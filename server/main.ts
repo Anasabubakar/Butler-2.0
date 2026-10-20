@@ -22,6 +22,7 @@ import { recall } from "./lib/recall.ts";
 import * as brief from "./lib/brief.ts";
 import * as recap from "./lib/recap.ts";
 import * as settings from "./lib/settings.ts";
+import * as archive from "./lib/archive.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -700,6 +701,32 @@ async function recapIfDue(now = new Date()) {
   console.log(`recap: sent to ${devices.join(", ")}`);
 }
 
+let rescuing = false;
+
+/** Copies new links to the Internet Archive and checks old ones, a few at a time. */
+async function rescueLinks() {
+  if (env("BUTLER_ARCHIVE") === "off" || rescuing) return;
+  rescuing = true;
+  try {
+    for (const { id, url } of await db.linksToArchive(3)) {
+      if (!archive.worthArchiving(url)) {
+        await db.updateItem(id, { archive_url: "" }); // "" means don't try again
+        continue;
+      }
+      const copy = await archive.archive(url);
+      if (copy === "busy") break; // leave the rest for next time
+      await db.updateItem(id, { archive_url: copy === "failed" ? "" : copy });
+    }
+    for (const { id, url } of await db.linksToCheck(10)) {
+      const state = await archive.check(url);
+      if (state !== "unknown") await db.markChecked(id, state === "dead");
+      if (state === "dead") console.log(`links: ${url} is gone`);
+    }
+  } finally {
+    rescuing = false;
+  }
+}
+
 // --- start ---------------------------------------------------------------------------
 
 if (import.meta.main) {
@@ -710,6 +737,7 @@ if (import.meta.main) {
   setInterval(backUpSoon, 6 * 60 * 60 * 1000);
   setInterval(() => briefIfDue().catch((e) => console.error("brief:", e)), 5 * 60_000);
   setInterval(() => recapIfDue().catch((e) => console.error("recap:", e)), 5 * 60_000);
+  setInterval(() => rescueLinks().catch((e) => console.error("links:", e)), 10 * 60_000);
   if (geminiReady()) geminiModels().then((m) => console.log("Gemini models, in order:", m.join(", ")));
   Deno.serve({ port: PORT, hostname: env("HOST", "0.0.0.0") }, app.fetch);
 }
