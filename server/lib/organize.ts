@@ -2,6 +2,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.131.0";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk@0.131.0/helpers/zod";
 import { z } from "npm:zod@4.3.6";
+import { askGemini, geminiReady } from "./gemini.ts";
 
 export const CATEGORIES = [
   "learning", "tech", "career", "money", "food", "fitness", "health", "travel",
@@ -34,7 +35,15 @@ let client: Anthropic | undefined; // created on first use; reads ANTHROPIC_API_
 const useLocal = () => Deno.env.get("BUTLER_AI") === "local";
 
 export function organize(item: RawItem): Promise<OrganizedItem> {
+  // Pictures go to Gemini when there's a key, since the local model may not see.
+  if (item.image && useLocal() && geminiReady()) return organizeWithGemini(item);
   return useLocal() ? organizeLocally(item) : organizeWithClaude(item);
+}
+
+async function organizeWithGemini(item: RawItem): Promise<OrganizedItem> {
+  const prompt = describe(item) + "\n\nThe picture is what they saved (often a screenshot of the post). " +
+    `Answer with JSON: {"title", "summary", "tags", "category"}. category must be one of: ${CATEGORIES.join(", ")}.`;
+  return tidy(await askGemini(prompt, item.image!, Organized));
 }
 
 function describe(item: RawItem): string {
