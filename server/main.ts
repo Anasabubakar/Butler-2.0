@@ -22,6 +22,7 @@ import { recall } from "./lib/recall.ts";
 import * as brief from "./lib/brief.ts";
 import * as recap from "./lib/recap.ts";
 import * as settings from "./lib/settings.ts";
+import * as spending from "./lib/spending.ts";
 import * as streaks from "./lib/streaks.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
@@ -396,10 +397,35 @@ app.post("/api/command", async (c) => {
       const now = new Date();
       return json({ action: "answer", say: brief.compose(await brief.gather(now, timeZone, env("PUBLIC_URL")), now, timeZone) });
     }
+    case "spend": {
+      if (!p.amount || p.amount <= 0 || !Number.isFinite(p.amount)) {
+        return json({ action: "answer", say: "How much was it? Say it like \"I spent 2,500 on suya\"." });
+      }
+      const spend = {
+        amount: Math.round(p.amount * 100) / 100,
+        currency: /^[A-Za-z]{3}$/.test(p.currency ?? "") ? p.currency!.toUpperCase() : spending.defaultCurrency(),
+        what: (p.text || said).slice(0, 200),
+        category: spending.category(p.category),
+      };
+      await spending.record(spend, device);
+      const week = await spending.since(spending.startOf("week", new Date(), timeZone));
+      const total = week.filter((r) => r.currency === spend.currency).reduce((sum, r) => sum + r.amount, 0);
+      return json({
+        action: "answer",
+        say: `Logged ${spending.money(spend.amount, spend.currency)} for ${spend.what} (${spend.category}). ` +
+          `That's ${spending.money(total, spend.currency)} this week.`,
+      });
+    }
+    case "spending": {
+      const period = p.period ?? "week";
+      const cat = p.category ? spending.category(p.category) : null;
+      const rows = await spending.since(spending.startOf(period, new Date(), timeZone), cat);
+      return json({ action: "answer", say: spending.compose(rows, period, cat) });
+    }
     case "ring":
       return json({ action: "answer", say: await ring(p.target || "phone", device) });
     case "recap":
-      return json({ action: "answer", say: recap.compose(await recap.gather(new Date(), env("PUBLIC_URL"))) });
+      return json({ action: "answer", say: await weekInButler(new Date(), timeZone) });
     case "recall": {
       try {
         const found = await findInLibrary(p.text || said);
@@ -724,6 +750,13 @@ async function briefIfDue(now = new Date()) {
 
 const RECAP_AT = env("BUTLER_RECAP_AT", "18:00")!;
 
+/** The weekly recap, plus this week's spending if you logged any. */
+async function weekInButler(now: Date, timeZone: string): Promise<string> {
+  const saved = recap.compose(await recap.gather(now, env("PUBLIC_URL")));
+  const spent = await spending.since(spending.startOf("week", now, timeZone));
+  return spent.length ? `${saved}\n\n${spending.compose(spent, "week")}` : saved;
+}
+
 /** Sends the weekly recap to every device on Sunday at BUTLER_RECAP_AT your time. */
 async function recapIfDue(now = new Date()) {
   if (env("BUTLER_RECAP") === "off") return;
@@ -735,7 +768,7 @@ async function recapIfDue(now = new Date()) {
   const devices = (await inbox.devices()).map((d) => d.name);
   if (!devices.length) return;
   await settings.set("recap_sent_on", day);
-  const body = recap.compose(await recap.gather(now, env("PUBLIC_URL")));
+  const body = await weekInButler(now, timeZone);
   await inbox.send(devices, { from_device: "Butler", kind: "note", body });
   console.log(`recap: sent to ${devices.join(", ")}`);
 }

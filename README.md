@@ -130,6 +130,10 @@ Every morning at 08:00 your time, Butler sends a note to your phone and laptop. 
 
 Every Sunday at 18:00 your time, Butler sends a note with what you saved that week: how many, by topic and app, your top tags, and three worth another look (ones you wrote a note on come first). Ask "what did I save this week?" for it any time. Set `BUTLER_RECAP_AT` for a different time, or `BUTLER_RECAP=off` to stop it.
 
+### Spending log
+
+Tell Butler what you spend, typed or out loud: "I spent 2,500 on suya", "paid 15k for transport". Ask "how much did I spend this week?" or "what did I spend on food this month?" and it adds it up (by plain arithmetic, not AI). The Sunday recap includes the week's spending. Amounts are in naira unless you say another currency; set `BUTLER_CURRENCY` (like `USD`) to change that.
+
 ### Streaks and milestones
 
 Butler cheers on every device when you hit a round number of saves (10th, 25th, 50th, 100th…) or save something several days in a row (3, 7, 14, 30 days…). The morning brief shows your current streak.
