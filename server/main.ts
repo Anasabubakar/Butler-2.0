@@ -216,8 +216,8 @@ app.post("/api/send", async (c) => {
   const device = text("device", 100);
   const target = text("target", 100);
   const kind = text("kind") as inbox.MessageKind | null;
-  if (!device || !target || !kind || !["clip", "note", "link", "file", "sync"].includes(kind)) {
-    return c.json({ error: "device, target and kind (clip, note, link, file or sync) are required" }, 400);
+  if (!device || !target || !kind || !["clip", "note", "link", "file", "sync", "ring"].includes(kind)) {
+    return c.json({ error: "device, target and kind (clip, note, link, file, sync or ring) are required" }, 400);
   }
   const to = await inbox.resolveTarget(target, device);
   if (!to.length) return c.json({ error: `no ${target} has checked in with Butler yet` }, 404);
