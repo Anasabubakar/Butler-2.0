@@ -51,6 +51,9 @@ class PetService : Service() {
     private lateinit var pet: ButlerSpriteView
     private lateinit var petLayout: WindowManager.LayoutParams
     private lateinit var panel: LinearLayout
+    private lateinit var panelLayout: WindowManager.LayoutParams
+    private var petX = 0f // where the pet is while it's dragged: from the right and bottom edges
+    private var petY = 0f
     private lateinit var menu: LinearLayout
     private lateinit var note: TextView
     private var panelShown = false
@@ -72,13 +75,28 @@ class PetService : Service() {
 
         pet = ButlerSpriteView(ui).apply {
             onTap = { toggle() }
+            // Drag it anywhere; it stays where you drop it, and remembers the spot.
             onDragBy = { dx, dy ->
-                petLayout.x = (petLayout.x - dx.toInt()).coerceAtLeast(0)
-                petLayout.y = (petLayout.y - dy.toInt()).coerceAtLeast(0)
+                if (panelShown && !busy) {
+                    panelShown = false
+                    panel.visibility = View.GONE
+                }
+                val screen = resources.displayMetrics
+                petX = (petX - dx).coerceIn(0f, (screen.widthPixels - petLayout.width).toFloat())
+                petY = (petY - dy).coerceIn(0f, (screen.heightPixels - petLayout.height).toFloat())
+                petLayout.x = petX.toInt()
+                petLayout.y = petY.toInt()
                 windows.updateViewLayout(this, petLayout)
             }
+            onDragEnd = { dropped() }
         }
-        petLayout = overlay((72 * dp).toInt(), (90 * dp).toInt()).apply { x = (16 * dp).toInt() }
+        val prefs = getSharedPreferences("pet", MODE_PRIVATE)
+        petLayout = overlay((72 * dp).toInt(), (90 * dp).toInt()).apply {
+            x = prefs.getInt("x", (16 * dp).toInt())
+            y = prefs.getInt("y", 0)
+        }
+        petX = petLayout.x.toFloat()
+        petY = petLayout.y.toFloat()
         windows.addView(pet, petLayout)
 
         menu = LinearLayout(ui).apply {
@@ -120,11 +138,10 @@ class PetService : Service() {
             addView(menu)
             visibility = View.GONE
         }
-        windows.addView(panel, overlay(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT).apply {
-            x = (16 * dp).toInt()
-            y = (96 * dp).toInt()
-        })
-        pet.setState("peek")
+        panelLayout = overlay(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT)
+        windows.addView(panel, panelLayout)
+        placePanel()
+        pet.setState(restingFace())
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
@@ -152,19 +169,49 @@ class PetService : Service() {
         cornerRadius = radius
     }
 
+    /** On the bottom edge it peeks; anywhere else it stands. */
+    private fun restingFace() = if (petLayout.y < 24 * resources.displayMetrics.density) "peek" else "idle"
+
+    private fun dropped() {
+        val dp = resources.displayMetrics.density
+        if (petLayout.y < 24 * dp) { // close to the bottom: dock on the edge again
+            petLayout.y = 0
+            petY = 0f
+            windows.updateViewLayout(pet, petLayout)
+        }
+        getSharedPreferences("pet", MODE_PRIVATE).edit()
+            .putInt("x", petLayout.x).putInt("y", petLayout.y).apply()
+        pet.setState(restingFace())
+        placePanel()
+    }
+
+    /** Puts the menu and notes above the pet, or below it when it's near the top. */
+    private fun placePanel() {
+        val screen = resources.displayMetrics
+        val gap = (8 * resources.displayMetrics.density).toInt()
+        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+        val above = petLayout.y + petLayout.height + gap
+        panelLayout.y = if (above + panel.measuredHeight <= screen.heightPixels) above
+        else (petLayout.y - panel.measuredHeight - gap).coerceAtLeast(0)
+        panelLayout.x = petLayout.x.coerceAtMost((screen.widthPixels - panel.measuredWidth).coerceAtLeast(0))
+        windows.updateViewLayout(panel, panelLayout)
+    }
+
     private fun toggle() {
         if (busy) return
         panelShown = !panelShown
         menu.visibility = View.VISIBLE
         note.visibility = View.GONE
         panel.visibility = if (panelShown) View.VISIBLE else View.GONE
-        pet.setState(if (panelShown) "summon" else "hide")
+        if (panelShown) placePanel()
+        pet.setState(if (panelShown) "summon" else if (restingFace() == "peek") "hide" else "idle")
     }
 
     private fun say(text: String) {
         note.text = text
         note.visibility = View.VISIBLE
         panel.visibility = View.VISIBLE
+        placePanel()
     }
 
     /** Runs an action with a working face and a note, then shows the result until it's read. */
@@ -185,7 +232,7 @@ class PetService : Service() {
             noteTapped = null
             panelShown = false
             panel.visibility = View.GONE
-            pet.setState("hide")
+            pet.setState(if (restingFace() == "peek") "hide" else "idle")
             busy = false
         }
     }
