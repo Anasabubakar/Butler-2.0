@@ -216,8 +216,8 @@ app.post("/api/send", async (c) => {
   const device = text("device", 100);
   const target = text("target", 100);
   const kind = text("kind") as inbox.MessageKind | null;
-  if (!device || !target || !kind || !["clip", "note", "link", "file", "sync"].includes(kind)) {
-    return c.json({ error: "device, target and kind (clip, note, link, file or sync) are required" }, 400);
+  if (!device || !target || !kind || !["clip", "note", "link", "file", "sync", "ring"].includes(kind)) {
+    return c.json({ error: "device, target and kind (clip, note, link, file, sync or ring) are required" }, 400);
   }
   const to = await inbox.resolveTarget(target, device);
   if (!to.length) return c.json({ error: `no ${target} has checked in with Butler yet` }, 404);
@@ -246,7 +246,7 @@ app.post("/api/send", async (c) => {
   }
   const body = text("text", 100_000);
   const url = text("url", 4000);
-  if (kind !== "file" && !body && !url) return c.json({ error: "nothing to send" }, 400);
+  if (kind !== "file" && kind !== "ring" && !body && !url) return c.json({ error: "nothing to send" }, 400);
   await inbox.send(to, { from_device: device, kind, body, url, item_id });
   return c.json({ sent_to: to });
 });
@@ -394,6 +394,8 @@ app.post("/api/command", async (c) => {
       const now = new Date();
       return json({ action: "answer", say: brief.compose(await brief.gather(now, timeZone, env("PUBLIC_URL")), now, timeZone) });
     }
+    case "ring":
+      return json({ action: "answer", say: await ring(p.target || "phone", device) });
     case "recap":
       return json({ action: "answer", say: recap.compose(await recap.gather(new Date(), env("PUBLIC_URL"))) });
     case "recall": {
@@ -481,6 +483,22 @@ app.post("/api/device-session", async (c) => {
 app.post("/api/logout", (c) => {
   deleteCookie(c, SESSION_COOKIE, { path: "/", secure: COOKIE_SECURE });
   return c.json({ ok: true });
+});
+
+/** Makes `target` ring loudly so you can find it, and says what happened. */
+async function ring(target: string, from: string): Promise<string> {
+  const to = await inbox.resolveTarget(target, from);
+  if (!to.length) return `I don't know a ${target} yet. Open Butler on it once so it checks in.`;
+  await inbox.send(to, { from_device: from, kind: "ring" });
+  return `Ringing your ${target} now. It may take up to 20 seconds to start.`;
+}
+
+// The website's "Ring my phone" button, for when the phone is lost and the laptop pet isn't handy.
+app.use("/api/ring", requireSession);
+app.post("/api/ring", async (c) => {
+  const body = await c.req.json().catch(() => ({})) as { target?: unknown };
+  const target = typeof body.target === "string" && body.target.trim() ? body.target.trim().slice(0, 100) : "phone";
+  return c.json({ say: await ring(target, "website") });
 });
 
 app.use("/api/me", requireSession);
