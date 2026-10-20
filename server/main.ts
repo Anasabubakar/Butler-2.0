@@ -22,6 +22,7 @@ import { recall } from "./lib/recall.ts";
 import * as brief from "./lib/brief.ts";
 import * as recap from "./lib/recap.ts";
 import * as settings from "./lib/settings.ts";
+import * as share from "./lib/share.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -527,6 +528,22 @@ app.put("/api/items/:id/place", async (c) => {
   return (await db.place(id, x, y, tilt)) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
 });
 
+// Public links: one note, for anyone you send the link to.
+app.post("/api/items/:id/share", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  const item = await db.getItem(id);
+  if (!item) return c.json({ error: "not found" }, 404);
+  const token = item.share_token ?? share.newToken();
+  if (!item.share_token) await db.setShareToken(id, token);
+  return c.json({ url: `${publicBase(c)}/s/${token}` });
+});
+app.delete("/api/items/:id/share", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  return (await db.setShareToken(id, null)) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
+});
+
 app.use("/api/board/*", requireSession);
 app.post("/api/board/tidy", async (c) => {
   await db.tidyBoard();
@@ -622,8 +639,13 @@ app.get("/files/:id", async (c) => {
   if (!UUID_RE.test(id)) return c.notFound();
   const item = await db.getItem(id);
   if (!item?.file_path) return c.notFound();
+  return fileResponse(item);
+});
+
+/** A saved file, served so the browser can't run it as a page. */
+async function fileResponse(item: db.Item): Promise<Response> {
   try {
-    const file = await Deno.open(join(FILES_DIR, item.file_path));
+    const file = await Deno.open(join(FILES_DIR, item.file_path!));
     const { size } = await file.stat();
     return new Response(file.readable, {
       headers: {
@@ -635,8 +657,29 @@ app.get("/files/:id", async (c) => {
       },
     });
   } catch {
-    return c.notFound();
+    return new Response("not found", { status: 404 });
   }
+}
+
+/** The site's own address, for links people open elsewhere. */
+const publicBase = (c: Context) => (env("PUBLIC_URL") ?? new URL(c.req.url).origin).replace(/\/$/, "");
+
+app.get("/s/:token", async (c) => {
+  const token = c.req.param("token");
+  const item = share.TOKEN_RE.test(token) ? await db.itemByShareToken(token) : null;
+  if (!item) return c.html("<!doctype html><title>Not shared</title><p>This note isn't shared any more.</p>", 404);
+  c.header("content-security-policy", "default-src 'none'; img-src * data:; media-src 'self'; " +
+    "style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com");
+  c.header("referrer-policy", "no-referrer");
+  c.header("cache-control", "private, no-store");
+  return c.html(share.page(item, `${publicBase(c)}/s/${token}`));
+});
+
+app.get("/s/:token/file", async (c) => {
+  const token = c.req.param("token");
+  const item = share.TOKEN_RE.test(token) ? await db.itemByShareToken(token) : null;
+  if (!item?.file_path) return c.notFound();
+  return fileResponse(item);
 });
 
 // The website: built files, falling back to index.html.
