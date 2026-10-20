@@ -46,8 +46,10 @@ function loadConfig() {
 export default class ButlerPetExtension extends Extension {
     enable() {
         this._session = new Soup.Session({timeout: 30});
-        this._keyboard = Clutter.get_default_backend().get_default_seat()
-            .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+        const seat = Clutter.get_default_backend().get_default_seat();
+        this._keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+        // Made once and kept: a pointer made at the moment of use drops its first events.
+        this._pointer = seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
         this._awake = false;
         this._busy = false;
         this._peeking = false;
@@ -104,7 +106,7 @@ export default class ButlerPetExtension extends Extension {
             actor.destroy();
         }
         this._pet = this._face = this._menu = this._note = null;
-        this._keyboard = null;
+        this._keyboard = this._pointer = null;
         this._session?.abort();
         this._session = null;
     }
@@ -266,6 +268,17 @@ export default class ButlerPetExtension extends Extension {
         for (const key of keyvals.reverse())
             this._keyboard.notify_keyval(now(), key, Clutter.KeyState.RELEASED);
         await sleep(60);
+    }
+
+    /** Moves the mouse to (x, y) and clicks, with small gaps so every event lands. */
+    async _click(x, y) {
+        const now = () => GLib.get_monotonic_time();
+        this._pointer.notify_absolute_motion(now(), x, y);
+        await sleep(40);
+        this._pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.PRESSED);
+        await sleep(40);
+        this._pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.RELEASED);
+        await sleep(40);
     }
 
     _readClipboard() {
