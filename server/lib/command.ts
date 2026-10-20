@@ -3,7 +3,7 @@
 import { z } from "npm:zod@4.3.6";
 import { askGemini, type Picture } from "./gemini.ts";
 
-export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "screen", "recall", "brief", "recap", "spend", "spending", "focus", "unfocus", "answer"] as const;
+export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "screen", "recall", "brief", "recap", "spend", "spending", "focus", "unfocus", "ring", "answer"] as const;
 export const APPS = ["whatsapp", "telegram"] as const;
 export const CONTENTS = ["text", "clipboard", "link", "screen"] as const;
 
@@ -111,6 +111,8 @@ Choose exactly one action:
 - "focus": they want to focus or work without distraction for a while, like "focus for 25 minutes on my essay"
   or "pomodoro". minutes = how long (25 unless said), text = what they're working on, if said.
 - "unfocus": they want to stop or cancel the focus timer.
+- "ring": they can't find a device and want it to ring loudly, like "where's my phone?" or "ring my phone".
+  target = "phone", "laptop" or a device name (the other device unless they say).
 - "answer": anything else. Put the answer in reply, plain and short (under 120 words). Use the screenshot if it helps.
 
 Times are ISO 8601 with the offset, like ${now}. "Tonight" means 20:00, "morning" 09:00, "afternoon" 15:00.

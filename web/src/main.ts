@@ -1,4 +1,5 @@
 import "./style.css";
+import { binMarkup, crumpleIntoBin, fasten, glide, hashOf, layout, makeDraggable, type Spot, unfasten } from "./board";
 
 class SignedOut extends Error {}
 
@@ -34,6 +35,9 @@ interface Item {
   tags: string[];
   category: string | null;
   status: "pending" | "organized" | "failed";
+  board_x: number | null;
+  board_y: number | null;
+  board_tilt: number | null;
 }
 
 interface Facet { facet: "category" | "platform" | "tag"; value: string; n: number }
@@ -194,9 +198,28 @@ function renderLibrary() {
   const googleButton = h("button", { class: "ghost", hidden: true });
   renderGoogle(googleButton);
 
+  // Lost your phone? It rings loudly, even on silent, the next time it checks in.
+  const ringButton = h("button", {
+    class: "ghost ring", title: "Make your phone ring loudly, even on silent",
+    onclick: async () => {
+      ringButton.disabled = true;
+      try {
+        showError((await api<{ say: string }>("/api/ring", { method: "POST", body: JSON.stringify({ target: "phone" }) })).say);
+      } catch (e) {
+        if (!(e instanceof SignedOut)) showError(`Couldn't ring your phone: ${(e as Error).message}`);
+      } finally {
+        ringButton.disabled = false;
+      }
+    },
+  }, "Ring my phone");
+
   sidebarEl = h("nav", { class: "sidebar", "aria-label": "Collections" });
   headingEl = h("h2", { class: "heading" });
-  gridEl = h("section", { class: "grid" });
+  gridEl = h("section", { class: "boards" });
+  binEl?.remove();
+  binEl = h("div", { class: "bin", title: "Drag a note here to throw it away", "aria-label": "Bin" });
+  binEl.innerHTML = binMarkup();
+  document.body.append(binEl);
 
   app.replaceChildren(
     h("header", { class: "top" },
@@ -204,6 +227,7 @@ function renderLibrary() {
         h("span", { class: "logo small" }, butlerMark()), "Butler"),
       search,
       googleButton,
+      ringButton,
       signOut,
     ),
     h("main", { class: "layout" }, sidebarEl, h("div", { class: "content" }, headingEl, gridEl)),
@@ -291,22 +315,44 @@ function renderSidebar() {
   );
 }
 
+// --- the board: every save is a sticky note -----------------------------------------------
+
+let binEl: HTMLElement;
+interface Board { el: HTMLElement; notes: { el: HTMLElement; item: Item }[]; movable: boolean }
+let boards: Board[] = [];
+
+/** Notes only stay where you stuck them on the full board; searches and filters line them up. */
+const onFullBoard = () => !state.q && !state.filter;
+
+const spotOf = (item: Item): Spot | null =>
+  item.board_x === null || item.board_y === null ? null : { x: item.board_x, y: item.board_y, tilt: item.board_tilt ?? 0 };
+
+function relayout(animate = false) {
+  const all = boards.flatMap((b) => b.notes.map((n) => n.el));
+  const before = animate ? new Map(all.map((el) => [el, el.getBoundingClientRect()])) : null;
+  for (const b of boards) layout(b.el, b.notes.map((n) => ({ el: n.el, spot: b.movable ? spotOf(n.item) : null })));
+  if (before) glide(all, before);
+}
+
+let relayoutSoon = 0;
+function relayoutLater() {
+  cancelAnimationFrame(relayoutSoon);
+  relayoutSoon = requestAnimationFrame(() => relayout());
+}
+addEventListener("resize", relayoutLater);
+
 function renderGrid() {
   const f = state.filter;
   const what = f ? (f.facet === "tag" ? `#${f.value}` : label(f.value)) : "Everything";
-  headingEl.textContent = state.q ? `${what} matching “${state.q}”` : what;
+  const anyStuck = onFullBoard() && state.items.some((i) => i.board_x !== null);
+  headingEl.replaceChildren(state.q ? `${what} matching “${state.q}”` : what);
+  if (anyStuck) headingEl.append(h("button", { class: "ghost tidy", onclick: tidyUp, title: "Put every note back in rows" }, "Tidy up"));
 
   const shown = new Set(state.items.map((i) => i.id));
   const alike = state.meaning.filter((i) => !shown.has(i.id));
-  const alikeSection = alike.length
-    ? [h("h3", { class: "section" }, "Close in meaning"), ...alike.map(card)]
-    : [];
+  boards = [];
 
-  if (!state.items.length && alike.length) {
-    gridEl.replaceChildren(...alikeSection);
-    return;
-  }
-  if (!state.items.length) {
+  if (!state.items.length && !alike.length) {
     gridEl.replaceChildren(
       h("div", { class: "empty" },
         h("p", {}, state.q || f ? "Nothing matches that yet." : "Nothing saved yet."),
@@ -315,14 +361,94 @@ function renderGrid() {
     );
     return;
   }
-  const cards = state.items.map(card);
+  const parts: Node[] = [];
+  if (state.items.length) parts.push(makeBoard(state.items, onFullBoard()));
   if (!state.done) {
-    cards.push(h("button", {
+    parts.push(h("button", {
       class: "more",
       onclick: async () => { await loadItems(false); renderGrid(); pollWhilePending(); },
     }, "Load more"));
   }
-  gridEl.replaceChildren(...cards, ...alikeSection);
+  if (alike.length) parts.push(h("h3", { class: "section" }, "Close in meaning"), makeBoard(alike, false));
+  gridEl.replaceChildren(...parts);
+  relayout();
+}
+
+function makeBoard(items: Item[], movable: boolean): HTMLElement {
+  const el = h("div", { class: movable ? "board movable" : "board" });
+  const board: Board = { el, notes: [], movable };
+  for (const item of items) {
+    const n = note(item);
+    makeDraggable(n, el, binEl, {
+      canDrag: () => movable,
+      onPlace: (_note, spot) => {
+        Object.assign(item, { board_x: spot.x, board_y: spot.y, board_tilt: spot.tilt });
+        api(`/api/items/${item.id}/place`, { method: "PUT", body: JSON.stringify(spot) })
+          .catch((err) => { if (!(err instanceof SignedOut)) showError((err as Error).message); });
+        if (!headingEl.querySelector(".tidy")) renderGrid();
+      },
+      onTrash: () => throwAway(item),
+      onOpen: () => {
+        const target = openTarget(item);
+        if (target) window.open(target, "_blank", "noopener,noreferrer");
+      },
+    });
+    board.notes.push({ el: n, item });
+    el.append(n);
+  }
+  boards.push(board);
+  return el;
+}
+
+/** Puts every note back in rows: the pins come out, they glide home, and get stuck again. */
+async function tidyUp() {
+  const notes = boards.flatMap((b) => b.notes.map((n) => n.el));
+  notes.forEach(unfasten);
+  try {
+    await api("/api/board/tidy", { method: "POST" });
+  } catch (err) {
+    if (!(err instanceof SignedOut)) showError((err as Error).message);
+    notes.forEach(fasten);
+    return;
+  }
+  for (const i of state.items) Object.assign(i, { board_x: null, board_y: null, board_tilt: null });
+  headingEl.querySelector(".tidy")?.remove();
+  relayout(true);
+  notes.forEach((el, i) => setTimeout(() => fasten(el), 500 + Math.min(i, 30) * 25));
+}
+
+/** The note is in the bin. It's really deleted a few seconds later, unless you press Undo. */
+function throwAway(item: Item) {
+  const at = state.items.findIndex((i) => i.id === item.id);
+  if (at >= 0) state.items.splice(at, 1);
+  state.meaning = state.meaning.filter((i) => i.id !== item.id);
+  for (const b of boards) b.notes = b.notes.filter((n) => n.item.id !== item.id);
+  relayout(true);
+
+  let undone = false;
+  const forget = () => {
+    clearTimeout(timer);
+    removeEventListener("pagehide", forget);
+    toast.remove();
+    if (undone) return;
+    fetch(`/api/items/${item.id}`, { method: "DELETE", keepalive: true })
+      .then(() => loadFacets().then(renderSidebar))
+      .catch(() => showError("Couldn't delete that. Try again."));
+  };
+  const toast = h("div", { class: "toast undo", role: "status" },
+    `“${item.title ?? "Note"}” is in the bin.`,
+    h("button", {
+      onclick: () => {
+        undone = true;
+        forget();
+        state.items.splice(Math.max(0, at), 0, item);
+        renderGrid();
+      },
+    }, "Undo"),
+  );
+  document.body.append(toast);
+  const timer = setTimeout(forget, 5000);
+  addEventListener("pagehide", forget);
 }
 
 /** Shows the items closest in meaning to `item`. */
@@ -334,9 +460,9 @@ async function showSimilar(item: Item) {
   gridEl.replaceChildren(h("p", { class: "muted" }, "Looking…"));
   try {
     const found = await api<Item[]>(`/api/items/${item.id}/similar`);
-    gridEl.replaceChildren(...(found.length
-      ? found.map(card)
-      : [h("p", { class: "muted" }, "Nothing close to this yet.")]));
+    boards = [];
+    gridEl.replaceChildren(found.length ? makeBoard(found, false) : h("p", { class: "muted" }, "Nothing close to this yet."));
+    relayout();
   } catch (err) {
     if (!(err instanceof SignedOut)) showError((err as Error).message);
   }
@@ -350,42 +476,54 @@ function openTarget(item: Item): string | null {
 
 function media(item: Item): HTMLElement | null {
   const file = item.file_path ? `/files/${item.id}` : undefined;
-  if (item.kind === "image" && file) return h("img", { src: file, alt: item.title ?? "", loading: "lazy" });
-  if (item.kind === "video" && file) {
-    return h("video", { src: file + "#t=0.1", preload: "metadata", muted: true, playsinline: true });
+  let el: HTMLElement | null = null;
+  if (item.kind === "image" && file) el = h("img", { src: file, alt: item.title ?? "", loading: "lazy", draggable: "false" });
+  else if (item.kind === "video" && file) {
+    el = h("video", { src: file + "#t=0.1", preload: "metadata", muted: true, playsinline: true, controls: true });
+  } else if (item.thumbnail) {
+    el = h("img", { src: item.thumbnail, alt: "", loading: "lazy", referrerpolicy: "no-referrer", draggable: "false" });
   }
-  if (item.thumbnail) {
-    return h("img", { src: item.thumbnail, alt: "", loading: "lazy", referrerpolicy: "no-referrer" });
-  }
-  return null;
+  // Pictures change a note's height once they arrive, so the board re-settles.
+  el?.addEventListener(el.tagName === "VIDEO" ? "loadedmetadata" : "load", relayoutLater, { once: true });
+  // A missing file or a dead thumbnail shouldn't leave a broken picture on the note.
+  el?.addEventListener("error", () => {
+    el?.closest(".media")?.remove();
+    relayoutLater();
+  }, { once: true });
+  return el;
 }
 
-function card(item: Item): HTMLElement {
-  const target = openTarget(item);
+const COLORS = 6;
+
+function note(item: Item): HTMLElement {
   const pic = media(item);
   const title = item.title ?? item.url ?? item.body?.slice(0, 80) ?? "Untitled";
+  const color = hashOf(item.category ?? item.kind) % COLORS; // one color per collection
+  const pinned = hashOf(item.id) % 3 === 0; // most get tape, some get a pin
+  let el: HTMLElement;
 
   const del = h("button", {
     class: "icon",
     "aria-label": "Delete",
-    title: "Delete",
-    onclick: async (e) => {
-      e.preventDefault();
+    title: "Throw away",
+    onclick: (e) => {
       e.stopPropagation();
-      if (!confirm(`Delete “${title}”?`)) return;
-      try {
-        await api(`/api/items/${item.id}`, { method: "DELETE" });
-      } catch (err) {
-        if (!(err instanceof SignedOut)) showError((err as Error).message);
-        return;
-      }
-      state.items = state.items.filter((i) => i.id !== item.id);
-      renderGrid();
-      loadFacets().then(renderSidebar);
+      crumpleIntoBin(el, binEl).then(() => throwAway(item));
     },
   }, "×");
 
-  const body = h("div", { class: "card-body" },
+  const paper = h("div", { class: "paper" },
+    pic ? h("div", { class: "media" }, pic) : null,
+    h("h4", {}, title),
+    item.status === "pending" ? h("p", { class: "muted pending" }, "Organizing…") : null,
+    item.status === "failed" ? h("p", { class: "muted" }, "Couldn't organize this one.") : null,
+    item.summary ? h("p", { class: "summary" }, item.summary) : null,
+    item.note ? h("p", { class: "note-text" }, item.note) : null,
+    !item.summary && item.body ? h("p", { class: "summary" }, item.body.slice(0, 240)) : null,
+    item.tags.length
+      ? h("div", { class: "tags" }, ...item.tags.map((t) =>
+          h("button", { class: "tag", onclick: (e) => { e.stopPropagation(); setFilter({ facet: "tag", value: t }); } }, `#${t}`)))
+      : null,
     h("div", { class: "meta" },
       item.platform ? h("span", { class: "badge" }, label(item.platform)) : h("span", { class: "badge" }, label(item.kind)),
       h("span", { class: "muted" }, ago(item.created_at)),
@@ -393,26 +531,22 @@ function card(item: Item): HTMLElement {
         class: "icon",
         "aria-label": "Find similar",
         title: "Find similar",
-        onclick: (e) => { e.preventDefault(); e.stopPropagation(); showSimilar(item); },
+        onclick: (e) => { e.stopPropagation(); showSimilar(item); },
       }, "≈"),
       del,
     ),
-    h("h4", {}, title),
-    item.status === "pending" ? h("p", { class: "muted pending" }, "Organizing…") : null,
-    item.status === "failed" ? h("p", { class: "muted" }, "Couldn't organize this one.") : null,
-    item.summary ? h("p", { class: "summary" }, item.summary) : null,
-    item.note ? h("p", { class: "note" }, item.note) : null,
-    !item.summary && item.body ? h("p", { class: "summary" }, item.body.slice(0, 240)) : null,
-    item.tags.length
-      ? h("div", { class: "tags" }, ...item.tags.map((t) =>
-          h("button", { class: "tag", onclick: (e) => { e.preventDefault(); e.stopPropagation(); setFilter({ facet: "tag", value: t }); } }, `#${t}`)))
-      : null,
   );
-
-  const inner = [pic ? h("div", { class: "media" }, pic) : null, body];
-  return target
-    ? h("a", { class: "card", href: target, target: "_blank", rel: "noopener noreferrer" }, ...inner)
-    : h("article", { class: "card" }, ...inner);
+  const fastener = pinned
+    ? h("span", { class: "pin", "aria-hidden": "true" })
+    : h("span", { class: "tape", "aria-hidden": "true" }, h("i"), h("i"));
+  if (!pinned) fastener.style.setProperty("--tape-tilt", `${(hashOf(item.id + "t") % 16) - 8}deg`);
+  el = h("div", {
+    class: `note c${color}${openTarget(item) ? " opens" : ""}`,
+    "data-id": item.id,
+    role: openTarget(item) ? "link" : "article",
+    title: openTarget(item) ? "Click to open · drag to move" : "Drag to move",
+  }, fastener, paper);
+  return el;
 }
 
 function showError(message: string) {

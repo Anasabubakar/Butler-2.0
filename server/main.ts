@@ -23,6 +23,7 @@ import * as brief from "./lib/brief.ts";
 import * as recap from "./lib/recap.ts";
 import * as settings from "./lib/settings.ts";
 import * as spending from "./lib/spending.ts";
+import * as streaks from "./lib/streaks.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -138,6 +139,7 @@ app.post("/api/save", async (c) => {
 
   const item = (await db.getItem(id))!;
   organizeItem(id, await rawFor(item)); // runs on after the response
+  celebrate().catch((e) => console.error("celebrate:", e));
   return c.json({ id, kind, platform }, 201);
 });
 
@@ -217,8 +219,8 @@ app.post("/api/send", async (c) => {
   const device = text("device", 100);
   const target = text("target", 100);
   const kind = text("kind") as inbox.MessageKind | null;
-  if (!device || !target || !kind || !["clip", "note", "link", "file", "sync"].includes(kind)) {
-    return c.json({ error: "device, target and kind (clip, note, link, file or sync) are required" }, 400);
+  if (!device || !target || !kind || !["clip", "note", "link", "file", "sync", "ring"].includes(kind)) {
+    return c.json({ error: "device, target and kind (clip, note, link, file, sync or ring) are required" }, 400);
   }
   const to = await inbox.resolveTarget(target, device);
   if (!to.length) return c.json({ error: `no ${target} has checked in with Butler yet` }, 404);
@@ -247,7 +249,7 @@ app.post("/api/send", async (c) => {
   }
   const body = text("text", 100_000);
   const url = text("url", 4000);
-  if (kind !== "file" && !body && !url) return c.json({ error: "nothing to send" }, 400);
+  if (kind !== "file" && kind !== "ring" && !body && !url) return c.json({ error: "nothing to send" }, 400);
   await inbox.send(to, { from_device: device, kind, body, url, item_id });
   return c.json({ sent_to: to });
 });
@@ -440,6 +442,8 @@ app.post("/api/command", async (c) => {
     }
     case "unfocus":
       return json({ action: "answer", say: (await stopFocus()) ? "Focus timer stopped." : "There's no focus timer running." });
+    case "ring":
+      return json({ action: "answer", say: await ring(p.target || "phone", device) });
     case "recap":
       return json({ action: "answer", say: await weekInButler(new Date(), timeZone) });
     case "recall": {
@@ -529,6 +533,22 @@ app.post("/api/logout", (c) => {
   return c.json({ ok: true });
 });
 
+/** Makes `target` ring loudly so you can find it, and says what happened. */
+async function ring(target: string, from: string): Promise<string> {
+  const to = await inbox.resolveTarget(target, from);
+  if (!to.length) return `I don't know a ${target} yet. Open Butler on it once so it checks in.`;
+  await inbox.send(to, { from_device: from, kind: "ring" });
+  return `Ringing your ${target} now. It may take up to 20 seconds to start.`;
+}
+
+// The website's "Ring my phone" button, for when the phone is lost and the laptop pet isn't handy.
+app.use("/api/ring", requireSession);
+app.post("/api/ring", async (c) => {
+  const body = await c.req.json().catch(() => ({})) as { target?: unknown };
+  const target = typeof body.target === "string" && body.target.trim() ? body.target.trim().slice(0, 100) : "phone";
+  return c.json({ say: await ring(target, "website") });
+});
+
 app.use("/api/me", requireSession);
 app.get("/api/me", (c) => c.json({ ok: true }));
 
@@ -559,6 +579,25 @@ app.delete("/api/items/:id", async (c) => {
 });
 
 app.get("/api/facets", async (c) => c.json(await db.facets()));
+
+// The sticky-note board: where you stuck a note, and putting them all back in rows.
+app.put("/api/items/:id/place", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  type Spot = { x?: unknown; y?: unknown; tilt?: unknown };
+  const body: Spot = await c.req.json<Spot>().catch(() => ({}));
+  const num = (v: unknown, min: number, max: number) =>
+    typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : null;
+  const x = num(body.x, 0, 1), y = num(body.y, 0, 200_000), tilt = num(body.tilt, -15, 15) ?? 0;
+  if (x === null || y === null) return c.json({ error: "x (0 to 1) and y are required" }, 400);
+  return (await db.place(id, x, y, tilt)) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
+});
+
+app.use("/api/board/*", requireSession);
+app.post("/api/board/tidy", async (c) => {
+  await db.tidyBoard();
+  return c.json({ ok: true });
+});
 
 /** Items in the order of `ranked`, each with its closeness score. */
 async function rankedItems(ranked: { id: string; score: number }[]) {
@@ -691,6 +730,26 @@ const BRIEF_AT = env("BUTLER_BRIEF_AT", "08:00")!;
 /** Your time zone, as your devices last said it. */
 async function ownerZone() {
   return safeZone(await settings.get("time_zone") ?? env("BUTLER_TZ"));
+}
+
+/** After a save: cheers on every device for a round number of saves or a saving streak. */
+async function celebrate() {
+  const notes: string[] = [];
+  const reached = streaks.milestone(await streaks.total());
+  if (reached && reached > Number(await settings.get("milestone_cheered") ?? 0)) {
+    await settings.set("milestone_cheered", String(reached));
+    notes.push(streaks.milestoneNote(reached));
+  }
+  const timeZone = await ownerZone();
+  const today = localIso(new Date(), timeZone).slice(0, 10);
+  if (await settings.get("streak_checked_on") !== today) { // the day's first save
+    await settings.set("streak_checked_on", today);
+    const days = streaks.streak(await streaks.savedDays(timeZone), today);
+    if (streaks.streakWorthCheering(days)) notes.push(streaks.streakNote(days));
+  }
+  if (!notes.length) return;
+  const devices = (await inbox.devices()).map((d) => d.name);
+  await inbox.send(devices, { from_device: "Butler", kind: "note", body: notes.join("\n\n") });
 }
 
 /** Sends the brief to every device once a day, at BUTLER_BRIEF_AT your time (unless it's past noon). */
