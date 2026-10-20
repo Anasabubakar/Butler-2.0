@@ -394,6 +394,8 @@ app.post("/api/command", async (c) => {
       const now = new Date();
       return json({ action: "answer", say: brief.compose(await brief.gather(now, timeZone, env("PUBLIC_URL")), now, timeZone) });
     }
+    case "ring":
+      return json({ action: "answer", say: await ring(p.target || "phone", device) });
     case "recap":
       return json({ action: "answer", say: recap.compose(await recap.gather(new Date(), env("PUBLIC_URL"))) });
     case "recall": {
@@ -481,6 +483,22 @@ app.post("/api/device-session", async (c) => {
 app.post("/api/logout", (c) => {
   deleteCookie(c, SESSION_COOKIE, { path: "/", secure: COOKIE_SECURE });
   return c.json({ ok: true });
+});
+
+/** Makes `target` ring loudly so you can find it, and says what happened. */
+async function ring(target: string, from: string): Promise<string> {
+  const to = await inbox.resolveTarget(target, from);
+  if (!to.length) return `I don't know a ${target} yet. Open Butler on it once so it checks in.`;
+  await inbox.send(to, { from_device: from, kind: "ring" });
+  return `Ringing your ${target} now. It may take up to 20 seconds to start.`;
+}
+
+// The website's "Ring my phone" button, for when the phone is lost and the laptop pet isn't handy.
+app.use("/api/ring", requireSession);
+app.post("/api/ring", async (c) => {
+  const body = await c.req.json().catch(() => ({})) as { target?: unknown };
+  const target = typeof body.target === "string" && body.target.trim() ? body.target.trim().slice(0, 100) : "phone";
+  return c.json({ say: await ring(target, "website") });
 });
 
 app.use("/api/me", requireSession);
