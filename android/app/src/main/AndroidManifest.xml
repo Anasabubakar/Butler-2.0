@@ -8,6 +8,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Reminders and things sent from your laptop arrive as notifications. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- "Message David on WhatsApp": finds David's number. Asked for the first time it's needed. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- Lets Butler hand WhatsApp and Telegram exactly the apps it opens with a message. -->
+    <queries>
+        <package android:name="com.whatsapp" />
+        <package android:name="org.telegram.messenger" />
+    </queries>
 
     <application
         android:allowBackup="false"
@@ -79,6 +87,17 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/hands" />
         </service>
+
+        <!-- Shares a screenshot with WhatsApp or Telegram. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/shared_files" />
+        </provider>
 
         <!-- Opens for a moment to read a copied link: Android only lets the app in front read the clipboard. -->
         <activity
