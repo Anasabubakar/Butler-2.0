@@ -48,6 +48,7 @@ const state = {
   facets: [] as Facet[],
   done: false,
   loading: false,
+  meaning: [] as Item[], // close in meaning to the search, without the exact words
 };
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -240,7 +241,15 @@ async function renderGoogle(button: HTMLButtonElement) {
 
 async function refresh(withFacets = false) {
   gridEl.replaceChildren(h("p", { class: "muted" }, "Loading…"));
-  await Promise.all([loadItems(true), withFacets ? loadFacets() : null]);
+  state.meaning = [];
+  const q = state.q;
+  await Promise.all([
+    loadItems(true),
+    withFacets ? loadFacets() : null,
+    q ? api<Item[]>(`/api/meaning?q=${encodeURIComponent(q)}`).then((found) => {
+      if (state.q === q) state.meaning = found;
+    }).catch(() => {}) : null,
+  ]);
   renderSidebar();
   renderGrid();
   pollWhilePending();
@@ -278,6 +287,16 @@ function renderGrid() {
   const what = f ? (f.facet === "tag" ? `#${f.value}` : label(f.value)) : "Everything";
   headingEl.textContent = state.q ? `${what} matching “${state.q}”` : what;
 
+  const shown = new Set(state.items.map((i) => i.id));
+  const alike = state.meaning.filter((i) => !shown.has(i.id));
+  const alikeSection = alike.length
+    ? [h("h3", { class: "section" }, "Close in meaning"), ...alike.map(card)]
+    : [];
+
+  if (!state.items.length && alike.length) {
+    gridEl.replaceChildren(...alikeSection);
+    return;
+  }
   if (!state.items.length) {
     gridEl.replaceChildren(
       h("div", { class: "empty" },
@@ -294,7 +313,24 @@ function renderGrid() {
       onclick: async () => { await loadItems(false); renderGrid(); pollWhilePending(); },
     }, "Load more"));
   }
-  gridEl.replaceChildren(...cards);
+  gridEl.replaceChildren(...cards, ...alikeSection);
+}
+
+/** Shows the items closest in meaning to `item`. */
+async function showSimilar(item: Item) {
+  headingEl.replaceChildren(
+    h("button", { class: "ghost back", onclick: () => renderGrid() }, "← Back"),
+    ` Like “${item.title ?? "this"}”`,
+  );
+  gridEl.replaceChildren(h("p", { class: "muted" }, "Looking…"));
+  try {
+    const found = await api<Item[]>(`/api/items/${item.id}/similar`);
+    gridEl.replaceChildren(...(found.length
+      ? found.map(card)
+      : [h("p", { class: "muted" }, "Nothing close to this yet.")]));
+  } catch (err) {
+    if (!(err instanceof SignedOut)) showError((err as Error).message);
+  }
 }
 
 function openTarget(item: Item): string | null {
@@ -344,6 +380,12 @@ function card(item: Item): HTMLElement {
     h("div", { class: "meta" },
       item.platform ? h("span", { class: "badge" }, label(item.platform)) : h("span", { class: "badge" }, label(item.kind)),
       h("span", { class: "muted" }, ago(item.created_at)),
+      h("button", {
+        class: "icon",
+        "aria-label": "Find similar",
+        title: "Find similar",
+        onclick: (e) => { e.preventDefault(); e.stopPropagation(); showSimilar(item); },
+      }, "≈"),
       del,
     ),
     h("h4", {}, title),

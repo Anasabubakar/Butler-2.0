@@ -16,6 +16,7 @@ import { LOOK_MODES, type LookMode, locate, look, MAX_STEPS, nextStep } from "./
 import * as inbox from "./lib/inbox.ts";
 import { calendarUrl, parseWhen, plan, safeZone } from "./lib/command.ts";
 import * as google from "./lib/google.ts";
+import * as meaning from "./lib/meaning.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -50,6 +51,7 @@ async function organizeItem(id: string, raw: RawItem) {
     }
     const out = await organize(raw);
     await db.updateItem(id, { ...out, status: "organized", error: null });
+    await meaning.embedItem(id).catch((e) => console.error("embedding", id, String(e).slice(0, 200)));
   } catch (e) {
     await db.updateItem(id, { status: "failed", error: String(e).slice(0, 500) }).catch(() => {});
   }
@@ -484,6 +486,35 @@ app.delete("/api/items/:id", async (c) => {
 
 app.get("/api/facets", async (c) => c.json(await db.facets()));
 
+/** Items in the order of `ranked`, each with its closeness score. */
+async function rankedItems(ranked: { id: string; score: number }[]) {
+  const items = ranked.length ? await db.itemsById(ranked.map((r) => r.id)) : [];
+  const byId = new Map(items.map((i) => [i.id, i]));
+  return ranked.flatMap((r) => (byId.has(r.id) ? [{ ...byId.get(r.id)!, score: Math.round(r.score * 100) / 100 }] : []));
+}
+
+// Things like this one.
+app.get("/api/items/:id/similar", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  const vector = await meaning.embeddingOf(id);
+  if (!vector) return c.json([]);
+  return c.json(await rankedItems((await meaning.nearest(vector, 12, id)).filter((r) => r.score > 0.55)));
+});
+
+// Search by meaning: "that video about saving money" finds it without the exact words.
+app.use("/api/meaning", requireSession);
+app.get("/api/meaning", async (c) => {
+  const q = c.req.query("q")?.trim();
+  if (!q || !meaning.meaningReady()) return c.json([]);
+  try {
+    const vector = await meaning.embed(q, "query");
+    return c.json(await rankedItems((await meaning.nearest(vector, 20)).filter((r) => r.score > 0.5)));
+  } catch (e) {
+    return c.json({ error: String(e).slice(0, 300) }, 502);
+  }
+});
+
 // --- your Google account, connected from the website ------------------------------------
 
 app.use("/api/google/*", requireSession);
@@ -556,6 +587,7 @@ app.get("*", async (c) => {
 if (import.meta.main) {
   await db.migrate(join(ROOT, "db/migrations"));
   for (const item of await db.stalePending()) organizeItem(item.id, await rawFor(item));
+  meaning.backfill().catch((e) => console.error("embedding backfill:", e)); // items saved before this existed
   Deno.serve({ port: PORT, hostname: env("HOST", "0.0.0.0") }, app.fetch);
 }
 
