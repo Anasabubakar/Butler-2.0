@@ -26,7 +26,9 @@ const clock = (d: Date, timeZone: string) =>
 /** The brief as a short plain note. */
 export function compose(p: Parts, now: Date, timeZone: string): string {
   const day = new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "long", day: "numeric", month: "long" }).format(now);
-  const lines = [`Good morning! It's ${day}.`];
+  const hour = Number(localIso(now, timeZone).slice(11, 13));
+  const hello = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const lines = [`${hello}! It's ${day}.`];
   if (p.events === null) lines.push("", "Connect Google on the website to see your calendar here.");
   else if (!p.events.length) lines.push("", "Nothing on your calendar today.");
   else lines.push("", "Today:", ...p.events.map((e) => `• ${e.allDay ? "All day" : clock(e.start, timeZone)} ${e.title}`));
