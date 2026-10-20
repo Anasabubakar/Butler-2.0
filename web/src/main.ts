@@ -38,6 +38,7 @@ interface Item {
   board_x: number | null;
   board_y: number | null;
   board_tilt: number | null;
+  details?: string | null;
 }
 
 interface Facet { facet: "category" | "platform" | "tag"; value: string; n: number }
@@ -543,6 +544,27 @@ function media(item: Item): HTMLElement | null {
   return el;
 }
 
+/** Butler's longer notes (like a video's key points), folded away until you ask. */
+function keyPoints(details: string): HTMLElement {
+  const [summary, ...points] = details.split("\n").map((l) => l.trim()).filter(Boolean);
+  const list = h("div", { class: "points", hidden: true },
+    h("p", {}, summary),
+    points.length ? h("ul", {}, ...points.map((p) => h("li", {}, p.replace(/^[•\-*]\s*/, "")))) : null,
+  );
+  const toggle = h("button", {
+    class: "points-toggle",
+    "aria-expanded": "false",
+    onclick: (e) => {
+      e.stopPropagation();
+      list.hidden = !list.hidden;
+      toggle.setAttribute("aria-expanded", String(!list.hidden));
+      toggle.textContent = list.hidden ? "▸ Key points" : "▾ Key points";
+      relayoutLater();
+    },
+  }, "▸ Key points");
+  return h("div", {}, toggle, list);
+}
+
 const COLORS = 6;
 
 function note(item: Item): HTMLElement {
@@ -570,6 +592,7 @@ function note(item: Item): HTMLElement {
     item.summary ? h("p", { class: "summary" }, item.summary) : null,
     item.note ? h("p", { class: "note-text" }, item.note) : null,
     !item.summary && item.body ? h("p", { class: "summary" }, item.body.slice(0, 240)) : null,
+    item.details ? keyPoints(item.details) : null,
     item.tags.length
       ? h("div", { class: "tags" }, ...item.tags.map((t) =>
           h("button", { class: "tag", onclick: (e) => { e.stopPropagation(); setFilter({ facet: "tag", value: t }); } }, `#${t}`)))

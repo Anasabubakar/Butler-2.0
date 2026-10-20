@@ -122,6 +122,10 @@ With `GEMINI_API_KEY` set, every organized item also gets an embedding (numbers 
 
 Ask Butler on the phone or laptop can also answer from your library: "what was that jollof recipe I saved?" or "open that TikTok about budgeting". It looks for the closest saves, answers from them only, and lists the ones it used with their links. It opens the first one if you said open, show, play or watch.
 
+### Video notes
+
+Save a YouTube video and Butler watches it (with Gemini) and writes a short summary plus its key points. Press **▸ Key points** on the note to read them. Ask Butler can answer from them too, like "what temperature did that jollof video say?". Set `BUTLER_VIDEO_NOTES=off` to stop it.
+
 ### Morning brief
 
 Every morning at 08:00 your time, Butler sends a note to your phone and laptop. It has today's calendar, the reminders still to come, how much you saved in the last day, and one older save worth another look. Ask Butler "what's my day?" to get it any time. It learns your time zone from Ask Butler; set `BUTLER_BRIEF_AT` in `butler.env` for a different time, or `BUTLER_BRIEF=off` to stop it. If the server is down at 08:00, the brief comes when it's back, up to noon.

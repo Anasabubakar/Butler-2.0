@@ -22,6 +22,7 @@ import { linkFor, recall } from "./lib/recall.ts";
 import * as brief from "./lib/brief.ts";
 import * as recap from "./lib/recap.ts";
 import * as settings from "./lib/settings.ts";
+import * as video from "./lib/video.ts";
 import * as spending from "./lib/spending.ts";
 import * as streaks from "./lib/streaks.ts";
 
@@ -62,6 +63,19 @@ async function organizeItem(id: string, raw: RawItem) {
     await meaning.embedItem(id).catch((e) => console.error("embedding", id, String(e).slice(0, 200)));
   } catch (e) {
     await db.updateItem(id, { status: "failed", error: String(e).slice(0, 500) }).catch(() => {});
+  }
+  await watchVideo(id, raw);
+}
+
+/** A saved YouTube video gets its key points written down. It's extra, so failing is fine. */
+async function watchVideo(id: string, raw: RawItem) {
+  const link = video.videoLink(raw.url);
+  if (!link || !geminiReady() || env("BUTLER_VIDEO_NOTES") === "off") return;
+  try {
+    await db.updateItem(id, { details: await video.watch(link, raw.pageTitle ?? null) });
+    await meaning.embedItem(id); // so searching by meaning finds what was said in it
+  } catch (e) {
+    console.warn("video notes", id, String(e).slice(0, 300));
   }
 }
 
