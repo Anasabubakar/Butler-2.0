@@ -94,8 +94,8 @@ export default class ButlerPetExtension extends Extension {
         for (const [label, run] of [
             ['Save this', () => this._saveThis()],
             ['Copy this', () => this._copyThis()],
-            ['Analyze this', () => this._soon()],
-            ['Solve this', () => this._soon()],
+            ['Analyze this', () => this._look('analyze')],
+            ['Solve this', () => this._look('solve')],
         ]) {
             const button = new St.Button({label, style_class: 'butler-action', x_expand: true, can_focus: false});
             button.connect('clicked', () => run());
@@ -418,9 +418,18 @@ export default class ButlerPetExtension extends Extension {
         });
     }
 
-    _soon() {
-        this._work('One sec…', () => {
-            throw new Error('this needs a vision model on your gateway. Coming next');
+    /** Analyze this (mode=analyze) or Solve this (mode=solve): Butler looks at the window and answers. */
+    _look(mode) {
+        this._work(mode === 'solve' ? 'Working it out…' : 'Having a look…', async () => {
+            const config = loadConfig();
+            if (!config)
+                throw new Error('set your save URL and token in ~/.config/butler/pet.json');
+            const shot = await this._snapWindow();
+            if (!shot)
+                throw new Error('open the window you want me to look at');
+            const {answer} = await this._send(config, '/api/screen/look', {mode}, shot);
+            St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, answer);
+            return `${answer}\n\n(Copied, so you can paste it.)`;
         }, 'think');
     }
 
