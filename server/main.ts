@@ -18,6 +18,7 @@ import { calendarUrl, parseWhen, plan, safeZone } from "./lib/command.ts";
 import * as google from "./lib/google.ts";
 import * as backup from "./lib/backup.ts";
 import * as meaning from "./lib/meaning.ts";
+import { recall } from "./lib/recall.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -385,6 +386,14 @@ app.post("/api/command", async (c) => {
     }
     case "screen":
       return json({ action: "screen", say: p.reply, goal: p.text || said });
+    case "recall": {
+      try {
+        const found = await findInLibrary(p.text || said);
+        return json({ action: "answer", ...await recall(said, found, env("PUBLIC_URL")) });
+      } catch (e) {
+        return c.json({ error: String(e).slice(0, 300) }, 502);
+      }
+    }
     case "message": {
       const who = (p.person ?? "").trim();
       if (!who) return json({ action: "answer", say: "Who should I message?" });
@@ -493,6 +502,17 @@ async function rankedItems(ranked: { id: string; score: number }[]) {
   const items = ranked.length ? await db.itemsById(ranked.map((r) => r.id)) : [];
   const byId = new Map(items.map((i) => [i.id, i]));
   return ranked.flatMap((r) => (byId.has(r.id) ? [{ ...byId.get(r.id)!, score: Math.round(r.score * 100) / 100 }] : []));
+}
+
+/** Up to 8 saved items that might answer `query`: closest in meaning first, then matching words. */
+async function findInLibrary(query: string) {
+  const close = meaning.meaningReady()
+    ? (await meaning.nearest(await meaning.embed(query, "query"), 8)).filter((r) => r.score > 0.45)
+    : [];
+  const byMeaning = await rankedItems(close);
+  const byWords = await db.listItems({ q: query, limit: 5 }).catch(() => []);
+  const seen = new Set(byMeaning.map((i) => i.id));
+  return [...byMeaning, ...byWords.filter((i) => !seen.has(i.id))].slice(0, 8);
 }
 
 // Things like this one.
