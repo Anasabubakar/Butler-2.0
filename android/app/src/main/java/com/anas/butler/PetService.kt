@@ -502,6 +502,7 @@ class PetService : Service() {
         val body = message.optString("body").takeIf { !message.isNull("body") }.orEmpty()
         when (message.optString("kind")) {
             "reminder" -> announce(getString(R.string.inbox_reminder), body, null)
+            "sync" -> copyToClipboard(body) // what you copied on the laptop, quietly
             "clip" -> {
                 copyToClipboard(body)
                 announce(getString(R.string.inbox_copied, from), body.take(200), null)
