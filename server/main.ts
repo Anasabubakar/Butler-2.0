@@ -304,6 +304,7 @@ app.post("/api/command", async (c) => {
   }
 
   const timeZone = safeZone(text("tz", 100));
+  if (timeZone !== "UTC" && timeZone === text("tz", 100)) await settings.set("time_zone", timeZone); // for the morning brief
   let p;
   try {
     p = await plan(typed, { device, timeZone, devices: await inbox.devices() }, picture, voice);
