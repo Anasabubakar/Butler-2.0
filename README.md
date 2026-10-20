@@ -49,7 +49,7 @@ Written for an Oracle Cloud Always Free VM (Ubuntu, ARM or x86); any Linux box w
    ```
    Caddy gets an HTTPS certificate on its own. Open `https://butler.yourdomain.com` and sign in with your password.
 
-Update later with `git pull && docker compose up -d --build`.
+Update later with `deploy/update.sh`, or set up automatic deploys below.
 
 Quick check from anywhere:
 
@@ -57,6 +57,29 @@ Quick check from anywhere:
 curl -F device=laptop -F text="https://www.youtube.com/watch?v=dQw4w9WgXcQ" -F note="test" \
   -H "x-butler-token: <BUTLER_TOKEN>" https://butler.yourdomain.com/api/save
 ```
+
+### Automatic deploys
+
+Once Butler runs on the VPS, GitHub can update it after every change to `main` that passes CI. It uses its own SSH key, which the server only lets run `deploy/update.sh`, so a leaked key can redeploy Butler but can't open a shell.
+
+1. On your laptop, make the key:
+   ```sh
+   ssh-keygen -t ed25519 -f ~/.ssh/butler_deploy -N "" -C butler-deploy
+   ```
+2. On the VPS, allow it to run only the update script (paste the contents of `~/.ssh/butler_deploy.pub` in place of `<public key>`):
+   ```sh
+   echo 'command="/home/ubuntu/Butler-2.0/deploy/update.sh",restrict <public key>' >> ~/.ssh/authorized_keys
+   ```
+3. On your laptop, give GitHub the key and the server's identity:
+   ```sh
+   gh secret set DEPLOY_HOST --body ubuntu@145.241.215.176
+   gh secret set DEPLOY_SSH_KEY < ~/.ssh/butler_deploy
+   ssh-keyscan -t ed25519 145.241.215.176 | gh secret set DEPLOY_KNOWN_HOSTS
+   ```
+   (Or add the three under the repo's Settings → Secrets and variables → Actions.)
+4. Test it: Actions tab → **Deploy** → **Run workflow**.
+
+Until the secrets exist, the Deploy workflow skips itself.
 
 ### Where your data lives
 
