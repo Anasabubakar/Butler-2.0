@@ -389,6 +389,10 @@ app.post("/api/command", async (c) => {
     }
     case "screen":
       return json({ action: "screen", say: p.reply, goal: p.text || said });
+    case "brief": {
+      const now = new Date();
+      return json({ action: "answer", say: brief.compose(await brief.gather(now, timeZone, env("PUBLIC_URL")), now, timeZone) });
+    }
     case "recall": {
       try {
         const found = await findInLibrary(p.text || said);
