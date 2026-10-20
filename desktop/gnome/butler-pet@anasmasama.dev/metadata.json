@@ -1,0 +1,7 @@
+{
+  "uuid": "butler-pet@anasmasama.dev",
+  "name": "Butler",
+  "description": "A small pet that peeks from the corner of your screen. Tap it to save what you're looking at to Butler.",
+  "shell-version": ["46", "47", "48"],
+  "url": "https://github.com/Anasabubakar/Butler-2.0"
+}
