@@ -471,6 +471,13 @@ app.post("/api/login", async (c) => {
   return c.json({ ok: true });
 });
 
+// The phone app opens the library inside itself: its device token buys a website session,
+// handed back for the app to put in its own browser's cookies.
+app.post("/api/device-session", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  return c.json({ cookie: SESSION_COOKIE, value: await newSession(SESSION_SECRET), days: SESSION_DAYS });
+});
+
 app.post("/api/logout", (c) => {
   deleteCookie(c, SESSION_COOKIE, { path: "/", secure: COOKIE_SECURE });
   return c.json({ ok: true });
