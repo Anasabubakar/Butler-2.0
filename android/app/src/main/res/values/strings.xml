@@ -82,6 +82,10 @@
     <string name="inbox_channel">Reminders and things sent to this phone</string>
     <string name="inbox_from">\u0020from %1$s</string>
     <string name="inbox_reminder">Reminder</string>
+    <string name="ring_title">I\'m here!</string>
+    <string name="ring_text">Butler is ringing your phone%1$s. Tap the pet or here to stop.</string>
+    <string name="ring_found">I found it</string>
+    <string name="pet_ringing">I\'m here! Tap me to stop.</string>
     <string name="inbox_copied">Copied%1$s</string>
     <string name="inbox_link">Link%1$s</string>
     <string name="inbox_file">Saved to Downloads/Butler%1$s</string>
