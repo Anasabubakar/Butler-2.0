@@ -18,11 +18,16 @@ import { calendarUrl, localIso, parseWhen, plan, safeZone } from "./lib/command.
 import * as google from "./lib/google.ts";
 import * as backup from "./lib/backup.ts";
 import * as meaning from "./lib/meaning.ts";
-import { recall } from "./lib/recall.ts";
+import { linkFor, recall } from "./lib/recall.ts";
 import * as brief from "./lib/brief.ts";
 import * as recap from "./lib/recap.ts";
 import * as settings from "./lib/settings.ts";
 import * as prices from "./lib/price.ts";
+import * as archive from "./lib/archive.ts";
+import * as share from "./lib/share.ts";
+import * as video from "./lib/video.ts";
+import * as spending from "./lib/spending.ts";
+import * as streaks from "./lib/streaks.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -61,6 +66,19 @@ async function organizeItem(id: string, raw: RawItem) {
     await meaning.embedItem(id).catch((e) => console.error("embedding", id, String(e).slice(0, 200)));
   } catch (e) {
     await db.updateItem(id, { status: "failed", error: String(e).slice(0, 500) }).catch(() => {});
+  }
+  await watchVideo(id, raw);
+}
+
+/** A saved YouTube video gets its key points written down. It's extra, so failing is fine. */
+async function watchVideo(id: string, raw: RawItem) {
+  const link = video.videoLink(raw.url);
+  if (!link || !geminiReady() || env("BUTLER_VIDEO_NOTES") === "off") return;
+  try {
+    await db.updateItem(id, { details: await video.watch(link, raw.pageTitle ?? null) });
+    await meaning.embedItem(id); // so searching by meaning finds what was said in it
+  } catch (e) {
+    console.warn("video notes", id, String(e).slice(0, 300));
   }
 }
 
@@ -138,6 +156,7 @@ app.post("/api/save", async (c) => {
 
   const item = (await db.getItem(id))!;
   organizeItem(id, await rawFor(item)); // runs on after the response
+  celebrate().catch((e) => console.error("celebrate:", e));
   return c.json({ id, kind, platform }, 201);
 });
 
@@ -217,8 +236,8 @@ app.post("/api/send", async (c) => {
   const device = text("device", 100);
   const target = text("target", 100);
   const kind = text("kind") as inbox.MessageKind | null;
-  if (!device || !target || !kind || !["clip", "note", "link", "file", "sync"].includes(kind)) {
-    return c.json({ error: "device, target and kind (clip, note, link, file or sync) are required" }, 400);
+  if (!device || !target || !kind || !["clip", "note", "link", "file", "sync", "ring"].includes(kind)) {
+    return c.json({ error: "device, target and kind (clip, note, link, file, sync or ring) are required" }, 400);
   }
   const to = await inbox.resolveTarget(target, device);
   if (!to.length) return c.json({ error: `no ${target} has checked in with Butler yet` }, 404);
@@ -247,7 +266,7 @@ app.post("/api/send", async (c) => {
   }
   const body = text("text", 100_000);
   const url = text("url", 4000);
-  if (kind !== "file" && !body && !url) return c.json({ error: "nothing to send" }, 400);
+  if (kind !== "file" && kind !== "ring" && !body && !url) return c.json({ error: "nothing to send" }, 400);
   await inbox.send(to, { from_device: device, kind, body, url, item_id });
   return c.json({ sent_to: to });
 });
@@ -395,8 +414,55 @@ app.post("/api/command", async (c) => {
       const now = new Date();
       return json({ action: "answer", say: brief.compose(await brief.gather(now, timeZone, env("PUBLIC_URL")), now, timeZone) });
     }
+    case "spend": {
+      if (!p.amount || p.amount <= 0 || !Number.isFinite(p.amount)) {
+        return json({ action: "answer", say: "How much was it? Say it like \"I spent 2,500 on suya\"." });
+      }
+      const spend = {
+        amount: Math.round(p.amount * 100) / 100,
+        currency: /^[A-Za-z]{3}$/.test(p.currency ?? "") ? p.currency!.toUpperCase() : spending.defaultCurrency(),
+        what: (p.text || said).slice(0, 200),
+        category: spending.category(p.category),
+      };
+      await spending.record(spend, device);
+      const week = await spending.since(spending.startOf("week", new Date(), timeZone));
+      const total = week.filter((r) => r.currency === spend.currency).reduce((sum, r) => sum + r.amount, 0);
+      return json({
+        action: "answer",
+        say: `Logged ${spending.money(spend.amount, spend.currency)} for ${spend.what} (${spend.category}). ` +
+          `That's ${spending.money(total, spend.currency)} this week.`,
+      });
+    }
+    case "spending": {
+      const period = p.period ?? "week";
+      const cat = p.category ? spending.category(p.category) : null;
+      const rows = await spending.since(spending.startOf(period, new Date(), timeZone), cat);
+      return json({ action: "answer", say: spending.compose(rows, period, cat) });
+    }
+    case "focus": {
+      const minutes = Math.round(Math.min(240, Math.max(1, p.minutes ?? 25)));
+      const on = p.text?.trim() ? ` on ${p.text.trim().slice(0, 100)}` : "";
+      const span = `${minutes} minute${minutes === 1 ? "" : "s"}`;
+      const to = (await inbox.devices()).map((d) => d.name);
+      await stopFocus();
+      await inbox.send(to, {
+        from_device: FOCUS, kind: "reminder", due_at: new Date(Date.now() + minutes * 60_000).toISOString(),
+        body: `Focus time's up${on}: ${span} done. Stand up, stretch, drink water. 🎉`,
+      });
+      const end = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit" })
+        .format(new Date(Date.now() + minutes * 60_000));
+      return json({
+        action: "answer",
+        say: `Focus${on} for ${span}, until ${end}. I'll tell you on all your devices when it's time for a break. ` +
+          `Say "stop focus" to cancel.`,
+      });
+    }
+    case "unfocus":
+      return json({ action: "answer", say: (await stopFocus()) ? "Focus timer stopped." : "There's no focus timer running." });
+    case "ring":
+      return json({ action: "answer", say: await ring(p.target || "phone", device) });
     case "recap":
-      return json({ action: "answer", say: recap.compose(await recap.gather(new Date(), env("PUBLIC_URL"))) });
+      return json({ action: "answer", say: await weekInButler(new Date(), timeZone) });
     case "recall": {
       try {
         const found = await findInLibrary(p.text || said);
@@ -484,6 +550,22 @@ app.post("/api/logout", (c) => {
   return c.json({ ok: true });
 });
 
+/** Makes `target` ring loudly so you can find it, and says what happened. */
+async function ring(target: string, from: string): Promise<string> {
+  const to = await inbox.resolveTarget(target, from);
+  if (!to.length) return `I don't know a ${target} yet. Open Butler on it once so it checks in.`;
+  await inbox.send(to, { from_device: from, kind: "ring" });
+  return `Ringing your ${target} now. It may take up to 20 seconds to start.`;
+}
+
+// The website's "Ring my phone" button, for when the phone is lost and the laptop pet isn't handy.
+app.use("/api/ring", requireSession);
+app.post("/api/ring", async (c) => {
+  const body = await c.req.json().catch(() => ({})) as { target?: unknown };
+  const target = typeof body.target === "string" && body.target.trim() ? body.target.trim().slice(0, 100) : "phone";
+  return c.json({ say: await ring(target, "website") });
+});
+
 app.use("/api/me", requireSession);
 app.get("/api/me", (c) => c.json({ ok: true }));
 
@@ -526,6 +608,44 @@ app.put("/api/items/:id/place", async (c) => {
   const x = num(body.x, 0, 1), y = num(body.y, 0, 200_000), tilt = num(body.tilt, -15, 15) ?? 0;
   if (x === null || y === null) return c.json({ error: "x (0 to 1) and y are required" }, 400);
   return (await db.place(id, x, y, tilt)) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
+});
+
+// Public links: one note, for anyone you send the link to.
+app.post("/api/items/:id/share", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  const item = await db.getItem(id);
+  if (!item) return c.json({ error: "not found" }, 404);
+  const token = item.share_token ?? share.newToken();
+  if (!item.share_token) await db.setShareToken(id, token);
+  return c.json({ url: `${publicBase(c)}/s/${token}` });
+});
+app.delete("/api/items/:id/share", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  return (await db.setShareToken(id, null)) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
+});
+
+// Snooze a note: it comes back as a reminder on every device at `at`.
+app.post("/api/items/:id/remind", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  const item = await db.getItem(id);
+  if (!item) return c.json({ error: "not found" }, 404);
+  const { at } = await c.req.json<{ at?: unknown }>().catch(() => ({ at: undefined }));
+  const due = typeof at === "string" ? new Date(at) : null;
+  if (!due || Number.isNaN(due.getTime()) || due.getTime() < Date.now() - 60_000) {
+    return c.json({ error: "at must be a time in the future" }, 400);
+  }
+  const to = (await inbox.devices()).map((d) => d.name);
+  if (!to.length) return c.json({ error: "no device has checked in with Butler yet" }, 404);
+  const title = item.title ?? item.body?.slice(0, 200) ?? item.url ?? "something you saved";
+  const link = linkFor(item, env("PUBLIC_URL"));
+  await inbox.send(to, {
+    from_device: "Butler", kind: "reminder", due_at: due.toISOString(),
+    body: `From your library: ${title}${link ? `\n${link}` : ""}`,
+  });
+  return c.json({ ok: true, devices: to.length });
 });
 
 app.use("/api/board/*", requireSession);
@@ -623,8 +743,13 @@ app.get("/files/:id", async (c) => {
   if (!UUID_RE.test(id)) return c.notFound();
   const item = await db.getItem(id);
   if (!item?.file_path) return c.notFound();
+  return fileResponse(item);
+});
+
+/** A saved file, served so the browser can't run it as a page. */
+async function fileResponse(item: db.Item): Promise<Response> {
   try {
-    const file = await Deno.open(join(FILES_DIR, item.file_path));
+    const file = await Deno.open(join(FILES_DIR, item.file_path!));
     const { size } = await file.stat();
     return new Response(file.readable, {
       headers: {
@@ -636,8 +761,29 @@ app.get("/files/:id", async (c) => {
       },
     });
   } catch {
-    return c.notFound();
+    return new Response("not found", { status: 404 });
   }
+}
+
+/** The site's own address, for links people open elsewhere. */
+const publicBase = (c: Context) => (env("PUBLIC_URL") ?? new URL(c.req.url).origin).replace(/\/$/, "");
+
+app.get("/s/:token", async (c) => {
+  const token = c.req.param("token");
+  const item = share.TOKEN_RE.test(token) ? await db.itemByShareToken(token) : null;
+  if (!item) return c.html("<!doctype html><title>Not shared</title><p>This note isn't shared any more.</p>", 404);
+  c.header("content-security-policy", "default-src 'none'; img-src * data:; media-src 'self'; " +
+    "style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com");
+  c.header("referrer-policy", "no-referrer");
+  c.header("cache-control", "private, no-store");
+  return c.html(share.page(item, `${publicBase(c)}/s/${token}`));
+});
+
+app.get("/s/:token/file", async (c) => {
+  const token = c.req.param("token");
+  const item = share.TOKEN_RE.test(token) ? await db.itemByShareToken(token) : null;
+  if (!item?.file_path) return c.notFound();
+  return fileResponse(item);
 });
 
 // The website: built files, falling back to index.html.
@@ -667,6 +813,26 @@ async function ownerZone() {
   return safeZone(await settings.get("time_zone") ?? env("BUTLER_TZ"));
 }
 
+/** After a save: cheers on every device for a round number of saves or a saving streak. */
+async function celebrate() {
+  const notes: string[] = [];
+  const reached = streaks.milestone(await streaks.total());
+  if (reached && reached > Number(await settings.get("milestone_cheered") ?? 0)) {
+    await settings.set("milestone_cheered", String(reached));
+    notes.push(streaks.milestoneNote(reached));
+  }
+  const timeZone = await ownerZone();
+  const today = localIso(new Date(), timeZone).slice(0, 10);
+  if (await settings.get("streak_checked_on") !== today) { // the day's first save
+    await settings.set("streak_checked_on", today);
+    const days = streaks.streak(await streaks.savedDays(timeZone), today);
+    if (streaks.streakWorthCheering(days)) notes.push(streaks.streakNote(days));
+  }
+  if (!notes.length) return;
+  const devices = (await inbox.devices()).map((d) => d.name);
+  await inbox.send(devices, { from_device: "Butler", kind: "note", body: notes.join("\n\n") });
+}
+
 /** Sends the brief to every device once a day, at BUTLER_BRIEF_AT your time (unless it's past noon). */
 async function briefIfDue(now = new Date()) {
   if (env("BUTLER_BRIEF") === "off") return;
@@ -685,6 +851,20 @@ async function briefIfDue(now = new Date()) {
 
 const RECAP_AT = env("BUTLER_RECAP_AT", "18:00")!;
 
+const FOCUS = "Butler focus"; // the sender of focus-timer reminders, so they can be cancelled
+
+/** Cancels a running focus timer. True if there was one. */
+async function stopFocus(): Promise<boolean> {
+  return (await inbox.cancelFrom(FOCUS)) > 0;
+}
+
+/** The weekly recap, plus this week's spending if you logged any. */
+async function weekInButler(now: Date, timeZone: string): Promise<string> {
+  const saved = recap.compose(await recap.gather(now, env("PUBLIC_URL")));
+  const spent = await spending.since(spending.startOf("week", now, timeZone));
+  return spent.length ? `${saved}\n\n${spending.compose(spent, "week")}` : saved;
+}
+
 /** Sends the weekly recap to every device on Sunday at BUTLER_RECAP_AT your time. */
 async function recapIfDue(now = new Date()) {
   if (env("BUTLER_RECAP") === "off") return;
@@ -696,7 +876,7 @@ async function recapIfDue(now = new Date()) {
   const devices = (await inbox.devices()).map((d) => d.name);
   if (!devices.length) return;
   await settings.set("recap_sent_on", day);
-  const body = recap.compose(await recap.gather(now, env("PUBLIC_URL")));
+  const body = await weekInButler(now, timeZone);
   await inbox.send(devices, { from_device: "Butler", kind: "note", body });
   console.log(`recap: sent to ${devices.join(", ")}`);
 }
@@ -730,6 +910,32 @@ async function watchPrices() {
   }
 }
 
+let rescuing = false;
+
+/** Copies new links to the Internet Archive and checks old ones, a few at a time. */
+async function rescueLinks() {
+  if (env("BUTLER_ARCHIVE") === "off" || rescuing) return;
+  rescuing = true;
+  try {
+    for (const { id, url } of await db.linksToArchive(3)) {
+      if (!archive.worthArchiving(url)) {
+        await db.updateItem(id, { archive_url: "" }); // "" means don't try again
+        continue;
+      }
+      const copy = await archive.archive(url);
+      if (copy === "busy") break; // leave the rest for next time
+      await db.updateItem(id, { archive_url: copy === "failed" ? "" : copy });
+    }
+    for (const { id, url } of await db.linksToCheck(10)) {
+      const state = await archive.check(url);
+      if (state !== "unknown") await db.markChecked(id, state === "dead");
+      if (state === "dead") console.log(`links: ${url} is gone`);
+    }
+  } finally {
+    rescuing = false;
+  }
+}
+
 // --- start ---------------------------------------------------------------------------
 
 if (import.meta.main) {
@@ -741,6 +947,7 @@ if (import.meta.main) {
   setInterval(() => briefIfDue().catch((e) => console.error("brief:", e)), 5 * 60_000);
   setInterval(() => recapIfDue().catch((e) => console.error("recap:", e)), 5 * 60_000);
   setInterval(() => watchPrices().catch((e) => console.error("prices:", e)), 30 * 60_000);
+  setInterval(() => rescueLinks().catch((e) => console.error("links:", e)), 10 * 60_000);
   if (geminiReady()) geminiModels().then((m) => console.log("Gemini models, in order:", m.join(", ")));
   Deno.serve({ port: PORT, hostname: env("HOST", "0.0.0.0") }, app.fetch);
 }

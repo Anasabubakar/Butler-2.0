@@ -10,6 +10,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- "Message David on WhatsApp": finds David's number. Asked for the first time it's needed. -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- Lets Butler hand WhatsApp and Telegram exactly the apps it opens with a message. -->
     <queries>

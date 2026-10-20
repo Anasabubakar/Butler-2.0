@@ -41,6 +41,10 @@ interface Item {
   price?: string | null;
   price_first?: string | null;
   price_currency?: string | null;
+  archive_url?: string | null;
+  link_dead?: boolean;
+  share_token?: string | null;
+  details?: string | null;
 }
 
 interface Facet { facet: "category" | "platform" | "tag"; value: string; n: number }
@@ -201,6 +205,21 @@ function renderLibrary() {
   const googleButton = h("button", { class: "ghost", hidden: true });
   renderGoogle(googleButton);
 
+  // Lost your phone? It rings loudly, even on silent, the next time it checks in.
+  const ringButton = h("button", {
+    class: "ghost ring", title: "Make your phone ring loudly, even on silent",
+    onclick: async () => {
+      ringButton.disabled = true;
+      try {
+        showError((await api<{ say: string }>("/api/ring", { method: "POST", body: JSON.stringify({ target: "phone" }) })).say);
+      } catch (e) {
+        if (!(e instanceof SignedOut)) showError(`Couldn't ring your phone: ${(e as Error).message}`);
+      } finally {
+        ringButton.disabled = false;
+      }
+    },
+  }, "Ring my phone");
+
   sidebarEl = h("nav", { class: "sidebar", "aria-label": "Collections" });
   headingEl = h("h2", { class: "heading" });
   gridEl = h("section", { class: "boards" });
@@ -215,6 +234,7 @@ function renderLibrary() {
         h("span", { class: "logo small" }, butlerMark()), "Butler"),
       search,
       googleButton,
+      ringButton,
       signOut,
     ),
     h("main", { class: "layout" }, sidebarEl, h("div", { class: "content" }, headingEl, gridEl)),
@@ -404,6 +424,99 @@ async function tidyUp() {
   notes.forEach((el, i) => setTimeout(() => fasten(el), 500 + Math.min(i, 30) * 25));
 }
 
+// --- public links ------------------------------------------------------------------------
+
+/** Makes a link anyone can open to see this one note, and hands it over (share sheet or clipboard). */
+async function shareNote(item: Item) {
+  let url: string;
+  try {
+    url = (await api<{ url: string }>(`/api/items/${item.id}/share`, { method: "POST" })).url;
+  } catch (e) {
+    if (!(e instanceof SignedOut)) showError(`Couldn't make a link: ${(e as Error).message}`);
+    return;
+  }
+  item.share_token = url.split("/").pop() ?? "shared";
+  document.querySelector(`.note[data-id="${item.id}"]`)?.classList.add("shared");
+  let how = "Link copied.";
+  if (navigator.share && matchMedia("(pointer: coarse)").matches) {
+    try {
+      await navigator.share({ title: item.title ?? "A note", url });
+      how = "Shared.";
+    } catch { /* closed the share sheet: still copy it */ }
+  }
+  if (how !== "Shared.") {
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      how = url; // no clipboard here: show the link itself
+    }
+  }
+  const toast = h("div", { class: "toast undo", role: "status" },
+    `${how} Anyone with it can see this note.`,
+    h("button", {
+      onclick: async () => {
+        toast.remove();
+        await api(`/api/items/${item.id}/share`, { method: "DELETE" }).catch(() => {});
+        item.share_token = null;
+        document.querySelector(`.note[data-id="${item.id}"]`)?.classList.remove("shared");
+        showError("Stopped sharing. The link no longer works.");
+      },
+    }, "Stop sharing"),
+  );
+  document.body.append(toast);
+  setTimeout(() => toast.remove(), 8000);
+}
+
+// --- snooze: bring a note back later as a reminder -------------------------------------
+
+/** Sensible "later"s from now, in this browser's time zone. */
+function laterTimes(now = new Date()): [string, Date][] {
+  const at = (days: number, hour: number) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() + days);
+    d.setHours(hour, 0, 0, 0);
+    return d;
+  };
+  const day = now.getDay(); // 0 Sunday … 6 Saturday
+  const times: [string, Date][] = [["In an hour", new Date(now.getTime() + 3_600_000)]];
+  if (now.getHours() < 19) times.push(["This evening", at(0, 20)]);
+  times.push(["Tomorrow morning", at(1, 9)]);
+  times.push([day === 6 || day === 0 ? "Next weekend" : "This weekend", at((6 - day + 7) % 7 || 7, 10)]);
+  times.push(["Next week", at((8 - day) % 7 || 7, 9)]);
+  return times;
+}
+
+function snooze(item: Item, button: HTMLElement) {
+  document.querySelector(".snooze")?.remove();
+  const close = () => {
+    menu.remove();
+    removeEventListener("pointerdown", outside, true);
+  };
+  const outside = (e: Event) => { if (!menu.contains(e.target as Node)) close(); };
+  const when = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  const menu = h("div", { class: "snooze", role: "menu" },
+    h("p", {}, "Remind me…"),
+    ...laterTimes().map(([label, time]) =>
+      h("button", {
+        role: "menuitem",
+        onclick: async () => {
+          close();
+          try {
+            await api(`/api/items/${item.id}/remind`, { method: "POST", body: JSON.stringify({ at: time.toISOString() }) });
+            showError(`I'll bring “${item.title ?? "this"}” back ${when.format(time)} on all your devices.`);
+          } catch (e) {
+            if (!(e instanceof SignedOut)) showError(`Couldn't set that: ${(e as Error).message}`);
+          }
+        },
+      }, h("span", {}, label), h("small", {}, when.format(time)))),
+  );
+  document.body.append(menu);
+  const r = button.getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(innerWidth - menu.offsetWidth - 8, r.right - menu.offsetWidth))}px`;
+  menu.style.top = `${r.bottom + menu.offsetHeight + 8 < innerHeight ? r.bottom + 6 : r.top - menu.offsetHeight - 6}px`;
+  addEventListener("pointerdown", outside, true);
+}
+
 /** The note is in the bin. It's really deleted a few seconds later, unless you press Undo. */
 function throwAway(item: Item) {
   const at = state.items.findIndex((i) => i.id === item.id);
@@ -456,6 +569,7 @@ async function showSimilar(item: Item) {
 }
 
 function openTarget(item: Item): string | null {
+  if (item.link_dead && item.archive_url) return item.archive_url; // the original is gone
   if (item.url) return item.url;
   if (item.file_path) return `/files/${item.id}`;
   return null;
@@ -496,6 +610,27 @@ function priceTag(item: Item): HTMLElement | null {
     fmt(item.price), was ? h("s", {}, fmt(was)) : null);
 }
 
+/** Butler's longer notes (like a video's key points), folded away until you ask. */
+function keyPoints(details: string): HTMLElement {
+  const [summary, ...points] = details.split("\n").map((l) => l.trim()).filter(Boolean);
+  const list = h("div", { class: "points", hidden: true },
+    h("p", {}, summary),
+    points.length ? h("ul", {}, ...points.map((p) => h("li", {}, p.replace(/^[•\-*]\s*/, "")))) : null,
+  );
+  const toggle = h("button", {
+    class: "points-toggle",
+    "aria-expanded": "false",
+    onclick: (e) => {
+      e.stopPropagation();
+      list.hidden = !list.hidden;
+      toggle.setAttribute("aria-expanded", String(!list.hidden));
+      toggle.textContent = list.hidden ? "▸ Key points" : "▾ Key points";
+      relayoutLater();
+    },
+  }, "▸ Key points");
+  return h("div", {}, toggle, list);
+}
+
 const COLORS = 6;
 
 function note(item: Item): HTMLElement {
@@ -523,7 +658,11 @@ function note(item: Item): HTMLElement {
     item.summary ? h("p", { class: "summary" }, item.summary) : null,
     item.note ? h("p", { class: "note-text" }, item.note) : null,
     priceTag(item),
+    item.link_dead
+      ? h("p", { class: "rescued" }, item.archive_url ? "The original page is gone. This opens a saved copy." : "The original page is gone.")
+      : null,
     !item.summary && item.body ? h("p", { class: "summary" }, item.body.slice(0, 240)) : null,
+    item.details ? keyPoints(item.details) : null,
     item.tags.length
       ? h("div", { class: "tags" }, ...item.tags.map((t) =>
           h("button", { class: "tag", onclick: (e) => { e.stopPropagation(); setFilter({ facet: "tag", value: t }); } }, `#${t}`)))
@@ -537,6 +676,18 @@ function note(item: Item): HTMLElement {
         title: "Find similar",
         onclick: (e) => { e.stopPropagation(); showSimilar(item); },
       }, "≈"),
+      h("button", {
+        class: "icon",
+        "aria-label": "Share a link to this note",
+        title: "Share a link to this note",
+        onclick: (e) => { e.stopPropagation(); shareNote(item); },
+      }, "🔗"),
+      h("button", {
+        class: "icon",
+        "aria-label": "Remind me later",
+        title: "Remind me later",
+        onclick: (e) => { e.stopPropagation(); snooze(item, e.currentTarget as HTMLElement); },
+      }, "⏰"),
       del,
     ),
   );
@@ -545,7 +696,7 @@ function note(item: Item): HTMLElement {
     : h("span", { class: "tape", "aria-hidden": "true" }, h("i"), h("i"));
   if (!pinned) fastener.style.setProperty("--tape-tilt", `${(hashOf(item.id + "t") % 16) - 8}deg`);
   el = h("div", {
-    class: `note c${color}${openTarget(item) ? " opens" : ""}`,
+    class: `note c${color}${openTarget(item) ? " opens" : ""}${item.share_token ? " shared" : ""}`,
     "data-id": item.id,
     role: openTarget(item) ? "link" : "article",
     title: openTarget(item) ? "Click to open · drag to move" : "Drag to move",

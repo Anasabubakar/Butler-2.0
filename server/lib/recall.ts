@@ -16,6 +16,7 @@ export interface Recalled {
 
 /** Where an item can be opened: its own link, or the saved file on the website. */
 export function linkFor(item: Item, publicUrl: string | undefined): string | null {
+  if (item.link_dead && item.archive_url) return item.archive_url; // the original is gone
   if (item.url?.startsWith("https://")) return item.url;
   if (item.file_path && publicUrl?.startsWith("https://")) return `${publicUrl.replace(/\/$/, "")}/files/${item.id}`;
   return null;
@@ -31,6 +32,7 @@ export function describe(item: Item, n: number): string {
     item.note ? `their note: ${item.note}` : null,
     item.url ? `link: ${item.url}` : null,
     item.body ? `text: ${item.body.slice(0, 600)}` : null,
+    item.details ? `notes: ${item.details.slice(0, 1500)}` : null,
   ];
   return lines.filter(Boolean).join("\n");
 }

@@ -30,13 +30,18 @@ export interface Item {
   board_x: number | null;
   board_y: number | null;
   board_tilt: number | null;
+  share_token?: string | null; // set while the note has a public link
+  details?: string | null; // longer notes, like a video's key points
+  archive_url?: string | null; // a copy on the Internet Archive
+  link_dead?: boolean; // the original stopped loading
   price?: string | null; // numeric comes back as text
   price_first?: string | null;
   price_currency?: string | null;
 }
 
 const COLUMNS = sql`id, created_at, device, kind, url, body, note, file_path, mime, thumbnail,
-  platform, title, summary, tags, category, status, error, board_x, board_y, board_tilt, price, price_first, price_currency`;
+  platform, title, summary, tags, category, status, error, board_x, board_y, board_tilt, share_token, details,
+  archive_url, link_dead, price, price_first, price_currency`;
 
 /** Applies every db/migrations/*.sql file not applied yet, in name order. */
 export async function migrate(dir: string) {
@@ -140,4 +145,35 @@ export async function setPrice(id: string, price: { amount: number; currency: st
     await sql`update items set price = ${price.amount}, price_currency = ${price.currency},
       price_first = coalesce(price_first, ${price.amount}), price_checked_at = now() where id = ${id}`;
   }
+}
+
+/** Links that need archiving (newest first), or checking (least recently checked first). */
+export function linksToArchive(limit: number) {
+  return sql<{ id: string; url: string }[]>`
+    select id, url from items where kind = 'link' and url like 'http%' and archive_url is null
+      and created_at > now() - interval '30 days'
+    order by created_at desc limit ${limit}`;
+}
+
+export function linksToCheck(limit: number) {
+  return sql<{ id: string; url: string }[]>`
+    select id, url from items where kind = 'link' and url like 'http%' and not link_dead
+      and created_at < now() - interval '1 day'
+      and (link_checked_at is null or link_checked_at < now() - interval '30 days')
+    order by link_checked_at nulls first, created_at limit ${limit}`;
+}
+
+export async function markChecked(id: string, dead: boolean) {
+  await sql`update items set link_checked_at = now(), link_dead = ${dead} where id = ${id}`;
+}
+
+/** Gives a note a public link token, or takes it away (null). False if there's no such note. */
+export async function setShareToken(id: string, token: string | null): Promise<boolean> {
+  const rows = await sql`update items set share_token = ${token} where id = ${id} returning id`;
+  return rows.length > 0;
+}
+
+export async function itemByShareToken(token: string): Promise<Item | null> {
+  const [item] = await sql<Item[]>`select ${COLUMNS} from items where share_token = ${token}`;
+  return item ?? null;
 }

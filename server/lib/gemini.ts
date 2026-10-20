@@ -63,15 +63,33 @@ export interface Picture {
   mediaType: string;
 }
 
+/** A public video Gemini fetches itself, such as a YouTube link. */
+export interface VideoLink {
+  uri: string;
+}
+
+export interface AskOptions {
+  timeoutMs?: number;
+  /** Fewer tokens per video frame, so long videos fit and cost less. */
+  lowDetail?: boolean;
+}
+
 /**
  * Asks Gemini about a picture (or several attachments, such as a screenshot and a voice
  * clip) and returns its JSON answer, checked against `schema`.
  */
-export async function askGemini<T>(prompt: string, picture: Picture | Picture[] | null, schema: z.ZodType<T>): Promise<T> {
+export async function askGemini<T>(
+  prompt: string,
+  picture: Picture | VideoLink | (Picture | VideoLink)[] | null,
+  schema: z.ZodType<T>,
+  options: AskOptions = {},
+): Promise<T> {
   const key = Deno.env.get("GEMINI_API_KEY");
   if (!key) throw new Error("GEMINI_API_KEY is not set");
   const parts: unknown[] = [];
-  for (const p of [picture ?? []].flat()) parts.push({ inline_data: { mime_type: p.mediaType, data: p.data } });
+  for (const p of [picture ?? []].flat()) {
+    parts.push("uri" in p ? { file_data: { file_uri: p.uri } } : { inline_data: { mime_type: p.mediaType, data: p.data } });
+  }
   parts.push({ text: prompt });
 
   let lastError = "no Gemini model answered";
@@ -86,10 +104,11 @@ export async function askGemini<T>(prompt: string, picture: Picture | Picture[] 
           generationConfig: {
             temperature: 0,
             responseMimeType: "application/json",
+            ...(options.lowDetail && { mediaResolution: "MEDIA_RESOLUTION_LOW" }),
             ...(thinking && { thinkingConfig: { thinkingBudget: 0 } }),
           },
         }),
-        signal: AbortSignal.timeout(45_000),
+        signal: AbortSignal.timeout(options.timeoutMs ?? 45_000),
       });
       if (res.ok) {
         const data = await res.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
