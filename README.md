@@ -134,6 +134,10 @@ Every morning at 08:00 your time, Butler sends a note to your phone and laptop. 
 
 Every Sunday at 18:00 your time, Butler sends a note with what you saved that week: how many, by topic and app, your top tags, and three worth another look (ones you wrote a note on come first). Ask "what did I save this week?" for it any time. Set `BUTLER_RECAP_AT` for a different time, or `BUTLER_RECAP=off` to stop it.
 
+### Price watch
+
+Save a product page (Jumia, Konga, Amazon and most shops) and Butler reads its price from the page's structured data, the same data Google Shopping uses, then checks it twice a day. If it drops by 5% or more, every device gets a "📉 Price drop" note with the link, and the sticky note shows the new price next to the old one. Shops that don't publish a price that way, or that block bots, aren't watched; Butler never guesses a price from the page text. Set `BUTLER_PRICE_WATCH=off` to stop it.
+
 ### Dead-link rescue
 
 Every public link you save is also saved to the Internet Archive's Wayback Machine. Once a month Butler checks old links; if a page has disappeared, its note says so and opens the saved copy instead, and Ask Butler links to the copy too. Set `BUTLER_ARCHIVE=off` to stop it. Social posts (the Archive can't copy them), Google Docs, Dropbox and other private links, and links carrying a token or key are never sent, since archive.org copies are public.

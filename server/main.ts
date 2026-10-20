@@ -22,6 +22,7 @@ import { linkFor, recall } from "./lib/recall.ts";
 import * as brief from "./lib/brief.ts";
 import * as recap from "./lib/recap.ts";
 import * as settings from "./lib/settings.ts";
+import * as prices from "./lib/price.ts";
 import * as archive from "./lib/archive.ts";
 import * as share from "./lib/share.ts";
 import * as video from "./lib/video.ts";
@@ -880,6 +881,35 @@ async function recapIfDue(now = new Date()) {
   console.log(`recap: sent to ${devices.join(", ")}`);
 }
 
+let watching = false;
+
+/** Checks saved shopping links' prices and tells every device about a drop. */
+async function watchPrices() {
+  if (env("BUTLER_PRICE_WATCH") === "off" || watching) return;
+  watching = true;
+  try {
+    for (const item of await db.pricesToCheck(10)) {
+      const now = await prices.fetchPrice(item.url);
+      // A page that showed a price before but not now (blocked, sold out): try again later.
+      if (!now && item.price) continue;
+      await db.setPrice(item.id, now);
+      if (!now || !item.price || !item.price_currency) continue;
+      const before = { amount: Number(item.price), currency: item.price_currency };
+      if (!prices.dropped(before, now)) continue;
+      const first = item.price_first ? Number(item.price_first) : before.amount;
+      const devices = (await inbox.devices()).map((d) => d.name);
+      await inbox.send(devices, {
+        from_device: "Butler", kind: "note",
+        body: `📉 Price drop: ${item.title ?? "something you saved"} is now ${prices.money(now.amount, now.currency)} ` +
+          `(was ${prices.money(before.amount, before.currency)}` +
+          (first > before.amount ? `, and ${prices.money(first, now.currency)} when you saved it` : "") + `).\n${item.url}`,
+      });
+    }
+  } finally {
+    watching = false;
+  }
+}
+
 let rescuing = false;
 
 /** Copies new links to the Internet Archive and checks old ones, a few at a time. */
@@ -916,6 +946,7 @@ if (import.meta.main) {
   setInterval(backUpSoon, 6 * 60 * 60 * 1000);
   setInterval(() => briefIfDue().catch((e) => console.error("brief:", e)), 5 * 60_000);
   setInterval(() => recapIfDue().catch((e) => console.error("recap:", e)), 5 * 60_000);
+  setInterval(() => watchPrices().catch((e) => console.error("prices:", e)), 30 * 60_000);
   setInterval(() => rescueLinks().catch((e) => console.error("links:", e)), 10 * 60_000);
   if (geminiReady()) geminiModels().then((m) => console.log("Gemini models, in order:", m.join(", ")));
   Deno.serve({ port: PORT, hostname: env("HOST", "0.0.0.0") }, app.fetch);

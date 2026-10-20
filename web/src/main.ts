@@ -38,6 +38,9 @@ interface Item {
   board_x: number | null;
   board_y: number | null;
   board_tilt: number | null;
+  price?: string | null;
+  price_first?: string | null;
+  price_currency?: string | null;
   archive_url?: string | null;
   link_dead?: boolean;
   share_token?: string | null;
@@ -591,6 +594,22 @@ function media(item: Item): HTMLElement | null {
   return el;
 }
 
+/** A saved product's price, with what it was when you saved it if it has dropped. */
+function priceTag(item: Item): HTMLElement | null {
+  if (!item.price || !item.price_currency) return null;
+  const fmt = (v: string) => {
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency: item.price_currency!, currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 })
+        .format(Number(v));
+    } catch {
+      return `${Number(v).toLocaleString()} ${item.price_currency}`;
+    }
+  };
+  const was = item.price_first && Number(item.price_first) > Number(item.price) ? item.price_first : null;
+  return h("p", { class: `price${was ? " down" : ""}`, title: "Butler checks this price twice a day" },
+    fmt(item.price), was ? h("s", {}, fmt(was)) : null);
+}
+
 /** Butler's longer notes (like a video's key points), folded away until you ask. */
 function keyPoints(details: string): HTMLElement {
   const [summary, ...points] = details.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -638,6 +657,7 @@ function note(item: Item): HTMLElement {
     item.status === "failed" ? h("p", { class: "muted" }, "Couldn't organize this one.") : null,
     item.summary ? h("p", { class: "summary" }, item.summary) : null,
     item.note ? h("p", { class: "note-text" }, item.note) : null,
+    priceTag(item),
     item.link_dead
       ? h("p", { class: "rescued" }, item.archive_url ? "The original page is gone. This opens a saved copy." : "The original page is gone.")
       : null,
