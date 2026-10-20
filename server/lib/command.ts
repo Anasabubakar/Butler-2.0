@@ -3,7 +3,7 @@
 import { z } from "npm:zod@4.3.6";
 import { askGemini, type Picture } from "./gemini.ts";
 
-export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "screen", "recall", "brief", "recap", "answer"] as const;
+export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "screen", "recall", "brief", "recap", "ring", "answer"] as const;
 export const APPS = ["whatsapp", "telegram"] as const;
 export const CONTENTS = ["text", "clipboard", "link", "screen"] as const;
 
@@ -98,6 +98,8 @@ Choose exactly one action:
   "what did I save about visas?" or "open that TikTok about budgeting". text = what to look for, as a short search.
 - "brief": they want a rundown of their day, like "what's my day?", "brief me" or "what's on today?".
 - "recap": they want a summary of what they saved lately, like "what did I save this week?" or "my week in Butler".
+- "ring": they can't find a device and want it to ring loudly, like "where's my phone?" or "ring my phone".
+  target = "phone", "laptop" or a device name (the other device unless they say).
 - "answer": anything else. Put the answer in reply, plain and short (under 120 words). Use the screenshot if it helps.
 
 Times are ISO 8601 with the offset, like ${now}. "Tonight" means 20:00, "morning" 09:00, "afternoon" 15:00.
