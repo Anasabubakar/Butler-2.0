@@ -5,7 +5,7 @@ import { sql } from "./db.ts";
 export const DEVICE_KINDS = ["laptop", "phone"] as const;
 export type DeviceKind = typeof DEVICE_KINDS[number];
 
-export const MESSAGE_KINDS = ["reminder", "note", "clip", "link", "file"] as const;
+export const MESSAGE_KINDS = ["reminder", "note", "clip", "link", "file", "sync"] as const;
 export type MessageKind = typeof MESSAGE_KINDS[number];
 
 export interface Device {
@@ -44,9 +44,9 @@ export function devices() {
   return sql<Device[]>`select name, kind, last_seen from devices order by last_seen desc`;
 }
 
-/** Hands over everything due for a device, once. */
-export function takeDue(name: string) {
-  return sql<Message[]>`
+/** Hands over everything due for a device, once. Copied text that synced is then forgotten. */
+export async function takeDue(name: string) {
+  const due = await sql<Message[]>`
     update messages set delivered_at = now()
     where id in (
       select id from messages
@@ -55,6 +55,8 @@ export function takeDue(name: string) {
       limit 20
       for update skip locked)
     returning id, created_at, from_device, kind, body, url, item_id, due_at`;
+  if (due.some((m) => m.kind === "sync")) await sql`delete from messages where kind = 'sync' and delivered_at is not null`;
+  return due;
 }
 
 /** Sends one message to each named device. */
@@ -69,6 +71,8 @@ export async function send(to: string[], message: NewMessage) {
     item_id: message.item_id ?? null,
     due_at: message.due_at ?? new Date().toISOString(),
   }));
+  // Only your latest copy matters: drop older ones still waiting.
+  if (message.kind === "sync") await sql`delete from messages where kind = 'sync' and delivered_at is null and to_device = any(${to})`;
   await sql`insert into messages ${sql(rows)}`;
 }
 
