@@ -30,6 +30,15 @@ services:
     volumes:
       - ./data/files:/data/files
 
+  # Local AI for organizing saves, used when butler.env has BUTLER_AI=local.
+  # Turn it on with COMPOSE_PROFILES=local-ai in .env.
+  ollama:
+    image: ollama/ollama:0.40.6
+    profiles: [local-ai]
+    restart: unless-stopped
+    volumes:
+      - ./data/ollama:/root/.ollama
+
   caddy:
     image: caddy:2
     restart: unless-stopped
