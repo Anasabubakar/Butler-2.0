@@ -469,6 +469,11 @@ function media(item: Item): HTMLElement | null {
   }
   // Pictures change a note's height once they arrive, so the board re-settles.
   el?.addEventListener(el.tagName === "VIDEO" ? "loadedmetadata" : "load", relayoutLater, { once: true });
+  // A missing file or a dead thumbnail shouldn't leave a broken picture on the note.
+  el?.addEventListener("error", () => {
+    el?.closest(".media")?.remove();
+    relayoutLater();
+  }, { once: true });
   return el;
 }
 
