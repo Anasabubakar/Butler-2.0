@@ -122,3 +122,7 @@ a.card:hover { transform: translateY(-2px); border-color: var(--accent); }
   .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
   .icon { opacity: 1; }
 }
+
+.icon + .icon { margin-left: 0; }
+.section { grid-column: 1 / -1; margin: 16px 0 0; font-size: 16px; color: var(--muted); }
+.heading .back { font-size: 14px; padding: 4px 10px; margin-right: 6px; vertical-align: middle; }
