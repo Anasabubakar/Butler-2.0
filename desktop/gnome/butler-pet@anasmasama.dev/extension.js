@@ -29,6 +29,7 @@ const DOWNLOADS = GLib.build_filenamev([GLib.get_user_special_dir(GLib.UserDirec
 // Clipboard sync is on while this file exists; the menu button makes and removes it.
 const SYNC_FLAG = GLib.build_filenamev([GLib.get_user_config_dir(), 'butler', 'clipboard-sync']);
 const SYNC_MAX = 20000; // characters; bigger copies stay on the laptop
+const RING_SOUND = '/usr/share/sounds/freedesktop/stereo/phone-incoming-call.oga';
 const syncLabel = on => `Clipboard sync: ${on ? 'on' : 'off'}`;
 const BROWSERS = ['firefox', 'google-chrome', 'chromium', 'brave-browser', 'microsoft-edge', 'vivaldi', 'opera'];
 
@@ -260,6 +261,7 @@ export default class ButlerPetExtension extends Extension {
     }
 
     disable() {
+        this._stopRinging();
         this._drag?.grab.dismiss();
         this._drag = null;
         this._closeAsk();
@@ -437,6 +439,10 @@ export default class ButlerPetExtension extends Extension {
     }
 
     _toggle() {
+        if (this._ringing) {
+            this._stopRinging();
+            return;
+        }
         if (this._stopRecording) {
             this._stopRecording();
             return;
@@ -1066,6 +1072,50 @@ export default class ButlerPetExtension extends Extension {
         });
     }
 
+    /** Rings here for a minute (unmuting first) until the pet is tapped. */
+    async _ringHere(from) {
+        if (this._ringing)
+            return;
+        this._ringing = true;
+        Main.notify('Butler: I\'m here!', `Ringing your laptop${from}. Tap the pet to stop.`);
+        this._spawn(['pactl', 'set-sink-mute', '@DEFAULT_SINK@', '0']);
+        if (this._pet && !this._busy) {
+            this._unpeek();
+            this._play('summon');
+            this._say('I\'m here! Tap me to stop.');
+        }
+        const until = Date.now() + 60000;
+        while (this._ringing && this._pet && Date.now() < until) {
+            this._ringer = this._spawn(['paplay', RING_SOUND]);
+            if (!this._ringer)
+                break; // no paplay: the notification and the pet will have to do
+            await new Promise(resolve => this._ringer.wait_async(null, () => resolve()));
+            this._ringer = null;
+        }
+        this._stopRinging();
+    }
+
+    _stopRinging() {
+        if (!this._ringing)
+            return;
+        this._ringing = false;
+        this._ringer?.force_exit();
+        this._ringer = null;
+        if (this._pet && !this._busy) {
+            this._note.hide();
+            this._goHome();
+        }
+    }
+
+    /** Starts a program and returns it, or null if it isn't installed. */
+    _spawn(argv) {
+        try {
+            return Gio.Subprocess.new(argv, Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE);
+        } catch (e) {
+            return null;
+        }
+    }
+
     async _addressBar() {
         await this._press(Clutter.KEY_Control_L, Clutter.KEY_l);
         const text = await this._copySelection();
@@ -1103,6 +1153,9 @@ export default class ButlerPetExtension extends Extension {
         switch (message.kind) {
         case 'reminder':
             return this._announce('Reminder', message.body);
+        case 'ring':
+            this._ringHere(from);
+            return;
         case 'sync':
             this._lastSynced = message.body ?? ''; // so it isn't sent straight back
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, this._lastSynced);
