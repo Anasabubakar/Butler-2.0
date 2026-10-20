@@ -7,6 +7,8 @@ A small charcoal butler that peeks out from the bottom-right corner of your scre
 - **Analyze this** and **Solve this**: Butler looks at the window and explains it, or solves the problem on it. The answer shows beside the pet (tap it to close) and is copied so you can paste it.
 - **Send to phone**: sends the page you're on (in a browser), the text you've selected, or else a screenshot to your phone.
 - **Ask Butler…**: type what you want and press Enter, for example "remind me at 3 to call Mum", "add dentist Friday 10am to my calendar", "send what I copied to my phone", "email this to David" or "what does this error mean?". Butler sees the window you're on, so "this" works. Escape closes the box.
+- **Talk to Butler**: say it instead. The pet listens until you tap it (or for 20 seconds), using PipeWire's `pw-record`, which Ubuntu has already.
+- Messages: "WhatsApp David I'm running late" opens WhatsApp Web with the message typed in, and "send this to David on Telegram" opens Telegram's share page. You press Send. With Google connected, Butler finds David's number in your contacts; a screenshot you wanted sent goes on your clipboard to paste.
 
 Every 20 seconds the pet checks for reminders and anything your phone sent. They arrive as a desktop notification and a note from the pet: copied text goes straight onto your clipboard, links open when you tap the note, and files land in `~/Downloads/Butler`.
 
