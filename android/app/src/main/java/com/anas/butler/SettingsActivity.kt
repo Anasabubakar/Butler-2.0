@@ -1,6 +1,9 @@
 package com.anas.butler
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Toast
@@ -25,5 +28,27 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
             if (config.isReady) finish()
         }
+
+        // Little Butler needs two switches, asked for one at a time.
+        findViewById<Button>(R.id.start_pet).setOnClickListener {
+            when {
+                !config.isReady -> toast(R.string.settings_incomplete)
+                !Settings.canDrawOverlays(this) -> {
+                    startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                    toast(R.string.allow_overlay)
+                }
+                HandsService.instance == null -> {
+                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    toast(R.string.allow_hands)
+                }
+                else -> {
+                    PetService.start(this)
+                    toast(R.string.pet_started)
+                    finish()
+                }
+            }
+        }
     }
+
+    private fun toast(message: Int) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 }
