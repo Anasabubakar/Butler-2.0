@@ -66,11 +66,14 @@ class PetService : Service() {
     private var panelShown = false
     private var busy = false
     private var noteTapped: CompletableDeferred<Unit>? = null
+    private var operating = false
+    private var stopOperating = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         startInForeground()
         if (!Settings.canDrawOverlays(this)) {
             stopSelf()
@@ -165,6 +168,7 @@ class PetService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onDestroy() {
+        if (instance === this) instance = null
         scope.cancel()
         if (::pet.isInitialized) {
             runCatching { windows.removeView(pet) }
@@ -216,6 +220,11 @@ class PetService : Service() {
     }
 
     private fun toggle() {
+        if (operating) {
+            stopOperating = true
+            say(getString(R.string.pet_stopping))
+            return
+        }
         if (busy) return
         panelShown = !panelShown
         menu.visibility = View.VISIBLE
@@ -374,6 +383,95 @@ class PetService : Service() {
         }
     }
 
+    // --- doing things on screen --------------------------------------------------------
+
+    /** Starts working on `goal` once the Ask sheet has closed. */
+    fun operateSoon(goal: String) {
+        scope.launch {
+            delay(700)
+            operate(goal)
+        }
+    }
+
+    /**
+     * Works towards `goal` one step at a time: a screenshot, Butler picks the next tap,
+     * swipe or typing, the pet does it, repeat. Tap the pet to stop.
+     */
+    private fun operate(goal: String) = work(getString(R.string.pet_thinking), face = "work") {
+        val config = Config(this)
+        val done = mutableListOf<String>()
+        operating = true
+        stopOperating = false
+        try {
+            for (i in 1..MAX_STEPS) {
+                if (stopOperating) return@work getString(R.string.pet_stopped)
+                val shot = snap()
+                val step = ScreenClient(config).step(shot.jpeg, goal, done)
+                val what = step.optString("say")
+                when (step.optString("do")) {
+                    "done" -> return@work what.ifBlank { getString(R.string.pet_done) }
+                    "stop" -> return@work what.ifBlank { getString(R.string.pet_cant_finish) }
+                }
+                if (stopOperating) return@work getString(R.string.pet_stopped)
+                say(getString(R.string.pet_step, i, what.ifBlank { step.optString("do") }))
+                val result = perform(step, shot)
+                done += listOfNotNull(step.optString("do"), step.optString("text").takeIf { !step.isNull("text") && it.isNotBlank() }?.let { "\"$it\"" },
+                    step.optString("key").takeIf { !step.isNull("key") && it.isNotBlank() })
+                    .joinToString(" ") + ": $what" + (result?.let { " ($it)" } ?: "")
+                delay(if (step.optString("do") == "wait") 1500 else 900)
+            }
+            getString(R.string.pet_too_many_steps, MAX_STEPS)
+        } finally {
+            operating = false
+        }
+    }
+
+    /** Does one step. Returns a note if it couldn't, which Butler sees on the next step. */
+    private suspend fun perform(step: JSONObject, shot: Shot): String? {
+        val hands = hands()
+        fun x(key: String, fallback: Double = 500.0) = (step.optDouble(key, fallback) / 1000.0 * shot.width).toFloat()
+        fun y(key: String, fallback: Double = 500.0) = (step.optDouble(key, fallback) / 1000.0 * shot.height).toFloat()
+        touchThrough(true) // our overlays mustn't catch the taps
+        try {
+            when (step.optString("do")) {
+                "click" -> hands.tap(x("x"), y("y"))
+                "double_click" -> { hands.tap(x("x"), y("y")); delay(90); hands.tap(x("x"), y("y")) }
+                "long_press" -> hands.longPress(x("x"), y("y"))
+                "type" -> if (!hands.type(step.optString("text"))) return "no text field had focus"
+                "key" -> when (step.optString("key")) {
+                    "enter" -> if (!hands.enter()) return "enter didn't work here"
+                    "back", "escape" -> hands.back()
+                    "home" -> hands.home()
+                    else -> return "that key isn't on a phone"
+                }
+                "scroll" -> {
+                    // Scrolling down means swiping up, by 40% of the screen.
+                    val sx = x("x"); val sy = y("y")
+                    val dx = shot.width * 0.4f; val dy = shot.height * 0.4f
+                    when (step.optString("direction", "down")) {
+                        "up" -> hands.drag(sx, sy - dy / 2, sx, sy + dy / 2, 350)
+                        "left" -> hands.drag(sx - dx / 2, sy, sx + dx / 2, sy, 350)
+                        "right" -> hands.drag(sx + dx / 2, sy, sx - dx / 2, sy, 350)
+                        else -> hands.drag(sx, sy + dy / 2, sx, sy - dy / 2, 350)
+                    }
+                }
+                "drag" -> hands.drag(x("x"), y("y"), x("x2", step.optDouble("x", 500.0)), y("y2", step.optDouble("y", 500.0)), 700)
+            }
+        } finally {
+            touchThrough(false)
+        }
+        return null
+    }
+
+    /** While true, touches pass straight through the pet and its notes to the app underneath. */
+    private fun touchThrough(on: Boolean) {
+        for ((view, layout) in listOf(pet to petLayout, panel to panelLayout)) {
+            layout.flags = if (on) layout.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            else layout.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+            windows.updateViewLayout(view, layout)
+        }
+    }
+
     // --- the inbox: reminders and things sent from your laptop -------------------------
 
     private suspend fun checkInbox() {
@@ -469,6 +567,11 @@ class PetService : Service() {
         private const val CHANNEL = "pet"
         private const val INBOX_CHANNEL = "inbox"
         private const val INBOX_EVERY_MS = 20_000L
+        private const val MAX_STEPS = 15
+
+        /** The running pet, so the Ask sheet can hand it screen tasks. */
+        var instance: PetService? = null
+            private set
         private var nextNotification = 100
         private val URL = Regex("https?://\\S+")
 
