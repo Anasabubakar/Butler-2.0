@@ -130,6 +130,10 @@ Every morning at 08:00 your time, Butler sends a note to your phone and laptop. 
 
 Every Sunday at 18:00 your time, Butler sends a note with what you saved that week: how many, by topic and app, your top tags, and three worth another look (ones you wrote a note on come first). Ask "what did I save this week?" for it any time. Set `BUTLER_RECAP_AT` for a different time, or `BUTLER_RECAP=off` to stop it.
 
+### Share a note
+
+Press 🔗 on a note to get a secret link to just that note (on the phone it opens the share sheet; on a computer it's copied). Anyone with the link sees a single sticky note with its title, summary and the original link, and WhatsApp or X show a preview. Nothing else in your library is visible. Shared notes wear a "shared" stamp; press 🔗 again and choose **Stop sharing** to kill the link.
+
 ### Clipboard sync
 
 Turn on **Clipboard sync** in the laptop pet's menu, and whatever you copy on the laptop lands on your phone's clipboard within about 20 seconds. Copies from password managers are skipped, only your latest copy waits on the server, and it's deleted once the phone takes it. On the phone, turn on **Clipboard sync** in the pet's menu too, and it works the other way. Android doesn't let apps read the clipboard in the background, so Butler's Accessibility helper notices when you tap **Copy** (or see a "Copied" message), and a see-through screen opens for a split second to read it. Android then shows "Butler pasted from your clipboard"; that's expected. Copying with a keyboard shortcut, or in an app that copies without a Copy button or message, won't be noticed; use Ask Butler's "send what I copied to my laptop" then.
