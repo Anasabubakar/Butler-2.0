@@ -72,7 +72,7 @@ export async function send(to: string[], message: NewMessage) {
     due_at: message.due_at ?? new Date().toISOString(),
   }));
   // Only your latest copy matters: drop older ones still waiting.
-  if (message.kind === "sync") await sql`delete from messages where kind = 'sync' and delivered_at is null and to_device = any(${to})`;
+  if (message.kind === "sync") await sql`delete from messages where kind = 'sync' and delivered_at is null and to_device = any(${to}::text[])`;
   await sql`insert into messages ${sql(rows)}`;
 }
 
