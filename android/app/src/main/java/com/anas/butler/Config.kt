@@ -19,6 +19,11 @@ class Config(context: Context) {
         get() = prefs.getString(KEY_DEVICE, null) ?: defaultDeviceName()
         set(v) = prefs.edit().putString(KEY_DEVICE, v.trim()).apply()
 
+    /** Whether what you copy on the phone goes to your laptop's clipboard too. */
+    var clipboardSync: Boolean
+        get() = prefs.getBoolean(KEY_SYNC, false)
+        set(v) = prefs.edit().putBoolean(KEY_SYNC, v).apply()
+
     val isReady: Boolean
         get() = saveUrl.startsWith("https://") && token.isNotEmpty()
 
@@ -29,5 +34,6 @@ class Config(context: Context) {
         const val KEY_URL = "save_url"
         const val KEY_TOKEN = "token"
         const val KEY_DEVICE = "device"
+        const val KEY_SYNC = "clipboard_sync"
     }
 }
