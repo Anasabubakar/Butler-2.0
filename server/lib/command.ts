@@ -3,7 +3,7 @@
 import { z } from "npm:zod@4.3.6";
 import { askGemini, type Picture } from "./gemini.ts";
 
-export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "screen", "recall", "answer"] as const;
+export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "screen", "recall", "brief", "answer"] as const;
 export const APPS = ["whatsapp", "telegram"] as const;
 export const CONTENTS = ["text", "clipboard", "link", "screen"] as const;
 
@@ -96,6 +96,7 @@ Choose exactly one action:
   text = the goal in plain words, e.g. "open the first video" or "search YouTube for jollof rice".
 - "recall": find or ask about something they saved in their Butler library before, like "that jollof recipe I saved",
   "what did I save about visas?" or "open that TikTok about budgeting". text = what to look for, as a short search.
+- "brief": they want a rundown of their day, like "what's my day?", "brief me" or "what's on today?".
 - "answer": anything else. Put the answer in reply, plain and short (under 120 words). Use the screenshot if it helps.
 
 Times are ISO 8601 with the offset, like ${now}. "Tonight" means 20:00, "morning" 09:00, "afternoon" 15:00.
