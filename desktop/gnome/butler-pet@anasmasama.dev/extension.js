@@ -339,12 +339,12 @@ export default class ButlerPetExtension extends Extension {
         if (!window)
             return null;
         const stream = Gio.MemoryOutputStream.new_resizable();
-        await new Promise((resolve, reject) => {
+        const area = await new Promise((resolve, reject) => {
             new Shell.Screenshot().screenshot_window(false, false, stream, (shot, result) => {
                 try {
-                    shot.screenshot_window_finish(result);
+                    const [, captured] = shot.screenshot_window_finish(result);
                     stream.close(null);
-                    resolve();
+                    resolve(captured);
                 } catch (e) {
                     reject(new Error("couldn't take a screenshot"));
                 }
@@ -357,7 +357,9 @@ export default class ButlerPetExtension extends Extension {
             pixbuf = pixbuf.scale_simple(1600, height, GdkPixbuf.InterpType.BILINEAR);
         }
         const [, jpeg] = pixbuf.save_to_bufferv('jpeg', ['quality'], ['85']);
-        return {jpeg: new GLib.Bytes(jpeg), rect: window.get_frame_rect()};
+        // The captured area is exactly what the picture shows, so clicks land where Gemini points.
+        const rect = area?.width ? area : window.get_frame_rect();
+        return {jpeg: new GLib.Bytes(jpeg), rect};
     }
 
     /** Asks Butler where `target` is on the screenshot and clicks it. False if it isn't there. */
