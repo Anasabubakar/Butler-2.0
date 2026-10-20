@@ -3,7 +3,7 @@
 import { z } from "npm:zod@4.3.6";
 import { askGemini, type Picture } from "./gemini.ts";
 
-export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "screen", "recall", "brief", "recap", "spend", "spending", "answer"] as const;
+export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "screen", "recall", "brief", "recap", "spend", "spending", "ring", "answer"] as const;
 export const APPS = ["whatsapp", "telegram"] as const;
 export const CONTENTS = ["text", "clipboard", "link", "screen"] as const;
 
@@ -107,6 +107,8 @@ Choose exactly one action:
   text = what it was for in a few words, category = one of food, transport, airtime, bills, shopping, fun, health, family, other.
 - "spending": they ask what they spent, like "how much did I spend this week?" or "what did I spend on food this month?".
   period = today, week, month or year (week unless said), category = only if they asked about one.
+- "ring": they can't find a device and want it to ring loudly, like "where's my phone?" or "ring my phone".
+  target = "phone", "laptop" or a device name (the other device unless they say).
 - "answer": anything else. Put the answer in reply, plain and short (under 120 words). Use the screenshot if it helps.
 
 Times are ISO 8601 with the offset, like ${now}. "Tonight" means 20:00, "morning" 09:00, "afternoon" 15:00.

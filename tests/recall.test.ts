@@ -6,7 +6,8 @@ import { describe, linkFor, recall } from "../server/lib/recall.ts";
 const item = (over: Partial<Item>): Item => ({
   id: "11111111-1111-1111-1111-111111111111", created_at: "2026-10-01T09:00:00Z", device: "phone", kind: "link",
   url: null, body: null, note: null, file_path: null, mime: null, thumbnail: null, platform: null,
-  title: null, summary: null, tags: [], category: null, status: "organized", error: null, ...over,
+  title: null, summary: null, tags: [], category: null, status: "organized", error: null,
+  board_x: null, board_y: null, board_tilt: null, ...over,
 });
 
 const jollof = item({

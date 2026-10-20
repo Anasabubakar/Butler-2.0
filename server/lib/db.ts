@@ -27,10 +27,13 @@ export interface Item {
   category: string | null;
   status: "pending" | "organized" | "failed";
   error: string | null;
+  board_x: number | null;
+  board_y: number | null;
+  board_tilt: number | null;
 }
 
 const COLUMNS = sql`id, created_at, device, kind, url, body, note, file_path, mime, thumbnail,
-  platform, title, summary, tags, category, status, error`;
+  platform, title, summary, tags, category, status, error, board_x, board_y, board_tilt`;
 
 /** Applies every db/migrations/*.sql file not applied yet, in name order. */
 export async function migrate(dir: string) {
@@ -91,6 +94,17 @@ export async function getItem(id: string): Promise<Item | undefined> {
 export async function deleteItem(id: string): Promise<Item | undefined> {
   const [item] = await sql<Item[]>`delete from items where id = ${id} returning ${COLUMNS}`;
   return item;
+}
+
+/** Sticks a note somewhere on the board, or takes it off (all null). */
+export async function place(id: string, x: number | null, y: number | null, tilt: number | null) {
+  const rows = await sql`update items set board_x = ${x}, board_y = ${y}, board_tilt = ${tilt} where id = ${id} returning id`;
+  return rows.length > 0;
+}
+
+/** Takes every note off the board, so they line up again. */
+export async function tidyBoard() {
+  await sql`update items set board_x = null, board_y = null, board_tilt = null where board_x is not null`;
 }
 
 export function facets() {

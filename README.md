@@ -134,9 +134,17 @@ Every Sunday at 18:00 your time, Butler sends a note with what you saved that we
 
 Tell Butler what you spend, typed or out loud: "I spent 2,500 on suya", "paid 15k for transport". Ask "how much did I spend this week?" or "what did I spend on food this month?" and it adds it up (by plain arithmetic, not AI). The Sunday recap includes the week's spending. Amounts are in naira unless you say another currency; set `BUTLER_CURRENCY` (like `USD`) to change that.
 
+### Streaks and milestones
+
+Butler cheers on every device when you hit a round number of saves (10th, 25th, 50th, 100th…) or save something several days in a row (3, 7, 14, 30 days…). The morning brief shows your current streak.
+
 ### Clipboard sync
 
 Turn on **Clipboard sync** in the laptop pet's menu, and whatever you copy on the laptop lands on your phone's clipboard within about 20 seconds. Copies from password managers are skipped, only your latest copy waits on the server, and it's deleted once the phone takes it. On the phone, turn on **Clipboard sync** in the pet's menu too, and it works the other way. Android doesn't let apps read the clipboard in the background, so Butler's Accessibility helper notices when you tap **Copy** (or see a "Copied" message), and a see-through screen opens for a split second to read it. Android then shows "Butler pasted from your clipboard"; that's expected. Copying with a keyboard shortcut, or in an app that copies without a Copy button or message, won't be noticed; use Ask Butler's "send what I copied to my laptop" then.
+
+### Find my phone
+
+Press **Ring my phone** in the laptop pet's menu or at the top of the website, or ask Butler "where's my phone?". Within about 20 seconds the phone rings at full alarm volume, even on silent, and buzzes for a minute. Tap the pet or the notification to stop it. It works the other way too ("ring my laptop"); the laptop unmutes and plays a ringtone. A ring that couldn't reach the device within 5 minutes is dropped, so it never goes off hours later.
 
 ## Install the Android app
 
@@ -167,7 +175,7 @@ Tap **Start Little Butler** on the setup screen. It asks for two switches, one a
 1. **Display over other apps**, so the pet can peek from the corner.
 2. **Butler** under **Accessibility**, so it can screenshot and tap for you. It only does that when you press one of its buttons. On Android 13 and newer, an app installed from an APK has this switch greyed out at first: open Butler's **App info**, tap **⋮**, choose **Allow restricted settings**, and try again.
 
-Drag the pet anywhere on the screen; it stays where you drop it, and peeks again if you drop it on the bottom edge. Tap it for **Save this** (a screenshot plus the post's link, using Share → Copy link inside apps), **Copy this**, **Analyze this** and **Solve this**. It also has **Send to laptop** (the page, the selected text, or a screenshot) and, at the top of the menu, an **Ask me anything…** box (tap it to type) plus **Talk to Butler**: type or say what you want, like "remind me at 3 to call Mum" or "send this to my laptop". Talk uses the phone's own speech recognizer. "WhatsApp David I'm running late" or "send this to David on Telegram" opens the app with the message (and the screenshot, if you said "this") ready for you to press Send; Butler looks David up in your phone's contacts, asking for access the first time. Ask it to do something on screen ("search YouTube for jollof rice") and the pet taps, swipes and types for you step by step; tap the pet to stop it. It stops by itself before paying, sending, posting, deleting or typing passwords. Reminders and things your laptop sends arrive as notifications; files land in Downloads/Butler. Screenshots need Android 11 or newer, and Share, Analyze, Solve and Ask Butler need `GEMINI_API_KEY` on the server.
+Drag the pet anywhere on the screen; it stays where you drop it, and peeks again if you drop it on the bottom edge. Tap it for **Save this** (a screenshot plus the post's link, using Share → Copy link inside apps), **Copy this**, **Analyze this**, **Solve this** and **Translate this** (into English, or into another language if you ask). It also has **Send to laptop** (the page, the selected text, or a screenshot) and, at the top of the menu, an **Ask me anything…** box (tap it to type) plus **Talk to Butler**: type or say what you want, like "remind me at 3 to call Mum" or "send this to my laptop". Talk uses the phone's own speech recognizer. "WhatsApp David I'm running late" or "send this to David on Telegram" opens the app with the message (and the screenshot, if you said "this") ready for you to press Send; Butler looks David up in your phone's contacts, asking for access the first time. Ask it to do something on screen ("search YouTube for jollof rice") and the pet taps, swipes and types for you step by step; tap the pet to stop it. It stops by itself before paying, sending, posting, deleting or typing passwords. Reminders and things your laptop sends arrive as notifications; files land in Downloads/Butler. Screenshots need Android 11 or newer, and Share, Analyze, Solve and Ask Butler need `GEMINI_API_KEY` on the server.
 
 ## Develop
 

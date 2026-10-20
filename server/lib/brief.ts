@@ -3,12 +3,14 @@
 import { sql } from "./db.ts";
 import * as google from "./google.ts";
 import { localIso } from "./command.ts";
+import { savedDays, streak } from "./streaks.ts";
 
 export interface Parts {
   events: google.Event[] | null; // null: Google isn't connected
   reminders: { body: string; due: Date }[];
   savedLastDay: number;
   resurface: { title: string; link: string | null; savedOn: Date } | null;
+  streak?: number; // days in a row with a save
 }
 
 /** The last moment of today in `timeZone`. */
@@ -36,6 +38,7 @@ export function compose(p: Parts, now: Date, timeZone: string): string {
     lines.push("", "Reminders:", ...p.reminders.map((r) => `• ${clock(r.due, timeZone)} ${r.body}`));
   }
   if (p.savedLastDay) lines.push("", `You saved ${p.savedLastDay} thing${p.savedLastDay === 1 ? "" : "s"} in the last day.`);
+  if (p.streak && p.streak >= 2) lines.push(`🔥 ${p.streak}-day saving streak. Save something today to keep it going.`);
   if (p.resurface) {
     const when = new Intl.DateTimeFormat("en-GB", { timeZone, day: "numeric", month: "short" }).format(p.resurface.savedOn);
     lines.push("", `From your library (saved ${when}): ${p.resurface.title}`);
@@ -73,5 +76,8 @@ export async function gather(now: Date, timeZone: string, publicUrl?: string): P
       link: old.url?.startsWith("https://") ? old.url : old.file_path && base?.startsWith("https://") ? `${base}/files/${old.id}` : null,
     }
     : null;
-  return { events, reminders: reminders.map((r) => ({ body: r.body, due: new Date(r.due) })), savedLastDay: n, resurface };
+  return {
+    events, reminders: reminders.map((r) => ({ body: r.body, due: new Date(r.due) })), savedLastDay: n, resurface,
+    streak: streak(await savedDays(timeZone), today(now, timeZone)),
+  };
 }
