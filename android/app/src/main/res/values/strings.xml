@@ -44,6 +44,10 @@
     <string name="allow_hands">Turn on Butler in Accessibility, then tap Start again. If it\'s greyed out, open Butler\'s App info, tap ⋮ and choose Allow restricted settings first.</string>
     <string name="pet_started">Little Butler is in the corner</string>
     <string name="pet_send_laptop">Send to laptop</string>
+    <string name="pet_sync_on">Clipboard sync: on</string>
+    <string name="pet_sync_off">Clipboard sync: off</string>
+    <string name="pet_sync_turned_on">Clipboard sync is on. When you tap Copy, it goes to your laptop too. Android will say Butler read your clipboard each time.</string>
+    <string name="pet_sync_turned_off">Clipboard sync is off.</string>
     <string name="pet_ask_box">Ask me anything…</string>
     <string name="pet_talk">Talk to Butler</string>
     <string name="pet_sending">Sending…</string>
