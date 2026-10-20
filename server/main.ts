@@ -14,11 +14,13 @@ import { cleanUrl, extractUrl, kindFor, platformFor } from "./lib/rules.ts";
 import { geminiModels, geminiReady } from "./lib/gemini.ts";
 import { LOOK_MODES, type LookMode, locate, look, MAX_STEPS, nextStep } from "./lib/screen.ts";
 import * as inbox from "./lib/inbox.ts";
-import { calendarUrl, parseWhen, plan, safeZone } from "./lib/command.ts";
+import { calendarUrl, localIso, parseWhen, plan, safeZone } from "./lib/command.ts";
 import * as google from "./lib/google.ts";
 import * as backup from "./lib/backup.ts";
 import * as meaning from "./lib/meaning.ts";
 import { recall } from "./lib/recall.ts";
+import * as brief from "./lib/brief.ts";
+import * as settings from "./lib/settings.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -302,6 +304,7 @@ app.post("/api/command", async (c) => {
   }
 
   const timeZone = safeZone(text("tz", 100));
+  if (timeZone !== "UTC" && timeZone === text("tz", 100)) await settings.set("time_zone", timeZone); // for the morning brief
   let p;
   try {
     p = await plan(typed, { device, timeZone, devices: await inbox.devices() }, picture, voice);
@@ -386,6 +389,10 @@ app.post("/api/command", async (c) => {
     }
     case "screen":
       return json({ action: "screen", say: p.reply, goal: p.text || said });
+    case "brief": {
+      const now = new Date();
+      return json({ action: "answer", say: brief.compose(await brief.gather(now, timeZone, env("PUBLIC_URL")), now, timeZone) });
+    }
     case "recall": {
       try {
         const found = await findInLibrary(p.text || said);
@@ -621,6 +628,31 @@ function backUpSoon() {
     .finally(() => (backingUp = false));
 }
 
+// --- the morning brief -----------------------------------------------------------------
+
+const BRIEF_AT = env("BUTLER_BRIEF_AT", "08:00")!;
+
+/** Your time zone, as your devices last said it. */
+async function ownerZone() {
+  return safeZone(await settings.get("time_zone") ?? env("BUTLER_TZ"));
+}
+
+/** Sends the brief to every device once a day, at BUTLER_BRIEF_AT your time (unless it's past noon). */
+async function briefIfDue(now = new Date()) {
+  if (env("BUTLER_BRIEF") === "off") return;
+  const timeZone = await ownerZone();
+  const local = localIso(now, timeZone);
+  const day = local.slice(0, 10);
+  const time = local.slice(11, 16);
+  if (time < BRIEF_AT || time >= "12:00" || await settings.get("brief_sent_on") === day) return;
+  const devices = (await inbox.devices()).map((d) => d.name);
+  if (!devices.length) return;
+  await settings.set("brief_sent_on", day);
+  const body = brief.compose(await brief.gather(now, timeZone, env("PUBLIC_URL")), now, timeZone);
+  await inbox.send(devices, { from_device: "Butler", kind: "note", body });
+  console.log(`brief: sent to ${devices.join(", ")}`);
+}
+
 // --- start ---------------------------------------------------------------------------
 
 if (import.meta.main) {
@@ -629,6 +661,7 @@ if (import.meta.main) {
   meaning.backfill().catch((e) => console.error("embedding backfill:", e)); // items saved before this existed
   setTimeout(backUpSoon, 60_000); // once things settle, then every 6 hours
   setInterval(backUpSoon, 6 * 60 * 60 * 1000);
+  setInterval(() => briefIfDue().catch((e) => console.error("brief:", e)), 5 * 60_000);
   if (geminiReady()) geminiModels().then((m) => console.log("Gemini models, in order:", m.join(", ")));
   Deno.serve({ port: PORT, hostname: env("HOST", "0.0.0.0") }, app.fetch);
 }

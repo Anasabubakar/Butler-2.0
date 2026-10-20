@@ -122,6 +122,10 @@ With `GEMINI_API_KEY` set, every organized item also gets an embedding (numbers 
 
 Ask Butler on the phone or laptop can also answer from your library: "what was that jollof recipe I saved?" or "open that TikTok about budgeting". It looks for the closest saves, answers from them only, and lists the ones it used with their links. It opens the first one if you said open, show, play or watch.
 
+### Morning brief
+
+Every morning at 08:00 your time, Butler sends a note to your phone and laptop. It has today's calendar, the reminders still to come, how much you saved in the last day, and one older save worth another look. Ask Butler "what's my day?" to get it any time. It learns your time zone from Ask Butler; set `BUTLER_BRIEF_AT` in `butler.env` for a different time, or `BUTLER_BRIEF=off` to stop it. If the server is down at 08:00, the brief comes when it's back, up to noon.
+
 ## Install the Android app
 
 Every push builds a debug APK. Download `butler-debug-apk` from the latest run on the repo's **Actions** tab, install it, open **Butler**, and enter:

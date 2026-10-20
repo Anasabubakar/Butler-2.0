@@ -134,6 +134,26 @@ export async function addEvent(title: string, start: Date, end: Date, timeZone: 
   return event.htmlLink;
 }
 
+export interface Event {
+  title: string;
+  start: Date;
+  allDay: boolean;
+}
+
+/** Your calendar's events that start between `from` and `to`, in order. */
+export async function events(from: Date, to: Date): Promise<Event[]> {
+  const params = new URLSearchParams({
+    timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: "true", orderBy: "startTime", maxResults: "20",
+  });
+  const data = await google<{ items?: { summary?: string; start?: { dateTime?: string; date?: string } }[] }>(
+    `${API()}/calendar/v3/calendars/primary/events?${params}`,
+  );
+  return (data.items ?? []).flatMap((e) => {
+    const when = e.start?.dateTime ?? e.start?.date;
+    return when ? [{ title: e.summary || "(no title)", start: new Date(when), allDay: !e.start?.dateTime }] : [];
+  });
+}
+
 // --- people ---------------------------------------------------------------------------------
 
 export interface Person {
