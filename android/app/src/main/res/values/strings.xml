@@ -16,7 +16,7 @@
     <string name="device_hint">Device name</string>
     <string name="settings_saved">Butler is ready</string>
     <string name="settings_incomplete">Add an https save URL and the token</string>
-    <string name="hands_description">Lets Little Butler see the screen and tap for you, only when you press one of its buttons: Save this, Copy this, Analyze this, Solve this, Send to laptop, or when you ask it to do something on screen.</string>
+    <string name="hands_description">Lets Little Butler see the screen and tap for you, only when you press one of its buttons: Save this, Copy this, Analyze this, Solve this, Send to laptop, or when you ask it to do something on screen. If you turn on clipboard sync, it also notices when you tap Copy, so what you copied can go to your laptop.</string>
     <string name="pet_channel">Little Butler</string>
     <string name="pet_notification">Little Butler is in the corner</string>
     <string name="pet_menu_title">What should I do?</string>
