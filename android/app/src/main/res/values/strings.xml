@@ -23,6 +23,7 @@
     <string name="pet_save">Save this</string>
     <string name="pet_copy">Copy this</string>
     <string name="pet_analyze">Analyze this</string>
+    <string name="pet_translate">Translate this</string>
     <string name="pet_solve">Solve this</string>
     <string name="pet_hide">Hide Butler</string>
     <string name="pet_grabbing">Grabbing it…</string>
