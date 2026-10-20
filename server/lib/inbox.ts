@@ -46,6 +46,8 @@ export function devices() {
 
 /** Hands over everything due for a device, once. Copied text that synced is then forgotten. */
 export async function takeDue(name: string) {
+  // A ring that waited more than 5 minutes (the phone was off) would only startle you later.
+  await sql`delete from messages where kind = 'ring' and delivered_at is null and due_at < now() - interval '5 minutes'`;
   const due = await sql<Message[]>`
     update messages set delivered_at = now()
     where id in (
@@ -73,6 +75,7 @@ export async function send(to: string[], message: NewMessage) {
   }));
   // Only your latest copy matters: drop older ones still waiting.
   if (message.kind === "sync") await sql`delete from messages where kind = 'sync' and delivered_at is null and to_device = any(${to}::text[])`;
+  if (message.kind === "ring") await sql`delete from messages where kind = 'ring' and delivered_at is null and to_device = any(${to}::text[])`;
   await sql`insert into messages ${sql(rows)}`;
 }
 
