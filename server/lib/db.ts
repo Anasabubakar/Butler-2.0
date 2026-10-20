@@ -30,11 +30,12 @@ export interface Item {
   board_x: number | null;
   board_y: number | null;
   board_tilt: number | null;
+  share_token?: string | null; // set while the note has a public link
   details?: string | null; // longer notes, like a video's key points
 }
 
 const COLUMNS = sql`id, created_at, device, kind, url, body, note, file_path, mime, thumbnail,
-  platform, title, summary, tags, category, status, error, board_x, board_y, board_tilt, details`;
+  platform, title, summary, tags, category, status, error, board_x, board_y, board_tilt, share_token, details`;
 
 /** Applies every db/migrations/*.sql file not applied yet, in name order. */
 export async function migrate(dir: string) {
@@ -120,4 +121,15 @@ export function facets() {
 /** Items left pending by a crash or restart. */
 export function stalePending() {
   return sql<Item[]>`select ${COLUMNS} from items where status = 'pending' and created_at < now() - interval '2 minutes'`;
+}
+
+/** Gives a note a public link token, or takes it away (null). False if there's no such note. */
+export async function setShareToken(id: string, token: string | null): Promise<boolean> {
+  const rows = await sql`update items set share_token = ${token} where id = ${id} returning id`;
+  return rows.length > 0;
+}
+
+export async function itemByShareToken(token: string): Promise<Item | null> {
+  const [item] = await sql<Item[]>`select ${COLUMNS} from items where share_token = ${token}`;
+  return item ?? null;
 }
