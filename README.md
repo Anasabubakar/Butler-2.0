@@ -58,6 +58,12 @@ curl -F device=laptop -F text="https://www.youtube.com/watch?v=dQw4w9WgXcQ" -F n
   -H "x-butler-token: <BUTLER_TOKEN>" https://butler.yourdomain.com/api/save
 ```
 
+### Organizing with a local model instead of Claude
+
+Butler can organize saves with a free model running on the VPS itself, through [Ollama](https://ollama.com). Add `COMPOSE_PROFILES=local-ai` to `.env`, then add `BUTLER_AI=local` to `butler.env` and leave out `ANTHROPIC_API_KEY`. Run `docker compose up -d`. The first save downloads the model (`gemma3:4b`, about 3 GB), and it can read images too.
+
+What to expect on a 4-core ARM VM with no GPU: saving is still instant, and organizing happens in the background, one item at a time. Each item takes roughly half a minute, and an image takes longer. Titles and tags are decent, but summaries are plainer than Claude's and the model makes more mistakes. To switch to Claude later, change those two lines back.
+
 ### Automatic deploys
 
 Once Butler runs on the VPS, GitHub can update it after every change to `main` that passes CI. It uses its own SSH key, which the server only lets run `deploy/update.sh`, so a leaked key can redeploy Butler but can't open a shell.
@@ -101,7 +107,7 @@ Then in TikTok, Instagram, YouTube, Chrome or Gallery: **Share → Save to Butle
 ## Develop
 
 ```sh
-deno test --allow-read tests/        # unit tests
+deno test --allow-read --allow-net --allow-env tests/        # unit tests
 deno task check                      # type-check the server
 deno task start                      # server on :8080 (needs DATABASE_URL and the settings in butler.env.example)
 cd web && npm install && npm run dev # website on :5173, calling the server on :8080
