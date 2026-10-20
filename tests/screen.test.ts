@@ -6,6 +6,7 @@ import { locate, look, nextStep } from "../server/lib/screen.ts";
 function fakeGemini(replies: { status: number; body: unknown }[]) {
   const calls: { model: string; body: Record<string, any> }[] = [];
   const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+    if (req.method === "GET") return new Response(null, { status: 404 }); // no model list: use the fallbacks
     calls.push({ model: new URL(req.url).pathname.split("/").pop()!, body: await req.json() });
     const { status, body } = replies.shift()!;
     return Response.json(body, { status });
@@ -45,9 +46,9 @@ test("a model that rejects thinking settings is asked again, then the next model
   try {
     assert.equal(await look(picture, "solve", "what is x?"), "x = 4");
     assert.deepEqual(gemini.calls.map((c) => [c.model.split(":")[0], Boolean(c.body.generationConfig.thinkingConfig)]), [
+      ["gemini-flash-lite-latest", true],
+      ["gemini-flash-lite-latest", false],
       ["gemini-flash-latest", true],
-      ["gemini-flash-latest", false],
-      ["gemini-2.5-flash", true],
     ]);
   } finally {
     await gemini.close();

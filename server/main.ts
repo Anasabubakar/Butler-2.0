@@ -11,7 +11,7 @@ import * as db from "./lib/db.ts";
 import { fetchMeta } from "./lib/meta.ts";
 import { organize, type RawItem } from "./lib/organize.ts";
 import { cleanUrl, extractUrl, kindFor, platformFor } from "./lib/rules.ts";
-import { geminiReady } from "./lib/gemini.ts";
+import { geminiModels, geminiReady } from "./lib/gemini.ts";
 import { LOOK_MODES, type LookMode, locate, look, MAX_STEPS, nextStep } from "./lib/screen.ts";
 import * as inbox from "./lib/inbox.ts";
 import { calendarUrl, parseWhen, plan, safeZone } from "./lib/command.ts";
@@ -588,6 +588,7 @@ if (import.meta.main) {
   await db.migrate(join(ROOT, "db/migrations"));
   for (const item of await db.stalePending()) organizeItem(item.id, await rawFor(item));
   meaning.backfill().catch((e) => console.error("embedding backfill:", e)); // items saved before this existed
+  if (geminiReady()) geminiModels().then((m) => console.log("Gemini models, in order:", m.join(", ")));
   Deno.serve({ port: PORT, hostname: env("HOST", "0.0.0.0") }, app.fetch);
 }
 

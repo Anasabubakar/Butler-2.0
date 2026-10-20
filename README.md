@@ -122,6 +122,8 @@ Every push builds a debug APK. Download `butler-debug-apk` from the latest run o
 So each new build installs over the old app (keeping its settings and switches), give CI one fixed signing key, once, from your laptop:
 
 ```sh
+sudo apt install openjdk-17-jre-headless   # if keytool is missing
+mkdir -p ~/.android
 keytool -genkeypair -keystore ~/.android/butler.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Butler"
 base64 -w0 ~/.android/butler.keystore | gh secret set ANDROID_DEBUG_KEYSTORE -R Anasabubakar/Butler-2.0
 ```

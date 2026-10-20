@@ -62,8 +62,8 @@ test("local model: a model that can't see gets the words without the image", asy
 
 test("local mode: screenshots go to Gemini when there's a key", async () => {
   let gemini = 0;
-  const server = Deno.serve({ port: 0, onListen() {} }, () => {
-    gemini++;
+  const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
+    if (req.method === "POST") gemini++; // not the model list
     const out = { title: "A reel", summary: "A saved reel.", tags: ["Reel"], category: "funny" };
     return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] });
   });
