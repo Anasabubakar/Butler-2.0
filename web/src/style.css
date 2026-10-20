@@ -175,6 +175,8 @@ button { cursor: pointer; }
 .note .summary { margin: 0; font-size: 13px; line-height: 1.4; color: rgb(43 38 32 / 78%); }
 .note .note-text { margin: 0; font-family: var(--hand); font-size: 18px; line-height: 1.1; color: #6b2f00; }
 .note .muted { color: rgb(43 38 32 / 60%); }
+.note .rescued { margin: 0; font-size: 12px; font-weight: 600; color: #8a3b12; }
+
 /* a shared note wears a little "shared" stamp */
 .note.shared .paper::before {
   content: "shared"; position: absolute; top: 8px; right: 8px; padding: 0 6px; border: 1.5px solid rgb(30 110 60 / 55%);

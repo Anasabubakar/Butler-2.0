@@ -134,6 +134,10 @@ Every morning at 08:00 your time, Butler sends a note to your phone and laptop. 
 
 Every Sunday at 18:00 your time, Butler sends a note with what you saved that week: how many, by topic and app, your top tags, and three worth another look (ones you wrote a note on come first). Ask "what did I save this week?" for it any time. Set `BUTLER_RECAP_AT` for a different time, or `BUTLER_RECAP=off` to stop it.
 
+### Dead-link rescue
+
+Every public link you save is also saved to the Internet Archive's Wayback Machine. Once a month Butler checks old links; if a page has disappeared, its note says so and opens the saved copy instead, and Ask Butler links to the copy too. Set `BUTLER_ARCHIVE=off` to stop it. Social posts (the Archive can't copy them), Google Docs, Dropbox and other private links, and links carrying a token or key are never sent, since archive.org copies are public.
+
 ### Share a note
 
 Press 🔗 on a note to get a secret link to just that note (on the phone it opens the share sheet; on a computer it's copied). Anyone with the link sees a single sticky note with its title, summary and the original link, and WhatsApp or X show a preview. Nothing else in your library is visible. Shared notes wear a "shared" stamp; press 🔗 again and choose **Stop sharing** to kill the link.

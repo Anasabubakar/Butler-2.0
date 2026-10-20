@@ -38,6 +38,8 @@ interface Item {
   board_x: number | null;
   board_y: number | null;
   board_tilt: number | null;
+  archive_url?: string | null;
+  link_dead?: boolean;
   share_token?: string | null;
   details?: string | null;
 }
@@ -564,6 +566,7 @@ async function showSimilar(item: Item) {
 }
 
 function openTarget(item: Item): string | null {
+  if (item.link_dead && item.archive_url) return item.archive_url; // the original is gone
   if (item.url) return item.url;
   if (item.file_path) return `/files/${item.id}`;
   return null;
@@ -635,6 +638,9 @@ function note(item: Item): HTMLElement {
     item.status === "failed" ? h("p", { class: "muted" }, "Couldn't organize this one.") : null,
     item.summary ? h("p", { class: "summary" }, item.summary) : null,
     item.note ? h("p", { class: "note-text" }, item.note) : null,
+    item.link_dead
+      ? h("p", { class: "rescued" }, item.archive_url ? "The original page is gone. This opens a saved copy." : "The original page is gone.")
+      : null,
     !item.summary && item.body ? h("p", { class: "summary" }, item.body.slice(0, 240)) : null,
     item.details ? keyPoints(item.details) : null,
     item.tags.length

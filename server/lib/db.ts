@@ -32,10 +32,13 @@ export interface Item {
   board_tilt: number | null;
   share_token?: string | null; // set while the note has a public link
   details?: string | null; // longer notes, like a video's key points
+  archive_url?: string | null; // a copy on the Internet Archive
+  link_dead?: boolean; // the original stopped loading
 }
 
 const COLUMNS = sql`id, created_at, device, kind, url, body, note, file_path, mime, thumbnail,
-  platform, title, summary, tags, category, status, error, board_x, board_y, board_tilt, share_token, details`;
+  platform, title, summary, tags, category, status, error, board_x, board_y, board_tilt, share_token, details,
+  archive_url, link_dead`;
 
 /** Applies every db/migrations/*.sql file not applied yet, in name order. */
 export async function migrate(dir: string) {
@@ -121,6 +124,26 @@ export function facets() {
 /** Items left pending by a crash or restart. */
 export function stalePending() {
   return sql<Item[]>`select ${COLUMNS} from items where status = 'pending' and created_at < now() - interval '2 minutes'`;
+}
+
+/** Links that need archiving (newest first), or checking (least recently checked first). */
+export function linksToArchive(limit: number) {
+  return sql<{ id: string; url: string }[]>`
+    select id, url from items where kind = 'link' and url like 'http%' and archive_url is null
+      and created_at > now() - interval '30 days'
+    order by created_at desc limit ${limit}`;
+}
+
+export function linksToCheck(limit: number) {
+  return sql<{ id: string; url: string }[]>`
+    select id, url from items where kind = 'link' and url like 'http%' and not link_dead
+      and created_at < now() - interval '1 day'
+      and (link_checked_at is null or link_checked_at < now() - interval '30 days')
+    order by link_checked_at nulls first, created_at limit ${limit}`;
+}
+
+export async function markChecked(id: string, dead: boolean) {
+  await sql`update items set link_checked_at = now(), link_dead = ${dead} where id = ${id}`;
 }
 
 /** Gives a note a public link token, or takes it away (null). False if there's no such note. */
