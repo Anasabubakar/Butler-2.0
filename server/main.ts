@@ -514,6 +514,25 @@ app.delete("/api/items/:id", async (c) => {
 
 app.get("/api/facets", async (c) => c.json(await db.facets()));
 
+// The sticky-note board: where you stuck a note, and putting them all back in rows.
+app.put("/api/items/:id/place", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  type Spot = { x?: unknown; y?: unknown; tilt?: unknown };
+  const body: Spot = await c.req.json<Spot>().catch(() => ({}));
+  const num = (v: unknown, min: number, max: number) =>
+    typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : null;
+  const x = num(body.x, 0, 1), y = num(body.y, 0, 200_000), tilt = num(body.tilt, -15, 15) ?? 0;
+  if (x === null || y === null) return c.json({ error: "x (0 to 1) and y are required" }, 400);
+  return (await db.place(id, x, y, tilt)) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
+});
+
+app.use("/api/board/*", requireSession);
+app.post("/api/board/tidy", async (c) => {
+  await db.tidyBoard();
+  return c.json({ ok: true });
+});
+
 /** Items in the order of `ranked`, each with its closeness score. */
 async function rankedItems(ranked: { id: string; score: number }[]) {
   const items = ranked.length ? await db.itemsById(ranked.map((r) => r.id)) : [];
