@@ -132,29 +132,38 @@ export async function addEvent(title: string, start: Date, end: Date, timeZone: 
 
 export interface Person {
   name: string;
-  email: string;
+  email: string | null;
+  phone: string | null;
 }
 
 interface PeopleResults {
-  results?: { person: { names?: { displayName?: string }[]; emailAddresses?: { value?: string }[] } }[];
+  results?: {
+    person: {
+      names?: { displayName?: string }[];
+      emailAddresses?: { value?: string }[];
+      phoneNumbers?: { value?: string; canonicalForm?: string }[];
+    };
+  }[];
 }
 
-/** People matching `name` in your contacts, then in people you've emailed. */
+/** People matching `name` in your contacts, then in people you've emailed, with an email or phone each. */
 export async function findPeople(name: string): Promise<Person[]> {
   const found: Person[] = [];
   const read = (data: PeopleResults) => {
     for (const { person } of data.results ?? []) {
-      const display = person.names?.[0]?.displayName ?? "";
-      for (const e of person.emailAddresses ?? []) {
-        if (e.value && !found.some((f) => f.email === e.value)) found.push({ name: display || e.value, email: e.value });
-      }
+      const email = person.emailAddresses?.find((e) => e.value)?.value ?? null;
+      const phoneEntry = person.phoneNumbers?.find((p) => p.canonicalForm || p.value);
+      const phone = phoneEntry?.canonicalForm ?? phoneEntry?.value ?? null;
+      if (!email && !phone) continue;
+      if (found.some((f) => (email && f.email === email) || (phone && f.phone === phone))) continue;
+      found.push({ name: person.names?.[0]?.displayName || email || phone!, email, phone });
     }
   };
   const query = encodeURIComponent(name);
   // Google asks for one empty search first so its search cache is warm.
-  await google(`${PEOPLE()}/v1/people:searchContacts?query=&readMask=names,emailAddresses`).catch(() => {});
-  read(await google<PeopleResults>(`${PEOPLE()}/v1/people:searchContacts?query=${query}&readMask=names,emailAddresses&pageSize=5`));
-  read(await google<PeopleResults>(`${PEOPLE()}/v1/otherContacts:search?query=${query}&readMask=names,emailAddresses&pageSize=5`)
+  await google(`${PEOPLE()}/v1/people:searchContacts?query=&readMask=names,emailAddresses,phoneNumbers`).catch(() => {});
+  read(await google<PeopleResults>(`${PEOPLE()}/v1/people:searchContacts?query=${query}&readMask=names,emailAddresses,phoneNumbers&pageSize=5`));
+  read(await google<PeopleResults>(`${PEOPLE()}/v1/otherContacts:search?query=${query}&readMask=names,emailAddresses,phoneNumbers&pageSize=5`)
     .catch(() => ({})));
   return found.slice(0, 5);
 }
@@ -162,7 +171,7 @@ export async function findPeople(name: string): Promise<Person[]> {
 // --- email ------------------------------------------------------------------------------------
 
 export interface Email {
-  to: Person;
+  to: { name: string; email: string };
   subject: string;
   body: string;
   attachment?: { name: string; mime: string; data: Uint8Array };

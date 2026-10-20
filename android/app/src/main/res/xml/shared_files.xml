@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The only folder Butler shares with other apps: one screenshot at a time. -->
+<paths>
+    <cache-path name="shared" path="shared/" />
+</paths>
