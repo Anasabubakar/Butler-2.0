@@ -194,6 +194,21 @@ function renderLibrary() {
   const googleButton = h("button", { class: "ghost", hidden: true });
   renderGoogle(googleButton);
 
+  // Lost your phone? It rings loudly, even on silent, the next time it checks in.
+  const ringButton = h("button", {
+    class: "ghost ring", title: "Make your phone ring loudly, even on silent",
+    onclick: async () => {
+      ringButton.disabled = true;
+      try {
+        showError((await api<{ say: string }>("/api/ring", { method: "POST", body: JSON.stringify({ target: "phone" }) })).say);
+      } catch (e) {
+        if (!(e instanceof SignedOut)) showError(`Couldn't ring your phone: ${(e as Error).message}`);
+      } finally {
+        ringButton.disabled = false;
+      }
+    },
+  }, "Ring my phone");
+
   sidebarEl = h("nav", { class: "sidebar", "aria-label": "Collections" });
   headingEl = h("h2", { class: "heading" });
   gridEl = h("section", { class: "grid" });
@@ -204,6 +219,7 @@ function renderLibrary() {
         h("span", { class: "logo small" }, butlerMark()), "Butler"),
       search,
       googleButton,
+      ringButton,
       signOut,
     ),
     h("main", { class: "layout" }, sidebarEl, h("div", { class: "content" }, headingEl, gridEl)),
