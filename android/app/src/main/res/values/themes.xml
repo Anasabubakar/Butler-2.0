@@ -1,0 +1,12 @@
+<resources>
+    <style name="Theme.Butler" parent="Theme.Material3.DayNight.NoActionBar" />
+
+    <!-- Small sheet at the bottom of the screen over whatever app you shared from. -->
+    <style name="Theme.Butler.Sheet" parent="Theme.Material3.DayNight.Dialog">
+        <item name="android:windowCloseOnTouchOutside">true</item>
+        <item name="android:windowMinWidthMajor">100%</item>
+        <item name="android:windowMinWidthMinor">100%</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+        <item name="windowNoTitle">true</item>
+    </style>
+</resources>

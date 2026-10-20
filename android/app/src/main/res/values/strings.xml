@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">Butler</string>
+    <string name="share_label">Save to Butler</string>
+    <string name="note_hint">Add a note (optional)</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="saved">Saved to Butler</string>
+    <string name="nothing_to_save">Nothing to save here</string>
+    <string name="setup_first">Set up Butler first</string>
+    <string name="n_files">%1$d files</string>
+    <string name="one_file">1 file</string>
+    <string name="some_failed">%1$d file(s) could not be read</string>
+    <string name="settings_title">Butler setup</string>
+    <string name="save_url_hint">Save URL (https://…/functions/v1/save)</string>
+    <string name="token_hint">Token</string>
+    <string name="device_hint">Device name</string>
+    <string name="settings_saved">Butler is ready</string>
+    <string name="settings_incomplete">Add an https save URL and the token</string>
+</resources>
