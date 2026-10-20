@@ -4,7 +4,9 @@
 // It lives inside GNOME Shell, which is what lets it stay on top of every
 // window and press keys for you on Wayland.
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Shell from 'gi://Shell';
 import Soup from 'gi://Soup?version=3.0';
 import St from 'gi://St';
 
@@ -276,6 +278,24 @@ export default class ButlerPetExtension extends Extension {
         await this._press(Clutter.KEY_Control_L, Clutter.KEY_c);
         await sleep(150);
         return (await this._readClipboard()).trim();
+    }
+
+    /** A PNG of the focused window, without the pet or its menu. Null if there is no window. */
+    _snapWindow() {
+        if (!global.display.focus_window)
+            return Promise.resolve(null);
+        const stream = Gio.MemoryOutputStream.new_resizable();
+        return new Promise((resolve, reject) => {
+            new Shell.Screenshot().screenshot_window(false, false, stream, (shot, result) => {
+                try {
+                    shot.screenshot_window_finish(result);
+                    stream.close(null);
+                    resolve(stream.steal_as_bytes());
+                } catch (e) {
+                    reject(new Error("couldn't take a screenshot"));
+                }
+            });
+        });
     }
 
     _inBrowser() {
