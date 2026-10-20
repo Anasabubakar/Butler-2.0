@@ -54,7 +54,7 @@ ${picture ? `<meta property="og:image" content="${escape(picture)}">` : ""}
     background: radial-gradient(circle at 20% 30%, #d9b98c 0 1px, transparent 2px) 0 0 / 23px 19px, #c49a6c;
   }
   .note {
-    position: relative; width: min(440px, 100%); padding: 30px 22px 20px; background: #fff3a8;
+    position: relative; box-sizing: border-box; width: min(440px, 100%); padding: 30px 22px 20px; background: #fff3a8;
     box-shadow: 0 2px 2px rgb(0 0 0 / 15%), 0 18px 30px -12px rgb(0 0 0 / 45%); transform: rotate(-1.2deg);
     border-radius: 2px 2px 3px 22px / 2px 2px 3px 6px; animation: land .5s cubic-bezier(.2, .9, .3, 1.3);
   }
