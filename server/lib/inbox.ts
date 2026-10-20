@@ -5,7 +5,7 @@ import { sql } from "./db.ts";
 export const DEVICE_KINDS = ["laptop", "phone"] as const;
 export type DeviceKind = typeof DEVICE_KINDS[number];
 
-export const MESSAGE_KINDS = ["reminder", "note", "clip", "link", "file", "sync"] as const;
+export const MESSAGE_KINDS = ["reminder", "note", "clip", "link", "file", "sync", "ring"] as const;
 export type MessageKind = typeof MESSAGE_KINDS[number];
 
 export interface Device {
