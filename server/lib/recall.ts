@@ -31,6 +31,7 @@ export function describe(item: Item, n: number): string {
     item.note ? `their note: ${item.note}` : null,
     item.url ? `link: ${item.url}` : null,
     item.body ? `text: ${item.body.slice(0, 600)}` : null,
+    item.details ? `notes: ${item.details.slice(0, 1500)}` : null,
   ];
   return lines.filter(Boolean).join("\n");
 }
