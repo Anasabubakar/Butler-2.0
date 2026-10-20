@@ -1,0 +1,6 @@
+.git
+android
+**/node_modules
+web/dist
+data
+deploy/backups

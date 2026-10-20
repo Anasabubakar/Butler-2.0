@@ -1,0 +1,7 @@
+{$BUTLER_DOMAIN} {
+	encode zstd gzip
+	request_body {
+		max_size 500MB
+	}
+	reverse_proxy butler:8080
+}

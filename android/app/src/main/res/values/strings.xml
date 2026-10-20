@@ -11,7 +11,7 @@
     <string name="one_file">1 file</string>
     <string name="some_failed">%1$d file(s) could not be read</string>
     <string name="settings_title">Butler setup</string>
-    <string name="save_url_hint">Save URL (https://…/functions/v1/save)</string>
+    <string name="save_url_hint">Save URL (https://your-domain/api/save)</string>
     <string name="token_hint">Token</string>
     <string name="device_hint">Device name</string>
     <string name="settings_saved">Butler is ready</string>

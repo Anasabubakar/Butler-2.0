@@ -28,7 +28,7 @@ export interface RawItem {
   image?: { data: string; mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif" };
 }
 
-const client = new Anthropic(); // reads ANTHROPIC_API_KEY
+let client: Anthropic | undefined; // created on first use; reads ANTHROPIC_API_KEY
 const MODEL = Deno.env.get("BUTLER_MODEL") ?? "claude-opus-5-5";
 
 export async function organize(item: RawItem): Promise<OrganizedItem> {
@@ -58,6 +58,7 @@ export async function organize(item: RawItem): Promise<OrganizedItem> {
       `<item>\n${facts}\n</item>`,
   });
 
+  client ??= new Anthropic();
   const response = await client.messages.parse({
     model: MODEL,
     max_tokens: 2000,

@@ -1,7 +1,21 @@
-import { createClient, type Session } from "@supabase/supabase-js";
 import "./style.css";
 
-const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
+class SignedOut extends Error {}
+
+/** Calls the Butler server on the same site; the session cookie rides along. */
+async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const res = await fetch(path, {
+    ...init,
+    headers: init.body ? { "content-type": "application/json", ...init.headers } : init.headers,
+  });
+  if (res.status === 401 && path !== "/api/login") {
+    renderSignIn();
+    throw new SignedOut();
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
+  return data as T;
+}
 
 interface Item {
   id: string;
@@ -32,7 +46,6 @@ const state = {
   filter: null as Filter,
   items: [] as Item[],
   facets: [] as Facet[],
-  signed: new Map<string, string>(),
   done: false,
   loading: false,
 };
@@ -74,26 +87,31 @@ function ago(iso: string): string {
 // --- sign in ---------------------------------------------------------------
 
 function renderSignIn(message = "") {
-  const email = h("input", { type: "email", placeholder: "you@example.com", required: true, autocomplete: "email" });
+  const password = h("input", {
+    type: "password", placeholder: "Password", required: true, autocomplete: "current-password", "aria-label": "Password",
+  });
   const status = h("p", { class: "muted" }, message);
   const form = h("form", { class: "signin" },
     h("div", { class: "logo" }, butlerMark()),
     h("h1", {}, "Butler"),
     h("p", { class: "muted" }, "Everything you've saved, in one place."),
-    email,
-    h("button", { type: "submit" }, "Email me a sign-in link"),
+    password,
+    h("button", { type: "submit" }, "Open library"),
     status,
   );
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    status.textContent = "Sending…";
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.value.trim(),
-      options: { shouldCreateUser: false, emailRedirectTo: location.origin + location.pathname },
-    });
-    status.textContent = error ? error.message : "Check your email for the link.";
+    status.textContent = "";
+    try {
+      await api("/api/login", { method: "POST", body: JSON.stringify({ password: password.value }) });
+      renderLibrary();
+    } catch (err) {
+      status.textContent = (err as Error).message;
+      password.select();
+    }
   });
   app.replaceChildren(form);
+  password.focus();
 }
 
 function butlerMark(): SVGSVGElement {
@@ -109,8 +127,7 @@ function butlerMark(): SVGSVGElement {
 // --- data --------------------------------------------------------------------
 
 async function loadFacets() {
-  const { data, error } = await supabase.rpc("item_facets");
-  state.facets = error ? [] : (data as Facet[]);
+  state.facets = await api<Facet[]>("/api/facets").catch(() => []);
 }
 
 async function loadItems(reset: boolean) {
@@ -118,29 +135,21 @@ async function loadItems(reset: boolean) {
   state.loading = true;
   if (reset) { state.items = []; state.done = false; }
 
-  let query = supabase.from("items").select("*").order("created_at", { ascending: false }).limit(PAGE);
+  const params = new URLSearchParams({ limit: String(PAGE) });
   const last = state.items.at(-1);
-  if (last) query = query.lt("created_at", last.created_at);
-  if (state.q) query = query.textSearch("search", state.q, { type: "websearch", config: "simple" });
-  const f = state.filter;
-  if (f?.facet === "category") query = f.value === "unsorted" ? query.is("category", null) : query.eq("category", f.value);
-  if (f?.facet === "platform") query = f.value === "none" ? query.is("platform", null) : query.eq("platform", f.value);
-  if (f?.facet === "tag") query = query.contains("tags", [f.value]);
+  if (last) params.set("before", last.created_at);
+  if (state.q) params.set("q", state.q);
+  if (state.filter) params.set(state.filter.facet, state.filter.value);
 
-  const { data, error } = await query;
-  state.loading = false;
-  if (error) { showError(error.message); return; }
-  const rows = data as Item[];
-  state.items.push(...rows);
-  state.done = rows.length < PAGE;
-  await signFiles(rows);
-}
-
-async function signFiles(rows: Item[]) {
-  const paths = rows.map((r) => r.file_path).filter((p): p is string => !!p && !state.signed.has(p));
-  if (!paths.length) return;
-  const { data } = await supabase.storage.from("items").createSignedUrls(paths, 60 * 60);
-  for (const s of data ?? []) if (s.path && s.signedUrl) state.signed.set(s.path, s.signedUrl);
+  try {
+    const rows = await api<Item[]>(`/api/items?${params}`);
+    state.items.push(...rows);
+    state.done = rows.length < PAGE;
+  } catch (err) {
+    if (!(err instanceof SignedOut)) showError((err as Error).message);
+  } finally {
+    state.loading = false;
+  }
 }
 
 let pollTimer: number | undefined;
@@ -149,12 +158,12 @@ function pollWhilePending() {
   if (!state.items.some((i) => i.status === "pending")) return;
   pollTimer = window.setTimeout(async () => {
     const ids = state.items.filter((i) => i.status === "pending").map((i) => i.id);
-    const { data } = await supabase.from("items").select("*").in("id", ids);
-    for (const fresh of (data ?? []) as Item[]) {
+    const data = await api<Item[]>(`/api/items?ids=${ids.join(",")}`).catch(() => [] as Item[]);
+    for (const fresh of data) {
       const i = state.items.findIndex((x) => x.id === fresh.id);
       if (i >= 0) state.items[i] = fresh;
     }
-    if (data?.some((d) => d.status !== "pending")) { await loadFacets(); renderSidebar(); }
+    if (data.some((d) => d.status !== "pending")) { await loadFacets(); renderSidebar(); }
     renderGrid();
     pollWhilePending();
   }, 5000);
@@ -166,7 +175,7 @@ let gridEl: HTMLElement;
 let sidebarEl: HTMLElement;
 let headingEl: HTMLElement;
 
-function renderLibrary(session: Session) {
+function renderLibrary() {
   const search = h("input", {
     type: "search", class: "search", placeholder: "Search titles, notes, tags, links…", "aria-label": "Search",
   });
@@ -176,8 +185,10 @@ function renderLibrary(session: Session) {
     debounce = window.setTimeout(() => { state.q = search.value.trim(); refresh(); }, 250);
   });
 
-  const signOut = h("button", { class: "ghost", onclick: () => supabase.auth.signOut() }, "Sign out");
-  signOut.title = session.user.email ?? "";
+  const signOut = h("button", {
+    class: "ghost",
+    onclick: async () => { await api("/api/logout", { method: "POST" }).catch(() => {}); renderSignIn(); },
+  }, "Sign out");
 
   sidebarEl = h("nav", { class: "sidebar", "aria-label": "Collections" });
   headingEl = h("h2", { class: "heading" });
@@ -256,12 +267,12 @@ function renderGrid() {
 
 function openTarget(item: Item): string | null {
   if (item.url) return item.url;
-  if (item.file_path) return state.signed.get(item.file_path) ?? null;
+  if (item.file_path) return `/files/${item.id}`;
   return null;
 }
 
 function media(item: Item): HTMLElement | null {
-  const file = item.file_path ? state.signed.get(item.file_path) : undefined;
+  const file = item.file_path ? `/files/${item.id}` : undefined;
   if (item.kind === "image" && file) return h("img", { src: file, alt: item.title ?? "", loading: "lazy" });
   if (item.kind === "video" && file) {
     return h("video", { src: file + "#t=0.1", preload: "metadata", muted: true, playsinline: true });
@@ -285,9 +296,12 @@ function card(item: Item): HTMLElement {
       e.preventDefault();
       e.stopPropagation();
       if (!confirm(`Delete “${title}”?`)) return;
-      const { error } = await supabase.from("items").delete().eq("id", item.id);
-      if (error) return showError(error.message);
-      if (item.file_path) await supabase.storage.from("items").remove([item.file_path]);
+      try {
+        await api(`/api/items/${item.id}`, { method: "DELETE" });
+      } catch (err) {
+        if (!(err instanceof SignedOut)) showError((err as Error).message);
+        return;
+      }
       state.items = state.items.filter((i) => i.id !== item.id);
       renderGrid();
       loadFacets().then(renderSidebar);
@@ -326,11 +340,4 @@ function showError(message: string) {
 
 // --- boot ----------------------------------------------------------------------
 
-let current: string | null = null;
-supabase.auth.onAuthStateChange((_event, session) => {
-  const id = session?.user.id ?? null;
-  if (id === current && app.childElementCount) return;
-  current = id;
-  if (session) renderLibrary(session);
-  else renderSignIn();
-});
+api("/api/me").then(renderLibrary, () => {});

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cleanUrl, extractUrl, kindFor, platformFor } from "../supabase/functions/_shared/rules.ts";
-import { parseHtmlMeta } from "../supabase/functions/_shared/meta.ts";
+import { cleanUrl, extractUrl, kindFor, platformFor } from "../server/lib/rules.ts";
+import { parseHtmlMeta } from "../server/lib/meta.ts";
 
 test("extractUrl finds the link inside shared text", () => {
   assert.equal(

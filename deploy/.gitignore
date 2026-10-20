@@ -1,0 +1,4 @@
+data/
+backups/
+.env
+butler.env
