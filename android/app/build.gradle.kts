@@ -15,7 +15,24 @@ android {
         versionName = "0.1.0"
     }
 
+    // One fixed key (from CI's ANDROID_DEBUG_KEYSTORE secret), so a new build installs over the old app
+    // and keeps its settings. Without it, Gradle uses a throwaway key and you'd have to uninstall first.
+    val stableKey = System.getenv("BUTLER_KEYSTORE")?.let { file(it) }?.takeIf { it.exists() }
+    signingConfigs {
+        if (stableKey != null) {
+            create("stable") {
+                storeFile = stableKey
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            if (stableKey != null) signingConfig = signingConfigs.getByName("stable")
+        }
         release {
             isMinifyEnabled = false
         }

@@ -53,6 +53,13 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+      - name: Unpack the app's signing key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+        if: env.KEYSTORE != ''
+        run: |
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/butler.keystore"
+          echo "BUTLER_KEYSTORE=$RUNNER_TEMP/butler.keystore" >> "$GITHUB_ENV"
       - name: Build debug APK
         run: ./gradlew --no-daemon assembleDebug
       - uses: actions/upload-artifact@v4
