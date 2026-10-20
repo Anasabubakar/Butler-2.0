@@ -191,6 +191,14 @@ export default class ButlerPetExtension extends Extension {
         });
         this._menu.add_child(this._ask);
 
+        // Send / Cancel, for things that need your yes first, like an email.
+        this._confirmBox = new St.BoxLayout({style_class: 'butler-menu', visible: false});
+        for (const [label, yes] of [['Send', true], ['Cancel', false]]) {
+            const button = new St.Button({label, style_class: 'butler-action', x_expand: true, can_focus: false});
+            button.connect('clicked', () => this._answer?.(yes));
+            this._confirmBox.add_child(button);
+        }
+
         this._note = new St.Label({style_class: 'butler-note', visible: false, reactive: true});
         this._note.clutter_text.line_wrap = true;
         this._note.connect('button-release-event', () => {
@@ -198,7 +206,7 @@ export default class ButlerPetExtension extends Extension {
             return Clutter.EVENT_STOP;
         });
 
-        for (const actor of [this._menu, this._note, this._pet])
+        for (const actor of [this._menu, this._confirmBox, this._note, this._pet])
             Main.layoutManager.addTopChrome(actor);
 
         this._monitorsId = Main.layoutManager.connect('monitors-changed', () => this._place(false));
@@ -221,11 +229,12 @@ export default class ButlerPetExtension extends Extension {
         this._inboxId = 0;
         this._stopClip();
         Main.layoutManager.disconnect(this._monitorsId);
-        for (const actor of [this._menu, this._note, this._pet]) {
+        this._answer?.(false);
+        for (const actor of [this._menu, this._confirmBox, this._note, this._pet]) {
             Main.layoutManager.removeChrome(actor);
             actor.destroy();
         }
-        this._pet = this._face = this._menu = this._note = this._ask = null;
+        this._pet = this._face = this._menu = this._note = this._ask = this._confirmBox = null;
         this._keyboard = this._pointer = null;
         this._session?.abort();
         this._session = null;
@@ -341,6 +350,9 @@ export default class ButlerPetExtension extends Extension {
         const [, menuH] = this._menu.get_preferred_height(-1);
         const [, menuW] = this._menu.get_preferred_width(-1);
         this._menu.set_position(beside(menuW), within(y + PET_H - menuH, menuH));
+        const [, boxH] = this._confirmBox.get_preferred_height(-1);
+        const [, boxW] = this._confirmBox.get_preferred_width(-1);
+        this._confirmBox.set_position(beside(boxW), within(y + PET_H + 8, boxH));
         // Notes grow upwards, so a long answer never covers the pet.
         const [, noteW] = this._note.get_preferred_width(-1);
         const [, noteH] = this._note.get_preferred_height(noteW);
@@ -657,12 +669,39 @@ export default class ButlerPetExtension extends Extension {
                 {device: 'laptop', kind: 'laptop', text, tz: timeZone()}, shot);
             if (result.open)
                 Gio.AppInfo.launch_default_for_uri(result.open, null);
+            if (result.confirm) {
+                this._say(result.say);
+                if (!await this._confirm())
+                    return 'Okay, not sent.';
+                this._say('Sending…');
+                return (await this._send(config, '/api/command/confirm', {confirm: result.confirm})).say;
+            }
             if (result.send) {
                 const {sent_to: to} = await this._sendContent(config, result.send, shot);
                 return result.say || `Sent to ${to.join(', ')}`;
             }
             return result.say;
         }, 'think');
+    }
+
+    /** Shows Send / Cancel under the note and waits for your answer (Cancel after 2 minutes). */
+    _confirm() {
+        this._confirmBox.show();
+        this._place(false);
+        return new Promise(resolve => {
+            let id = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 120, () => {
+                id = 0;
+                this._answer?.(false);
+                return GLib.SOURCE_REMOVE;
+            });
+            this._answer = yes => {
+                if (id)
+                    GLib.source_remove(id);
+                this._answer = null;
+                this._confirmBox?.hide();
+                resolve(yes);
+            };
+        });
     }
 
     /**
