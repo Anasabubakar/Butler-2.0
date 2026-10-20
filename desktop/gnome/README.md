@@ -1,6 +1,6 @@
 # Butler pet for GNOME
 
-A small charcoal butler that peeks out from the bottom-right corner of your screen. Tap it and it hops up out of the way, with quick actions:
+A small charcoal butler that peeks out from the bottom-right corner of your screen. Drag it anywhere you like: it stays where you drop it, and peeks again if you drop it on the bottom edge. Tap it for quick actions:
 
 - **Save this**: saves a screenshot of the window you're in, plus the page's link in a browser or the text you've selected in any other app. On a feed (TikTok For You, the X home page, Instagram and so on), the address bar doesn't hold the post's link, so the pet taps the post's Share button, then Copy link, and saves that link instead.
 - **Copy this**: copies what you've selected.
