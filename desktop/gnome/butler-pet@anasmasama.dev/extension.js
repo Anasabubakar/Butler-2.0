@@ -11,9 +11,12 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-const PET_W = 84;
-const PET_H = 96;
-const PEEK_H = 52;      // how much shows while peeking: ears, eyes and paws
+// The Little Butler's desktop size (design/little-butler/docs/BEHAVIOR.md).
+const PET_W = 88;
+const PET_H = 110;
+// While peeking, only the top of the peek pose shows: its head, eyes and fingers on the edge.
+const PEEK_TOP = 40;    // where its head starts, in pet pixels
+const PEEK_H = 60;      // down to just below its fingers
 const EDGE = 40;        // gap from the right edge while peeking
 const HOP_X = 56;       // how far it moves left when it wakes up
 const HOP_Y = 118;      // how far it moves up
@@ -45,6 +48,9 @@ export default class ButlerPetExtension extends Extension {
             .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
         this._awake = false;
         this._busy = false;
+        this._peeking = false;
+        this._clipId = 0;
+        this._clips = this._loadClips();
 
         this._pet = new St.Widget({
             reactive: true,
@@ -56,7 +62,6 @@ export default class ButlerPetExtension extends Extension {
         });
         this._face = new St.Bin({width: PET_W, height: PET_H, style_class: 'butler-face'});
         this._pet.add_child(this._face);
-        this._setMood('awake');
         this._pet.connect('button-release-event', () => {
             this._toggle();
             return Clutter.EVENT_STOP;
@@ -86,10 +91,11 @@ export default class ButlerPetExtension extends Extension {
             Main.layoutManager.addTopChrome(actor);
 
         this._monitorsId = Main.layoutManager.connect('monitors-changed', () => this._place(false));
-        this._place(false);
+        this._peek();
     }
 
     disable() {
+        this._stopClip();
         Main.layoutManager.disconnect(this._monitorsId);
         for (const actor of [this._menu, this._note, this._pet]) {
             Main.layoutManager.removeChrome(actor);
@@ -101,9 +107,76 @@ export default class ButlerPetExtension extends Extension {
         this._session = null;
     }
 
-    _setMood(mood) {
-        const file = GLib.build_filenamev([this.path, 'pets', `${mood}.svg`]);
+    /** pets/clips.json, written by update-sprites.py: frame count, duration, loop and next clip. */
+    _loadClips() {
+        const [, bytes] = GLib.file_get_contents(GLib.build_filenamev([this.path, 'pets', 'clips.json']));
+        return JSON.parse(new TextDecoder().decode(bytes));
+    }
+
+    _show(...parts) {
+        const file = GLib.build_filenamev([this.path, 'pets', ...parts]);
         this._face.style = `background-image: url("file://${file}"); background-size: contain;`;
+    }
+
+    _stopClip() {
+        if (this._clipId)
+            GLib.source_remove(this._clipId);
+        this._clipId = 0;
+    }
+
+    /** Plays one of the kit's animations, then whatever it says comes next. */
+    _play(name) {
+        this._stopClip();
+        const clip = this._clips[name];
+        const frame = i => this._show(name, `${String(i).padStart(2, '0')}.png`);
+        if (!St.Settings.get().enable_animations) {
+            // Reduced motion: one still pose per state.
+            frame(clip.loop ? 0 : clip.frames - 1);
+            return;
+        }
+        let i = 0;
+        frame(i);
+        this._clipId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.round(clip.duration / clip.frames), () => {
+            if (++i < clip.frames) {
+                frame(i);
+                return GLib.SOURCE_CONTINUE;
+            }
+            if (clip.loop && !(name === 'idle' && Math.random() < 0.4)) {
+                frame(i = 0);
+                return GLib.SOURCE_CONTINUE;
+            }
+            this._clipId = 0;
+            // Now and then a blink between breaths; one-shot clips hand over to their next clip.
+            const next = clip.loop ? 'blink' : clip.next;
+            if (this._clips[next])
+                this._play(next);
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    /** Back in the corner: just its eyes and fingers over the edge, breathing slowly. */
+    _peek() {
+        this._stopClip();
+        this._peeking = true;
+        this._show('peek.png');
+        this._face.remove_all_transitions();
+        this._face.translation_y = -PEEK_TOP;
+        this._face.ease({
+            translation_y: -PEEK_TOP + 2,
+            duration: 1600,
+            mode: Clutter.AnimationMode.EASE_IN_OUT_SINE,
+            repeatCount: -1,
+            autoReverse: true,
+        });
+        this._place(false);
+    }
+
+    /** Shows the whole pet, still sitting on the bottom edge. */
+    _unpeek() {
+        this._peeking = false;
+        this._face.remove_all_transitions();
+        this._face.translation_y = 0;
+        this._place(false);
     }
 
     _place(animate) {
@@ -111,8 +184,8 @@ export default class ButlerPetExtension extends Extension {
         if (!monitor)
             return;
         const x = monitor.x + monitor.width - PET_W - EDGE - (this._awake ? HOP_X : 0);
-        const y = monitor.y + monitor.height - (this._awake ? PET_H + HOP_Y : PEEK_H);
-        const height = this._awake ? PET_H : PEEK_H;
+        const height = this._peeking ? PEEK_H : PET_H;
+        const y = monitor.y + monitor.height - height - (this._awake ? HOP_Y : 0);
         if (animate) {
             this._pet.ease({x, y, height, duration: 380, mode: Clutter.AnimationMode.EASE_OUT_BACK});
         } else {
@@ -131,17 +204,27 @@ export default class ButlerPetExtension extends Extension {
     _toggle() {
         if (this._busy)
             return;
-        this._awake = !this._awake;
+        if (this._awake) {
+            this._goHome();
+            return;
+        }
+        this._unpeek();
+        this._awake = true;
         this._note.hide();
-        this._menu.visible = this._awake;
+        this._menu.show();
+        this._play('summon');
         this._place(true);
     }
 
-    _goHome() {
+    /** Sinks below the edge, then peeks again. */
+    async _goHome() {
         this._awake = false;
         this._menu.hide();
-        this._setMood('awake');
+        this._play('hide');
         this._place(true);
+        await sleep(this._clips.hide.duration);
+        if (this._pet && !this._awake)
+            this._peek();
     }
 
     _say(text) {
@@ -151,22 +234,24 @@ export default class ButlerPetExtension extends Extension {
     }
 
     /** Wraps an action: hides the menu, shows a working face, then a result. */
-    async _work(working, action) {
+    async _work(working, action, clip = 'work') {
         if (this._busy)
             return;
         this._busy = true;
         this._menu.hide();
-        this._setMood('working');
+        this._play(clip);
         this._say(working);
         try {
             const done = await action();
-            this._setMood('done');
+            this._play('success');
             this._say(done);
         } catch (e) {
-            this._setMood('awake');
+            this._play('error');
             this._say(`Couldn't do that: ${e.message}`);
         }
         await sleep(2200);
+        if (!this._pet)
+            return;
         this._note.hide();
         this._busy = false;
         this._goHome();
@@ -233,7 +318,7 @@ export default class ButlerPetExtension extends Extension {
     _soon() {
         this._work('One sec…', () => {
             throw new Error('this needs a vision model on your gateway. Coming next');
-        });
+        }, 'think');
     }
 
     _post(config, fields) {
