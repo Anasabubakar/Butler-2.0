@@ -142,6 +142,7 @@ class PetService : Service() {
                 R.string.pet_copy to ::copyThis,
                 R.string.pet_analyze to { look("analyze") },
                 R.string.pet_solve to { look("solve") },
+                R.string.pet_translate to { look("translate") },
                 R.string.pet_send_laptop to ::sendToLaptop,
                 R.string.pet_library to ::openLibrary,
                 R.string.pet_talk to { askButler(talk = true) },
@@ -168,7 +169,10 @@ class PetService : Service() {
             maxWidth = (300 * dp).toInt()
             setPadding((14 * dp).toInt(), (10 * dp).toInt(), (14 * dp).toInt(), (10 * dp).toInt())
             visibility = View.GONE
-            setOnClickListener { noteTapped?.complete(Unit) }
+            setOnClickListener {
+                if (Ringer.ringing) stopRinging()
+                noteTapped?.complete(Unit)
+            }
         }
         panel = LinearLayout(ui).apply {
             orientation = LinearLayout.VERTICAL
@@ -191,10 +195,14 @@ class PetService : Service() {
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == STOP_RING) stopRinging()
+        return START_STICKY
+    }
 
     override fun onDestroy() {
         if (instance === this) instance = null
+        Ringer.stop(this)
         scope.cancel()
         if (::pet.isInitialized) {
             runCatching { windows.removeView(pet) }
@@ -246,6 +254,7 @@ class PetService : Service() {
     }
 
     private fun toggle() {
+        if (Ringer.ringing) return stopRinging()
         if (operating) {
             stopOperating = true
             say(getString(R.string.pet_stopping))
@@ -552,6 +561,7 @@ class PetService : Service() {
         val body = message.optString("body").takeIf { !message.isNull("body") }.orEmpty()
         when (message.optString("kind")) {
             "reminder" -> announce(getString(R.string.inbox_reminder), body, null)
+            "ring" -> ring(from)
             "sync" -> { // what you copied on the laptop, quietly
                 lastSynced = body // so it isn't sent straight back
                 copyToClipboard(body)
@@ -571,6 +581,38 @@ class PetService : Service() {
             }
             else -> announce(getString(R.string.inbox_note, from), body, null)
         }
+    }
+
+    // --- "where's my phone?" ------------------------------------------------------------
+
+    private fun ring(from: String) {
+        val stop = PendingIntent.getService(
+            this, 0, Intent(this, PetService::class.java).setAction(STOP_RING), PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(this, INBOX_CHANNEL)
+            .setSmallIcon(R.drawable.ic_butler)
+            .setContentTitle(getString(R.string.ring_title))
+            .setContentText(getString(R.string.ring_text, from))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setOngoing(true)
+            .setContentIntent(stop)
+            .addAction(0, getString(R.string.ring_found), stop)
+            .build()
+        runCatching { getSystemService(NotificationManager::class.java).notify(Ringer.NOTIFICATION, notification) }
+        Ringer.start(this)
+        if (!busy) {
+            pet.setState("attention")
+            say(getString(R.string.pet_ringing))
+        }
+    }
+
+    private fun stopRinging() {
+        Ringer.stop(this)
+        if (!::pet.isInitialized || busy) return
+        panelShown = false
+        panel.visibility = View.GONE
+        pet.setState(if (restingFace() == "peek") "hide" else "idle")
     }
 
     /** Puts a file in Downloads/Butler and returns an Intent that opens it (Android 10+). */
@@ -636,6 +678,7 @@ class PetService : Service() {
         private const val CHANNEL = "pet"
         private const val INBOX_CHANNEL = "inbox"
         private const val INBOX_EVERY_MS = 20_000L
+        private const val STOP_RING = "com.anas.butler.STOP_RING"
         private const val MAX_STEPS = 15
         private const val SYNC_MAX = 20_000 // characters; bigger copies stay on the phone
 
