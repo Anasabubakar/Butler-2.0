@@ -36,6 +36,7 @@ test("the consent page asks for offline access with every scope", () => {
     assert.equal(url.searchParams.get("access_type"), "offline");
     assert.match(url.searchParams.get("scope")!, /gmail\.send/);
     assert.match(url.searchParams.get("scope")!, /calendar\.events/);
+    assert.match(url.searchParams.get("scope")!, /drive\.file/); // only Butler's own backup files
   } finally {
     Deno.env.delete("GOOGLE_CLIENT_ID");
     Deno.env.delete("PUBLIC_URL");
