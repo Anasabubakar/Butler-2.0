@@ -1,12 +1,17 @@
 package com.anas.butler
 
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.speech.RecognizerIntent
+import android.telephony.PhoneNumberUtils
+import android.telephony.TelephonyManager
 import android.view.Gravity
 import android.view.View
 import android.view.inputmethod.EditorInfo
@@ -17,11 +22,13 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
 import java.io.File
+import java.util.Locale
 import kotlin.coroutines.resume
 
 /**
@@ -42,6 +49,12 @@ class AskActivity : AppCompatActivity() {
             input.setText(heard)
             ask()
         }
+    }
+
+    private var contactsAnswer: ((Boolean) -> Unit)? = null
+    private val askContacts = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        contactsAnswer?.invoke(granted)
+        contactsAnswer = null
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -107,6 +120,7 @@ class AskActivity : AppCompatActivity() {
     /** Does the part of Butler's plan that happens on the phone, and says what happened. */
     private suspend fun act(result: JSONObject, shot: ByteArray?): String {
         val say = result.optString("say")
+        result.optJSONObject("message")?.let { return handoff(it, shot, say) }
         result.optString("open").takeIf { it.startsWith("https://") }?.let {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it)))
         }
@@ -148,6 +162,65 @@ class AskActivity : AppCompatActivity() {
             .setOnCancelListener { if (cont.isActive) cont.resume(false) }
             .show()
         cont.invokeOnCancellation { dialog.dismiss() }
+    }
+
+    /**
+     * WhatsApp or Telegram: opens the app with the message (and the screenshot, if wanted)
+     * ready for the person. You press Send; Butler never sends from your account itself.
+     */
+    private suspend fun handoff(message: JSONObject, shot: ByteArray?, say: String): String {
+        val app = message.optString("app", "whatsapp")
+        val name = message.optString("name").ifBlank { message.optString("person") }
+        val text = message.optString("text")
+        val number = message.optString("phone").takeIf { it.isNotBlank() && !message.isNull("phone") }
+            ?: phoneFromContacts(message.optString("person"))
+        val digits = number?.let(::international)?.filter { it.isDigit() }
+        val image = shot?.takeIf { message.optBoolean("attach_screen") }?.let { bytes ->
+            val file = File(cacheDir, "shared/screenshot.jpg").apply { parentFile?.mkdirs(); writeBytes(bytes) }
+            FileProvider.getUriForFile(this, "$packageName.files", file)
+        }
+        val intent = when {
+            app == "telegram" || image != null -> Intent(Intent.ACTION_SEND).apply {
+                type = if (image != null) "image/jpeg" else "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+                image?.let { putExtra(Intent.EXTRA_STREAM, it); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                setPackage(if (app == "telegram") "org.telegram.messenger" else "com.whatsapp")
+                if (app != "telegram" && digits != null) putExtra("jid", "$digits@s.whatsapp.net")
+            }
+            else -> Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/${digits.orEmpty()}?text=${Uri.encode(text)}"))
+        }
+        try {
+            startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            startActivity(Intent.createChooser(intent.setPackage(null), null)) // the app isn't installed: let them pick
+        }
+        val where = if (app == "telegram") "Telegram" else "WhatsApp"
+        val how = if (digits != null && app != "telegram") getString(R.string.handoff_press_send)
+        else getString(R.string.handoff_pick, name)
+        return listOf(say, getString(R.string.handoff_opened, where, how)).filter { it.isNotBlank() }.joinToString("\n\n")
+    }
+
+    /** The first phone number saved for `name` in this phone's contacts (asks to read them once). */
+    private suspend fun phoneFromContacts(name: String): String? {
+        if (name.isBlank()) return null
+        if (checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            val granted = suspendCancellableCoroutine { cont ->
+                contactsAnswer = { if (cont.isActive) cont.resume(it) }
+                askContacts.launch(Manifest.permission.READ_CONTACTS)
+            }
+            if (!granted) return null
+        }
+        val uri = Uri.withAppendedPath(ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI, Uri.encode(name))
+        return contentResolver.query(uri, arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER), null, null, null)
+            ?.use { if (it.moveToFirst()) it.getString(0) else null }
+    }
+
+    /** A number in international form (+234…), using the SIM's country for local numbers. */
+    private fun international(number: String): String {
+        if (number.trim().startsWith("+")) return number
+        val country = (getSystemService(TelephonyManager::class.java)?.simCountryIso?.takeIf { it.isNotBlank() }
+            ?: Locale.getDefault().country).uppercase()
+        return PhoneNumberUtils.formatNumberToE164(number, country) ?: number
     }
 
     private fun clipboardText(): String? =
