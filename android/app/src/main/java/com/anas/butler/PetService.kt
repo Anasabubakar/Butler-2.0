@@ -143,6 +143,7 @@ class PetService : Service() {
                 R.string.pet_analyze to { look("analyze") },
                 R.string.pet_solve to { look("solve") },
                 R.string.pet_send_laptop to ::sendToLaptop,
+                R.string.pet_library to ::openLibrary,
                 R.string.pet_talk to { askButler(talk = true) },
                 R.string.pet_hide to { stopSelf() },
             )) {
@@ -257,6 +258,13 @@ class PetService : Service() {
         panel.visibility = if (panelShown) View.VISIBLE else View.GONE
         if (panelShown) placePanel()
         pet.setState(if (panelShown) "summon" else if (restingFace() == "peek") "hide" else "idle")
+    }
+
+    private fun openLibrary() {
+        panelShown = false
+        panel.visibility = View.GONE
+        pet.setState(if (restingFace() == "peek") "hide" else "idle")
+        startActivity(Intent(this, LibraryActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     // --- clipboard sync ------------------------------------------------------------------
