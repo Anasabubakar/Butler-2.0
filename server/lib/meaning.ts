@@ -60,7 +60,7 @@ export async function embedItem(id: string) {
     select id, title, summary, tags, note, url, body from items where id = ${id}`;
   if (!item) return;
   const embedding = await embed(itemText(item), "document");
-  await sql`update items set embedding = ${embedding} where id = ${id}`;
+  await sql`update items set embedding = ${embedding}::real[] where id = ${id}`;
 }
 
 /** Embeds organized items that don't have one yet, a few at a time. */
