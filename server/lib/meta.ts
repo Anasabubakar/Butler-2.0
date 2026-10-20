@@ -32,7 +32,7 @@ function decode(s: string): string {
     .replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
 }
 
-function metaTag(html: string, key: string): string | null {
+export function metaTag(html: string, key: string): string | null {
   const re = new RegExp(
     `<meta[^>]+(?:property|name)=["']${key}["'][^>]*content=["']([^"']*)["']` +
       `|<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${key}["']`,
