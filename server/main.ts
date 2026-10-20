@@ -30,6 +30,8 @@ const COOKIE_SECURE = env("COOKIE_SECURE", "true") !== "false";
 const MAX_FILE_BYTES = 500 * 1024 * 1024;
 const MAX_VISION_BYTES = 4 * 1024 * 1024;
 const VISION_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+const VOICE_TYPES = ["audio/wav", "audio/x-wav", "audio/ogg", "audio/webm", "audio/mp4", "audio/mpeg", "audio/aac"] as const;
+const MAX_VOICE_BYTES = 4 * 1024 * 1024;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 for (const [name, value] of [["BUTLER_TOKEN", TOKEN], ["BUTLER_PASSWORD_HASH", PASSWORD_HASH], ["SESSION_SECRET", SESSION_SECRET]]) {
@@ -275,8 +277,16 @@ app.post("/api/command", async (c) => {
   if (!geminiReady()) return c.json({ error: "no AI model: set GEMINI_API_KEY on the server" }, 503);
   const { form, text, deviceKind } = await deviceForm(c);
   const device = text("device", 100);
-  const said = text("text", 2000);
-  if (!device || !said) return c.json({ error: "device and text are required" }, 400);
+  const typed = text("text", 2000);
+  const audio = form?.get("audio");
+  let voice = null;
+  if (audio instanceof File && audio.size) {
+    const type = audio.type.split(";")[0];
+    if (!VOICE_TYPES.some((t) => t === type)) return c.json({ error: "unsupported voice clip type" }, 400);
+    if (audio.size > MAX_VOICE_BYTES) return c.json({ error: "voice clip too long" }, 413);
+    voice = { data: encodeBase64(new Uint8Array(await audio.arrayBuffer())), mediaType: type === "audio/x-wav" ? "audio/wav" : type };
+  }
+  if (!device || (!typed && !voice)) return c.json({ error: "device and text (or a voice clip) are required" }, 400);
   if (deviceKind) await inbox.checkIn(device, deviceKind);
 
   let picture = null;
@@ -289,55 +299,59 @@ app.post("/api/command", async (c) => {
   const timeZone = safeZone(text("tz", 100));
   let p;
   try {
-    p = await plan(said, { device, timeZone, devices: await inbox.devices() }, picture);
+    p = await plan(typed, { device, timeZone, devices: await inbox.devices() }, picture, voice);
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
+  const said = typed ?? p.heard?.trim() ?? "";
+  const json = (body: Record<string, unknown>) => c.json({ heard: voice ? said : undefined, ...body });
 
   switch (p.action) {
     case "remind": {
       const when = parseWhen(p.when);
-      if (!when) return c.json({ action: "answer", say: "When should I remind you?" });
+      if (!when) return json({ action: "answer", say: "When should I remind you?" });
       const everywhere = (await inbox.devices()).map((d) => d.name);
       const due = new Date(Math.max(when.getTime(), Date.now()));
       await inbox.send(everywhere.length ? everywhere : [device], {
         from_device: device, kind: "reminder", body: p.text || said, due_at: due.toISOString(),
       });
-      return c.json({ action: "remind", say: p.reply || "Reminder set." });
+      return json({ action: "remind", say: p.reply || "Reminder set." });
     }
     case "calendar": {
       const start = parseWhen(p.when);
-      if (!start) return c.json({ action: "answer", say: "When is it?" });
+      if (!start) return json({ action: "answer", say: "When is it?" });
       const parsedEnd = parseWhen(p.end);
       const end = parsedEnd && parsedEnd > start ? parsedEnd : new Date(start.getTime() + 3_600_000);
       const title = p.text || said;
       if (google.googleConfigured() && await google.account()) {
         try {
           await google.addEvent(title, start, end, timeZone);
-          return c.json({ action: "calendar", say: p.reply || "Added to your calendar." });
+          return json({ action: "calendar", say: p.reply || "Added to your calendar." });
         } catch (e) {
           return c.json({ error: String(e).slice(0, 300) }, 502);
         }
       }
       // Google isn't connected: open the event filled in, and you tap Save.
-      return c.json({
+      return json({
         action: "calendar", say: "Here's the event. Tap Save to add it.", open: calendarUrl(title, start, end),
       });
     }
     case "email": {
       if (!google.googleConfigured() || !(await google.account())) {
-        return c.json({ action: "answer", say: "Connect your Google account on the Butler website first, then ask again." });
+        return json({ action: "answer", say: "Connect your Google account on the Butler website first, then ask again." });
       }
       const who = (p.person ?? "").trim();
-      if (!who) return c.json({ action: "answer", say: "Who should I email?" });
-      let people: google.Person[];
+      if (!who) return json({ action: "answer", say: "Who should I email?" });
+      let people: { name: string; email: string }[];
       try {
-        people = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(who) ? [{ name: who, email: who }] : await google.findPeople(who);
+        people = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(who)
+          ? [{ name: who, email: who }]
+          : (await google.findPeople(who)).flatMap((p) => (p.email ? [{ name: p.name, email: p.email }] : []));
       } catch (e) {
         return c.json({ error: String(e).slice(0, 300) }, 502);
       }
       if (!people.length) {
-        return c.json({ action: "answer", say: `I couldn't find ${who} in your contacts. Ask again with their email address.` });
+        return json({ action: "answer", say: `I couldn't find ${who} in your contacts. Ask again with their email address.` });
       }
       const [to, ...others] = people;
       const subject = p.subject || "From Butler";
@@ -347,14 +361,14 @@ app.post("/api/command", async (c) => {
         : undefined;
       const confirm = holdEmail({ to, subject, body, attachment });
       const also = others.length ? `\n(Also found: ${others.map((o) => `${o.name} <${o.email}>`).join(", ")}.)` : "";
-      return c.json({
+      return json({
         action: "confirm",
         say: `Send this to ${to.name} <${to.email}>?\nSubject: ${subject}\n\n${body}${attachment ? "\n\n[screenshot attached]" : ""}${also}`,
         confirm,
       });
     }
     case "send":
-      return c.json({
+      return json({
         action: "send", say: p.reply,
         send: { target: p.target || "laptop", content: p.content ?? "text", text: p.text ?? null },
       });
@@ -363,10 +377,25 @@ app.post("/api/command", async (c) => {
         device, kind: "text", url: null, body: p.text || said, note: null, mime: null, platform: null,
       });
       organizeItem(id, await rawFor((await db.getItem(id))!));
-      return c.json({ action: "save", say: p.reply || "Saved to Butler." });
+      return json({ action: "save", say: p.reply || "Saved to Butler." });
+    }
+    case "message": {
+      const who = (p.person ?? "").trim();
+      if (!who) return json({ action: "answer", say: "Who should I message?" });
+      let name = who;
+      let phone = /^\+?[\d\s()-]{7,}$/.test(who) ? who.replace(/[^\d+]/g, "") : null;
+      if (!phone && google.googleConfigured() && await google.account()) {
+        const found = (await google.findPeople(who).catch(() => [])).find((f) => f.phone);
+        if (found) ({ name, phone } = { name: found.name, phone: found.phone });
+      }
+      return json({
+        action: "message",
+        say: p.reply,
+        message: { app: p.app ?? "whatsapp", person: who, name, phone, text: p.text || said, attach_screen: Boolean(p.attach_screen) },
+      });
     }
     default:
-      return c.json({ action: "answer", say: p.reply || "I'm not sure how to help with that yet." });
+      return json({ action: "answer", say: p.reply || "I'm not sure how to help with that yet." });
   }
 });
 
