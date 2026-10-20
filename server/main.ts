@@ -246,7 +246,7 @@ app.post("/api/send", async (c) => {
   }
   const body = text("text", 100_000);
   const url = text("url", 4000);
-  if (kind !== "file" && !body && !url) return c.json({ error: "nothing to send" }, 400);
+  if (kind !== "file" && kind !== "ring" && !body && !url) return c.json({ error: "nothing to send" }, 400);
   await inbox.send(to, { from_device: device, kind, body, url, item_id });
   return c.json({ sent_to: to });
 });
