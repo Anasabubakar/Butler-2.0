@@ -171,6 +171,7 @@ export default class ButlerPetExtension extends Extension {
             ['Copy this', () => this._copyThis()],
             ['Analyze this', () => this._look('analyze')],
             ['Solve this', () => this._look('solve')],
+            ['Translate this', () => this._look('translate')],
             ['Send to phone', () => this._sendToPhone()],
             ['Talk to Butler', () => this._talk()],
         ]) {
