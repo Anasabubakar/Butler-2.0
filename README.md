@@ -120,6 +120,8 @@ To restore on a new server: set Butler up as above but start only the database (
 
 With `GEMINI_API_KEY` set, every organized item also gets an embedding (numbers that capture what it's about). On the website, the **≈** button on a card shows the items closest to it, and searches add a **Close in meaning** row, so "saving money" finds "budget tips" without the exact words. Items saved before this existed are filled in when the server starts.
 
+Ask Butler on the phone or laptop can also answer from your library: "what was that jollof recipe I saved?" or "open that TikTok about budgeting". It looks for the closest saves, answers from them only, and lists the ones it used with their links. It opens the first one if you said open, show, play or watch.
+
 ## Install the Android app
 
 Every push builds a debug APK. Download `butler-debug-apk` from the latest run on the repo's **Actions** tab, install it, open **Butler**, and enter:
