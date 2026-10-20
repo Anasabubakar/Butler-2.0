@@ -16,6 +16,7 @@ export interface Recalled {
 
 /** Where an item can be opened: its own link, or the saved file on the website. */
 export function linkFor(item: Item, publicUrl: string | undefined): string | null {
+  if (item.link_dead && item.archive_url) return item.archive_url; // the original is gone
   if (item.url?.startsWith("https://")) return item.url;
   if (item.file_path && publicUrl?.startsWith("https://")) return `${publicUrl.replace(/\/$/, "")}/files/${item.id}`;
   return null;
