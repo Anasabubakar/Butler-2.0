@@ -3,6 +3,8 @@ package com.anas.butler
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.ContentValues
 import android.app.Service
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -14,7 +16,9 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.os.IBinder
+import android.provider.MediaStore
 import android.provider.Settings
 import android.view.ContextThemeWrapper
 import android.view.Gravity
@@ -31,16 +35,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
 
 /**
  * Little Butler on your phone: peeks from the bottom-right corner over every app.
- * Tap it for Save this, Copy this, Analyze this and Solve this.
+ * Tap it for Save this, Copy this, Analyze this, Solve this, Send to laptop and Ask Butler.
+ * It also checks for reminders and things sent from your laptop.
  */
 class PetService : Service() {
 
@@ -113,6 +120,9 @@ class PetService : Service() {
                 R.string.pet_copy to ::copyThis,
                 R.string.pet_analyze to { look("analyze") },
                 R.string.pet_solve to { look("solve") },
+                R.string.pet_send_laptop to ::sendToLaptop,
+                R.string.pet_ask to { askButler(talk = false) },
+                R.string.pet_talk to { askButler(talk = true) },
                 R.string.pet_hide to { stopSelf() },
             )) {
                 addView(Button(ui).apply {
@@ -142,6 +152,14 @@ class PetService : Service() {
         windows.addView(panel, panelLayout)
         placePanel()
         pet.setState(restingFace())
+
+        // Reminders and things sent from your laptop.
+        scope.launch {
+            while (isActive) {
+                checkInbox()
+                delay(INBOX_EVERY_MS)
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
@@ -324,12 +342,119 @@ class PetService : Service() {
         getString(R.string.pet_answer, answer)
     }
 
+    /** Send to laptop: the page in a browser, else the selected text, else a screenshot. */
+    private fun sendToLaptop() = work(getString(R.string.pet_sending)) {
+        val config = Config(this)
+        if (!config.isReady) throw IllegalStateException(getString(R.string.setup_first))
+        val butler = ButlerClient(config)
+        val link = HandsService.instance?.browserUrl()
+        val selected = HandsService.instance?.selectedText()
+        when {
+            link != null -> butler.send("laptop", "link", url = link).let { getString(R.string.pet_sent_page) }
+            selected != null -> butler.send("laptop", "clip", text = selected).let { getString(R.string.pet_sent_text) }
+            else -> butler.send("laptop", "file", file = ButlerClient.Attachment("screenshot.jpg", snap().jpeg, "image/jpeg"))
+                .let { getString(R.string.pet_sent_screenshot) }
+        }
+    }
+
+    /** Ask Butler: takes a screenshot of what you're looking at, then opens the typing (or talking) sheet. */
+    private fun askButler(talk: Boolean) {
+        if (busy) return
+        busy = true
+        scope.launch {
+            val shot = runCatching { snap() }.getOrNull()?.let { s ->
+                File(cacheDir, "ask-${UUID.randomUUID()}.jpg").apply { writeBytes(s.jpeg) }
+            }
+            val link = HandsService.instance?.browserUrl()
+            panelShown = false
+            panel.visibility = View.GONE
+            pet.setState(restingFace())
+            busy = false
+            AskActivity.open(this@PetService, shot, link, talk)
+        }
+    }
+
+    // --- the inbox: reminders and things sent from your laptop -------------------------
+
+    private suspend fun checkInbox() {
+        val config = Config(this)
+        if (!config.isReady) return
+        val messages = runCatching { ButlerClient(config).inbox() }.getOrNull() ?: return // offline: next time
+        for (i in 0 until messages.length()) runCatching { deliver(config, messages.getJSONObject(i)) }
+    }
+
+    private suspend fun deliver(config: Config, message: JSONObject) {
+        val from = message.optString("from_device").takeIf { it != config.deviceName }
+            ?.let { getString(R.string.inbox_from, it) }.orEmpty()
+        val body = message.optString("body").takeIf { !message.isNull("body") }.orEmpty()
+        when (message.optString("kind")) {
+            "reminder" -> announce(getString(R.string.inbox_reminder), body, null)
+            "clip" -> {
+                copyToClipboard(body)
+                announce(getString(R.string.inbox_copied, from), body.take(200), null)
+            }
+            "link" -> {
+                val url = message.optString("url")
+                announce(getString(R.string.inbox_link, from), url, Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            }
+            "file" -> {
+                val (bytes, name) = ButlerClient(config).download(message.getString("item_id"))
+                val open = saveDownload(bytes, name)
+                announce(getString(R.string.inbox_file, from), name, open)
+            }
+            else -> announce(getString(R.string.inbox_note, from), body, null)
+        }
+    }
+
+    /** Puts a file in Downloads/Butler and returns an Intent that opens it (Android 10+). */
+    private fun saveDownload(bytes: ByteArray, name: String): Intent? {
+        val mime = android.webkit.MimeTypeMap.getSingleton()
+            .getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase()) ?: "application/octet-stream"
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: filesDir
+            File(dir, name).writeBytes(bytes)
+            return null
+        }
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, name)
+            put(MediaStore.Downloads.MIME_TYPE, mime)
+            put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/Butler")
+        }
+        val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
+        contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+        return Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+
+    /** A notification you can tap (to open `open`), plus the pet saying it if it isn't busy. */
+    private fun announce(title: String, text: String, open: Intent?) {
+        val tap = open?.let {
+            PendingIntent.getActivity(
+                this, nextNotification, it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+        }
+        val notification = NotificationCompat.Builder(this, INBOX_CHANNEL)
+            .setSmallIcon(R.drawable.ic_butler)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .apply { tap?.let(::setContentIntent) }
+            .build()
+        runCatching { getSystemService(NotificationManager::class.java).notify(nextNotification++, notification) }
+        if (!busy) work(title, face = "attention") { "$title: $text" }
+    }
+
     // --- foreground notification ------------------------------------------------------
 
     private fun startInForeground() {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL, getString(R.string.pet_channel), NotificationManager.IMPORTANCE_MIN),
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(INBOX_CHANNEL, getString(R.string.inbox_channel), NotificationManager.IMPORTANCE_HIGH),
         )
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_butler)
@@ -342,6 +467,9 @@ class PetService : Service() {
 
     companion object {
         private const val CHANNEL = "pet"
+        private const val INBOX_CHANNEL = "inbox"
+        private const val INBOX_EVERY_MS = 20_000L
+        private var nextNotification = 100
         private val URL = Regex("https?://\\S+")
 
         // Feed pages, where the address bar shows the feed rather than the post you're looking at.

@@ -37,3 +37,17 @@
   font-weight: 600;
   max-width: 300px;
 }
+
+.butler-ask {
+  color: #1b1b22;
+  background-color: #f4f4f6;
+  border: 1px solid #d9dbe0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-top: 6px;
+  min-width: 260px;
+}
+
+.butler-ask:focus {
+  border-color: #f08a24;
+}

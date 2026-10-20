@@ -23,6 +23,8 @@ const PEEK_H = 60;      // down to just below its fingers
 const EDGE = 40;        // gap from the right edge while peeking
 const HOP_X = 56;       // how far it moves left when it wakes up
 const HOP_Y = 118;      // how far it moves up
+const INBOX_EVERY = 20;  // seconds between checks for reminders and things sent here
+const DOWNLOADS = GLib.build_filenamev([GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD) ?? GLib.get_home_dir(), 'Butler']);
 const BROWSERS = ['firefox', 'google-chrome', 'chromium', 'brave-browser', 'microsoft-edge', 'vivaldi', 'opera'];
 
 // Feed pages, where the address bar shows the feed rather than the post you're looking at.
@@ -36,6 +38,18 @@ const FEEDS = [
     /^https?:\/\/(www\.)?threads\.(net|com)\/?([?#].*)?$/,
 ];
 const isFeed = url => FEEDS.some(feed => feed.test(url));
+
+/** This laptop's time zone, like Africa/Lagos, so "at 3pm" means your 3pm. */
+function timeZone() {
+    const id = GLib.TimeZone.new_local().get_identifier();
+    if (/^[A-Za-z]+\/[A-Za-z_+-]+/.test(id))
+        return id;
+    try {
+        return GLib.file_read_link('/etc/localtime').split('zoneinfo/')[1] ?? 'UTC';
+    } catch (e) {
+        return 'UTC';
+    }
+}
 
 const sleep = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
     resolve();
@@ -152,10 +166,37 @@ export default class ButlerPetExtension extends Extension {
             ['Copy this', () => this._copyThis()],
             ['Analyze this', () => this._look('analyze')],
             ['Solve this', () => this._look('solve')],
+            ['Send to phone', () => this._sendToPhone()],
+            ['Ask Butler…', () => this._openAsk()],
         ]) {
             const button = new St.Button({label, style_class: 'butler-action', x_expand: true, can_focus: false});
             button.connect('clicked', () => run());
             this._menu.add_child(button);
+        }
+
+        // Ask Butler: type what you want, press Enter.
+        this._ask = new St.Entry({hint_text: 'Remind me… / Send this to my phone…', style_class: 'butler-ask', can_focus: true, visible: false});
+        this._ask.clutter_text.connect('activate', () => {
+            const text = this._ask.text.trim();
+            this._closeAsk();
+            if (text)
+                this._askButler(text);
+        });
+        this._ask.clutter_text.connect('key-press-event', (_actor, event) => {
+            if (event.get_key_symbol() !== Clutter.KEY_Escape)
+                return Clutter.EVENT_PROPAGATE;
+            this._closeAsk();
+            this._goHome();
+            return Clutter.EVENT_STOP;
+        });
+        this._menu.add_child(this._ask);
+
+        // Send / Cancel, for things that need your yes first, like an email.
+        this._confirmBox = new St.BoxLayout({style_class: 'butler-menu', visible: false});
+        for (const [label, yes] of [['Send', true], ['Cancel', false]]) {
+            const button = new St.Button({label, style_class: 'butler-action', x_expand: true, can_focus: false});
+            button.connect('clicked', () => this._answer?.(yes));
+            this._confirmBox.add_child(button);
         }
 
         this._note = new St.Label({style_class: 'butler-note', visible: false, reactive: true});
@@ -165,23 +206,35 @@ export default class ButlerPetExtension extends Extension {
             return Clutter.EVENT_STOP;
         });
 
-        for (const actor of [this._menu, this._note, this._pet])
+        for (const actor of [this._menu, this._confirmBox, this._note, this._pet])
             Main.layoutManager.addTopChrome(actor);
 
         this._monitorsId = Main.layoutManager.connect('monitors-changed', () => this._place(false));
         this._rest();
+
+        // Checks for reminders and things sent from your phone.
+        this._checking = false;
+        this._inboxId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, INBOX_EVERY, () => {
+            this._checkInbox();
+            return GLib.SOURCE_CONTINUE;
+        });
     }
 
     disable() {
         this._drag?.grab.dismiss();
         this._drag = null;
+        this._closeAsk();
+        if (this._inboxId)
+            GLib.source_remove(this._inboxId);
+        this._inboxId = 0;
         this._stopClip();
         Main.layoutManager.disconnect(this._monitorsId);
-        for (const actor of [this._menu, this._note, this._pet]) {
+        this._answer?.(false);
+        for (const actor of [this._menu, this._confirmBox, this._note, this._pet]) {
             Main.layoutManager.removeChrome(actor);
             actor.destroy();
         }
-        this._pet = this._face = this._menu = this._note = null;
+        this._pet = this._face = this._menu = this._note = this._ask = this._confirmBox = null;
         this._keyboard = this._pointer = null;
         this._session?.abort();
         this._session = null;
@@ -297,6 +350,9 @@ export default class ButlerPetExtension extends Extension {
         const [, menuH] = this._menu.get_preferred_height(-1);
         const [, menuW] = this._menu.get_preferred_width(-1);
         this._menu.set_position(beside(menuW), within(y + PET_H - menuH, menuH));
+        const [, boxH] = this._confirmBox.get_preferred_height(-1);
+        const [, boxW] = this._confirmBox.get_preferred_width(-1);
+        this._confirmBox.set_position(beside(boxW), within(y + PET_H + 8, boxH));
         // Notes grow upwards, so a long answer never covers the pet.
         const [, noteW] = this._note.get_preferred_width(-1);
         const [, noteH] = this._note.get_preferred_height(noteW);
@@ -346,6 +402,7 @@ export default class ButlerPetExtension extends Extension {
         this._unpeek();
         this._awake = true;
         this._note.hide();
+        this._closeAsk();
         this._menu.show();
         this._play('summon');
         this._place(true);
@@ -437,11 +494,20 @@ export default class ButlerPetExtension extends Extension {
             .get_text(St.ClipboardType.CLIPBOARD, (_clipboard, text) => resolve(text ?? '')));
     }
 
-    /** Copies the current selection in the focused window. */
+    /**
+     * Copies the current selection in the focused window. Empty if nothing is selected,
+     * rather than whatever was copied earlier; the old clipboard is put back then.
+     */
     async _copySelection() {
+        const clipboard = St.Clipboard.get_default();
+        const before = await this._readClipboard();
+        clipboard.set_text(St.ClipboardType.CLIPBOARD, '');
         await this._press(Clutter.KEY_Control_L, Clutter.KEY_c);
         await sleep(150);
-        return (await this._readClipboard()).trim();
+        const copied = (await this._readClipboard()).trim();
+        if (!copied && before)
+            clipboard.set_text(St.ClipboardType.CLIPBOARD, before);
+        return copied;
     }
 
     /**
@@ -571,6 +637,226 @@ export default class ButlerPetExtension extends Extension {
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, answer);
             return `${answer}\n\n(Copied, so you can paste it.)`;
         }, 'think');
+    }
+
+    // --- Ask Butler -------------------------------------------------------------------
+
+    /** Shows the typing box and takes the keyboard until Enter or Escape. */
+    _openAsk() {
+        if (this._busy)
+            return;
+        this._ask.text = '';
+        this._ask.show();
+        this._place(false);
+        this._askGrab = Main.pushModal(this._menu);
+        global.stage.set_key_focus(this._ask);
+    }
+
+    _closeAsk() {
+        if (this._askGrab) {
+            Main.popModal(this._askGrab);
+            this._askGrab = null;
+        }
+        this._ask?.hide();
+    }
+
+    /** Sends what you typed, plus a screenshot of the window you're on, and does what Butler decides. */
+    _askButler(text) {
+        this._work('On it…', async () => {
+            const config = this._config();
+            const shot = await this._snapWindow().catch(() => null);
+            const result = await this._send(config, '/api/command',
+                {device: 'laptop', kind: 'laptop', text, tz: timeZone()}, shot);
+            if (result.open)
+                Gio.AppInfo.launch_default_for_uri(result.open, null);
+            if (result.confirm) {
+                this._say(result.say);
+                if (!await this._confirm())
+                    return 'Okay, not sent.';
+                this._say('Sending…');
+                return (await this._send(config, '/api/command/confirm', {confirm: result.confirm})).say;
+            }
+            if (result.send) {
+                const {sent_to: to} = await this._sendContent(config, result.send, shot);
+                return result.say || `Sent to ${to.join(', ')}`;
+            }
+            return result.say;
+        }, 'think');
+    }
+
+    /** Shows Send / Cancel under the note and waits for your answer (Cancel after 2 minutes). */
+    _confirm() {
+        this._confirmBox.show();
+        this._place(false);
+        return new Promise(resolve => {
+            let id = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 120, () => {
+                id = 0;
+                this._answer?.(false);
+                return GLib.SOURCE_REMOVE;
+            });
+            this._answer = yes => {
+                if (id)
+                    GLib.source_remove(id);
+                this._answer = null;
+                this._confirmBox?.hide();
+                resolve(yes);
+            };
+        });
+    }
+
+    /**
+     * Sends something to another device: what you copied ("clipboard"), the page you're
+     * on ("link"), a screenshot ("screen") or words ("text").
+     */
+    async _sendContent(config, {target, content, text}, shot) {
+        const fields = {device: 'laptop', target};
+        if (content === 'screen') {
+            if (!shot)
+                throw new Error('open the window you want to send');
+            return this._send(config, '/api/send', {...fields, kind: 'file'}, shot);
+        }
+        if (content === 'link') {
+            const link = this._inBrowser() ? await this._addressBar() : '';
+            if (!/^https?:\/\//.test(link))
+                throw new Error('open the page you want to send in your browser');
+            return this._send(config, '/api/send', {...fields, kind: 'link', url: link});
+        }
+        if (content === 'clipboard') {
+            const copied = (await this._readClipboard()).trim();
+            if (!copied)
+                throw new Error('copy something first');
+            return this._send(config, '/api/send', {...fields, kind: 'clip', text: copied});
+        }
+        if (!text)
+            throw new Error('nothing to send');
+        return this._send(config, '/api/send', {...fields, kind: 'note', text});
+    }
+
+    /** Send to phone: the page in a browser, else the selection, else a screenshot. */
+    _sendToPhone() {
+        this._work('Sending…', async () => {
+            const config = this._config();
+            const target = {target: 'phone'};
+            if (this._inBrowser()) {
+                await this._sendContent(config, {...target, content: 'link'});
+                return 'Sent the page to your phone';
+            }
+            const selected = await this._copySelection();
+            if (selected) {
+                await this._sendContent(config, {...target, content: 'clipboard'});
+                return 'Sent to your phone, ready to paste';
+            }
+            await this._sendContent(config, {...target, content: 'screen'}, await this._snapWindow());
+            return 'Sent a screenshot to your phone';
+        });
+    }
+
+    async _addressBar() {
+        await this._press(Clutter.KEY_Control_L, Clutter.KEY_l);
+        const text = await this._copySelection();
+        await this._press(Clutter.KEY_Escape);
+        return text;
+    }
+
+    _config() {
+        const config = loadConfig();
+        if (!config)
+            throw new Error('set your save URL and token in ~/.config/butler/pet.json');
+        return config;
+    }
+
+    // --- the inbox: reminders and things sent from your phone ---------------------
+
+    async _checkInbox() {
+        const config = loadConfig();
+        if (!config || this._checking)
+            return;
+        this._checking = true;
+        try {
+            const messages = await this._send(config, '/api/inbox', {device: 'laptop', kind: 'laptop'});
+            for (const message of messages)
+                await this._deliver(config, message);
+        } catch (e) {
+            // offline or the server is restarting: try again next time
+        } finally {
+            this._checking = false;
+        }
+    }
+
+    async _deliver(config, message) {
+        const from = message.from_device === 'laptop' ? '' : ` from ${message.from_device}`;
+        switch (message.kind) {
+        case 'reminder':
+            return this._announce('Reminder', message.body);
+        case 'clip':
+            St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, message.body ?? '');
+            return this._announce(`Copied${from}`, `${(message.body ?? '').slice(0, 200)}\n\n(Ready to paste.)`);
+        case 'link':
+            return this._announce(`Link${from}`, `${message.url}\n\n(Tap to open it.)`,
+                () => Gio.AppInfo.launch_default_for_uri(message.url, null));
+        case 'file': {
+            const path = await this._download(config, message.item_id);
+            return this._announce(`File${from}`, `Saved to ${path.replace(GLib.get_home_dir(), '~')}\n\n(Tap to open it.)`,
+                () => Gio.AppInfo.launch_default_for_uri(GLib.filename_to_uri(path, null), null));
+        }
+        default:
+            return this._announce(`Note${from}`, message.body ?? message.url ?? '');
+        }
+    }
+
+    /** A desktop notification, plus the pet saying it if it isn't busy. Tapping the note runs `onTap`. */
+    async _announce(title, text, onTap = null) {
+        Main.notify(`Butler: ${title}`, text);
+        if (this._busy || !this._pet)
+            return;
+        this._busy = true;
+        this._menu.hide();
+        this._unpeek();
+        this._play('summon');
+        this._say(`${title}: ${text}`);
+        const tapped = await new Promise(resolve => {
+            const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 15000, () => {
+                this._noteTapped = null;
+                resolve(false);
+                return GLib.SOURCE_REMOVE;
+            });
+            this._noteTapped = () => {
+                GLib.source_remove(id);
+                this._noteTapped = null;
+                resolve(true);
+            };
+        });
+        if (!this._pet)
+            return;
+        if (tapped)
+            onTap?.();
+        this._note.hide();
+        this._busy = false;
+        this._goHome();
+    }
+
+    /** Downloads a file sent here into ~/Downloads/Butler and returns its path. */
+    _download(config, itemId) {
+        const base = config.url.replace(/\/api\/save\/?$/, '');
+        const message = Soup.Message.new('GET', `${base}/api/inbox/file/${itemId}`);
+        message.request_headers.append('x-butler-token', config.token);
+        return new Promise((resolve, reject) => {
+            this._session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null, (session, result) => {
+                try {
+                    const bytes = session.send_and_read_finish(result);
+                    if (message.get_status() !== 200)
+                        throw new Error(`Butler answered ${message.get_status()}`);
+                    const disposition = message.response_headers.get_one('content-disposition') ?? '';
+                    const name = (disposition.match(/filename="([^"]+)"/)?.[1] ?? 'file').replace(/[/\\]/g, '_');
+                    GLib.mkdir_with_parents(DOWNLOADS, 0o755);
+                    const path = GLib.build_filenamev([DOWNLOADS, `${GLib.DateTime.new_now_local().format('%Y%m%d-%H%M%S')}-${name}`]);
+                    GLib.file_set_contents(path, bytes.get_data());
+                    resolve(path);
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        });
     }
 
     /** Posts a form to Butler (`path` like /api/save) and returns its JSON answer. */

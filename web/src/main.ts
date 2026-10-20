@@ -190,6 +190,9 @@ function renderLibrary() {
     onclick: async () => { await api("/api/logout", { method: "POST" }).catch(() => {}); renderSignIn(); },
   }, "Sign out");
 
+  const googleButton = h("button", { class: "ghost", hidden: true });
+  renderGoogle(googleButton);
+
   sidebarEl = h("nav", { class: "sidebar", "aria-label": "Collections" });
   headingEl = h("h2", { class: "heading" });
   gridEl = h("section", { class: "grid" });
@@ -199,11 +202,40 @@ function renderLibrary() {
       h("a", { class: "brand", href: "#", onclick: (e) => { e.preventDefault(); setFilter(null); } },
         h("span", { class: "logo small" }, butlerMark()), "Butler"),
       search,
+      googleButton,
       signOut,
     ),
     h("main", { class: "layout" }, sidebarEl, h("div", { class: "content" }, headingEl, gridEl)),
   );
   refresh(true);
+}
+
+// --- Google: lets Ask Butler add calendar events and send email as you ---------------
+
+interface GoogleStatus { configured: boolean; connected: boolean; email: string | null }
+
+async function renderGoogle(button: HTMLButtonElement) {
+  const result = new URLSearchParams(location.search).get("google");
+  if (result) {
+    history.replaceState(null, "", location.pathname);
+    if (result === "failed") alert("Connecting Google didn't work. Try again.");
+  }
+  const status = await api<GoogleStatus>("/api/google/status").catch(() => null);
+  if (!status?.configured) return; // the server has no Google client set up
+  button.hidden = false;
+  button.textContent = status.connected ? `Google: ${status.email ?? "connected"}` : "Connect Google";
+  button.title = status.connected
+    ? "Butler can add calendar events and send email you approve. Click to disconnect."
+    : "Let Ask Butler add calendar events and send email you approve";
+  button.onclick = async () => {
+    if (!status.connected) {
+      location.href = "/api/google/connect";
+      return;
+    }
+    if (!confirm("Disconnect Google? Ask Butler won't be able to add events or send email.")) return;
+    await api("/api/google/disconnect", { method: "POST" }).catch(() => {});
+    renderGoogle(button);
+  };
 }
 
 async function refresh(withFacets = false) {

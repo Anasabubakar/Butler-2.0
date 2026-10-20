@@ -1,7 +1,10 @@
 package com.anas.butler
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
@@ -42,6 +45,12 @@ class SettingsActivity : AppCompatActivity() {
                     toast(R.string.allow_hands)
                 }
                 else -> {
+                    // Reminders arrive as notifications; Android 13+ asks once. Butler still works without.
+                    if (Build.VERSION.SDK_INT >= 33 &&
+                        checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+                    }
                     PetService.start(this)
                     toast(R.string.pet_started)
                     finish()

@@ -5,8 +5,12 @@ A small charcoal butler that peeks out from the bottom-right corner of your scre
 - **Save this**: saves a screenshot of the window you're in, plus the page's link in a browser or the text you've selected in any other app. On a feed (TikTok For You, the X home page, Instagram and so on), the address bar doesn't hold the post's link, so the pet taps the post's Share button, then Copy link, and saves that link instead.
 - **Copy this**: copies what you've selected.
 - **Analyze this** and **Solve this**: Butler looks at the window and explains it, or solves the problem on it. The answer shows beside the pet (tap it to close) and is copied so you can paste it.
+- **Send to phone**: sends the page you're on (in a browser), the text you've selected, or else a screenshot to your phone.
+- **Ask Butler…**: type what you want and press Enter, for example "remind me at 3 to call Mum", "add dentist Friday 10am to my calendar", "send what I copied to my phone", "email this to David" or "what does this error mean?". Butler sees the window you're on, so "this" works. Escape closes the box.
 
-Share, Analyze and Solve need a Gemini key on the server (`GEMINI_API_KEY` in `deploy/butler.env`). The key stays on the server: the pet sends the screenshot to Butler, and Butler asks Gemini.
+Every 20 seconds the pet checks for reminders and anything your phone sent. They arrive as a desktop notification and a note from the pet: copied text goes straight onto your clipboard, links open when you tap the note, and files land in `~/Downloads/Butler`.
+
+Share, Analyze, Solve and Ask Butler need a Gemini key on the server (`GEMINI_API_KEY` in `deploy/butler.env`). The key stays on the server: the pet sends the screenshot to Butler, and Butler asks Gemini.
 
 It runs as a GNOME Shell extension (GNOME 46 to 48). Living inside the desktop is what lets it stay on top of every window and press keys for you on Wayland.
 

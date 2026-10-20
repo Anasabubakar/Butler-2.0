@@ -96,6 +96,18 @@ Until the secrets exist, the Deploy workflow skips itself.
 
 The backups sit on the same disk as everything else, so they protect against mistakes, not against losing the VM. Oracle can reclaim Always Free VMs that stay idle for a week. Copy `deploy/backups` and `deploy/data/files` somewhere else now and then (for example with `rclone` to Google Drive).
 
+### Connect Google (calendar and email)
+
+Ask Butler can add events to your Google Calendar and send email from your Gmail, after you tap **Send**. Set it up once:
+
+1. At [console.cloud.google.com](https://console.cloud.google.com), create a project, then enable the **Google Calendar API**, **Gmail API** and **People API**.
+2. **OAuth consent screen**: External, add your own address as a test user, then press **Publish app** so it's **In production**. Left in Testing, Google signs you out every 7 days. Google will call the app unverified; that's expected for a personal app, and you click past it once.
+3. **Credentials → Create credentials → OAuth client ID → Web application**, with the redirect URI `https://butler.yourdomain.com/api/google/callback`.
+4. Add the client ID and secret to `butler.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, plus `PUBLIC_URL=https://butler.yourdomain.com`, and run `docker compose up -d`.
+5. On the website, press **Connect Google** and allow it.
+
+Without this, calendar requests open a filled-in event for you to save, and email requests ask you to connect first.
+
 ## Install the Android app
 
 Every push builds a debug APK. Download `butler-debug-apk` from the latest run on the repo's **Actions** tab, install it, open **Butler**, and enter:
@@ -112,7 +124,7 @@ Tap **Start Little Butler** on the setup screen. It asks for two switches, one a
 1. **Display over other apps**, so the pet can peek from the corner.
 2. **Butler** under **Accessibility**, so it can screenshot and tap for you. It only does that when you press one of its buttons. On Android 13 and newer, an app installed from an APK has this switch greyed out at first: open Butler's **App info**, tap **⋮**, choose **Allow restricted settings**, and try again.
 
-Drag the pet anywhere on the screen; it stays where you drop it, and peeks again if you drop it on the bottom edge. Tap it for **Save this** (a screenshot plus the post's link, using Share → Copy link inside apps), **Copy this**, **Analyze this** and **Solve this**. Screenshots need Android 11 or newer, and Share, Analyze and Solve need `GEMINI_API_KEY` on the server.
+Drag the pet anywhere on the screen; it stays where you drop it, and peeks again if you drop it on the bottom edge. Tap it for **Save this** (a screenshot plus the post's link, using Share → Copy link inside apps), **Copy this**, **Analyze this** and **Solve this**. It also has **Send to laptop** (the page, the selected text, or a screenshot) and **Ask Butler** / **Talk to Butler**: type or say what you want, like "remind me at 3 to call Mum" or "send this to my laptop". Talk uses the phone's own speech recognizer. Reminders and things your laptop sends arrive as notifications; files land in Downloads/Butler. Screenshots need Android 11 or newer, and Share, Analyze, Solve and Ask Butler need `GEMINI_API_KEY` on the server.
 
 ## Develop
 
@@ -130,3 +142,4 @@ cd android && ./gradlew assembleDebug  # needs the Android SDK
 - Saved files are only served to a signed-in browser, from paths the server looked up itself.
 - Keep `butler.env` and `.env` off GitHub (they're git-ignored). If the token leaks, change it in `butler.env`, run `docker compose up -d`, and update the phone.
 - The organizer treats saved content as data, not instructions, because anything you save could contain text written to manipulate an AI.
+- Ask Butler never sends an email without your **Send**. The Google refresh token sits in the database on your server; **Disconnect** on the website revokes it.
