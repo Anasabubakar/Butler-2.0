@@ -1,0 +1,63 @@
+# Everything Butler needs on one machine: database, server, HTTPS, nightly backups.
+#   cd deploy && cp butler.env.example butler.env   # then fill it in
+#   docker compose up -d --build
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    env_file: .env # supplies POSTGRES_PASSWORD
+    environment:
+      POSTGRES_USER: butler
+      POSTGRES_DB: butler
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U butler"]
+      interval: 5s
+      retries: 10
+
+  butler:
+    build: ..
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: [.env, butler.env]
+    environment:
+      PGHOST: db
+      PGUSER: butler
+      PGDATABASE: butler
+    volumes:
+      - ./data/files:/data/files
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [butler]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      BUTLER_DOMAIN: ${BUTLER_DOMAIN:?set BUTLER_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy:/data
+
+  backup:
+    image: postgres:17
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      PGHOST: db
+      PGUSER: butler
+    volumes:
+      - ./backups:/backups
+    # One compressed dump a day, keeping the last 14.
+    entrypoint: >
+      sh -c 'while true; do
+        PGPASSWORD="$$POSTGRES_PASSWORD" pg_dump butler | gzip > /backups/butler-$$(date +%F).sql.gz &&
+        find /backups -name "butler-*.sql.gz" -mtime +14 -delete;
+        sleep 86400; done'

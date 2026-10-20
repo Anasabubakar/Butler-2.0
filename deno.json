@@ -1,0 +1,7 @@
+{
+  "tasks": {
+    "start": "deno run --allow-net --allow-env --allow-read --allow-write --allow-sys server/main.ts",
+    "hash-password": "deno run server/hash-password.ts",
+    "check": "deno check server/main.ts server/hash-password.ts"
+  }
+}

@@ -2,76 +2,92 @@
 
 A personal companion that lives on your phone and laptop. Phase 1 is the **save library**: share anything from any app, and Butler stores it, titles it, tags it and groups it so you can find it again.
 
-The full plan, including what is out of scope and why, lives in the project's `plan/pet-plan.md`.
+Everything runs on one machine you own: the database, the server, your files, and the website.
 
 ## What's here
 
 | Path | What it is |
 |---|---|
-| `supabase/migrations/` | The `items` table (with full-text search) and the private `items` storage bucket |
-| `supabase/functions/save/` | `POST` endpoint every device saves through |
-| `supabase/functions/_shared/` | Rules (platform, kind, link cleanup), page metadata, and the AI organizer |
-| `web/` | The library website: sign in, search, browse by collection, platform and tag |
+| `server/` | The Butler server (Deno): device saves, library API, sign-in, files, and serving the website |
+| `server/lib/` | Rules (platform, kind, link cleanup), page metadata, the AI organizer, database and auth |
+| `db/migrations/` | Postgres schema, applied automatically when the server starts |
+| `web/` | The library website: search, browse by collection, platform and tag |
 | `android/` | Android app: "Save to Butler" in every app's Share menu, with offline queueing |
-| `tests/` | Unit tests for the rules and metadata parsing |
+| `deploy/` | Docker Compose setup for a VPS: Postgres, the server, HTTPS (Caddy), nightly backups |
+| `tests/` | Unit tests |
 
 Coming next: the Linux/Windows desktop pet (Tauri).
 
-## Set up the server (once)
+## Run it on your VPS
 
-1. Create a free project at [supabase.com](https://supabase.com) and install the [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started).
-2. Link and push the database:
-   ```sh
-   supabase link --project-ref <your-project-ref>
-   supabase db push
-   ```
-3. Set the secrets. `BUTLER_TOKEN` is a long random string that every device sends to prove it's you:
-   ```sh
-   supabase secrets set BUTLER_TOKEN="$(openssl rand -hex 32)" ANTHROPIC_API_KEY=sk-ant-...
-   ```
-   Optional: `BUTLER_MODEL` picks the Claude model that organizes items (default `claude-opus-5-5`; `claude-haiku-5-5` is much cheaper).
-4. Deploy the function:
-   ```sh
-   supabase functions deploy save
-   ```
-   Your save URL is `https://<your-project-ref>.supabase.co/functions/v1/save`.
+Written for an Oracle Cloud Always Free VM (Ubuntu, ARM or x86); any Linux box with Docker works.
 
-Quick check from the laptop:
+1. **Point a domain at the VM.** Create an `A` record (e.g. `butler.yourdomain.com`) for the VM's public IP.
+2. **Open ports 80 and 443.** On Oracle this needs both steps:
+   - In the console: your VCN → Security List → add ingress rules for TCP 80 and 443 from `0.0.0.0/0`.
+   - On the VM, Oracle's Ubuntu image blocks them in iptables too:
+     ```sh
+     sudo iptables -I INPUT 6 -p tcp -m multiport --dports 80,443 -j ACCEPT
+     sudo netfilter-persistent save
+     ```
+3. **Install Docker** and get the code:
+   ```sh
+   curl -fsSL https://get.docker.com | sudo sh
+   sudo usermod -aG docker $USER && newgrp docker
+   git clone https://github.com/Anasabubakar/Butler-2.0.git && cd Butler-2.0/deploy
+   ```
+4. **Fill in the settings:**
+   ```sh
+   cp .env.example .env                 # your domain and a database password
+   cp butler.env.example butler.env     # tokens, password hash, Anthropic key
+   openssl rand -hex 32                 # run twice: one for BUTLER_TOKEN, one for SESSION_SECRET
+   docker compose run --rm butler run server/hash-password.ts   # type your website password, paste the result as BUTLER_PASSWORD_HASH
+   ```
+5. **Start it:**
+   ```sh
+   docker compose up -d --build
+   ```
+   Caddy gets an HTTPS certificate on its own. Open `https://butler.yourdomain.com` and sign in with your password.
+
+Update later with `git pull && docker compose up -d --build`.
+
+Quick check from anywhere:
 
 ```sh
 curl -F device=laptop -F text="https://www.youtube.com/watch?v=dQw4w9WgXcQ" -F note="test" \
-  -H "x-butler-token: $BUTLER_TOKEN" https://<your-project-ref>.supabase.co/functions/v1/save
+  -H "x-butler-token: <BUTLER_TOKEN>" https://butler.yourdomain.com/api/save
 ```
 
-## Put the library on your domain
+### Where your data lives
 
-1. In Supabase, go to **Authentication → Sign In / Providers** and turn off **Allow new users to sign up**. Then go to **Authentication → Users** and add yourself with your email.
-2. Allow your email to see the library (SQL editor):
-   ```sql
-   insert into public.owners (email) values ('you@example.com');
-   ```
-3. Deploy `web/` to Vercel (or any static host). Set the root directory to `web` and add two environment variables from Supabase **Project Settings → API**: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
-4. Add your domain in Vercel. Then in Supabase, under **Authentication → URL Configuration**, set **Site URL** to it so sign-in links point back to your site.
+- Database: `deploy/data/postgres`
+- Saved files: `deploy/data/files`
+- Backups: `deploy/backups`, one compressed database dump a day, keeping 14
 
-Sign in with your email and Butler sends you a link. Only emails in `owners` can see anything; everyone else sees an empty library. The page also works on your phone.
+The backups sit on the same disk as everything else, so they protect against mistakes, not against losing the VM. Oracle can reclaim Always Free VMs that stay idle for a week. Copy `deploy/backups` and `deploy/data/files` somewhere else now and then (for example with `rclone` to Google Drive).
 
 ## Install the Android app
 
-Every push builds a debug APK. Download `butler-debug-apk` from the latest run on the repo's **Actions** tab, install it, open **Butler**, and paste the save URL and token.
+Every push builds a debug APK. Download `butler-debug-apk` from the latest run on the repo's **Actions** tab, install it, open **Butler**, and enter:
+
+- Save URL: `https://butler.yourdomain.com/api/save`
+- Token: your `BUTLER_TOKEN`
 
 Then in TikTok, Instagram, YouTube, Chrome or Gallery: **Share → Save to Butler**, add a note if you like, tap **Save**. If you're offline it uploads when you're back.
 
 ## Develop
 
 ```sh
-node --experimental-strip-types --test tests/*.test.ts   # rules tests
-deno check supabase/functions/save/index.ts               # type-check the function
-cd web && cp .env.example .env && npm install && npm run dev   # library website
-cd android && ./gradlew assembleDebug                      # needs the Android SDK
+deno test --allow-read tests/        # unit tests
+deno task check                      # type-check the server
+deno task start                      # server on :8080 (needs DATABASE_URL and the settings in butler.env.example)
+cd web && npm install && npm run dev # website on :5173, calling the server on :8080
+cd android && ./gradlew assembleDebug  # needs the Android SDK
 ```
 
 ## Security notes
 
-- The token is the only thing protecting the save endpoint. Keep it out of screenshots and git, and rotate it with `supabase secrets set` if it leaks.
-- Row-level security lets only the server functions and signed-in owners (emails in `owners`) read or change items and files. The anon key in the website is public by design; it grants nothing on its own.
+- Devices prove themselves with `BUTLER_TOKEN`; the website uses your password, stored only as a PBKDF2 hash, and a signed cookie that lasts 30 days. Password guesses are limited to 5 a minute.
+- Saved files are only served to a signed-in browser, from paths the server looked up itself.
+- Keep `butler.env` and `.env` off GitHub (they're git-ignored). If the token leaks, change it in `butler.env`, run `docker compose up -d`, and update the phone.
 - The organizer treats saved content as data, not instructions, because anything you save could contain text written to manipulate an AI.
