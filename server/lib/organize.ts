@@ -119,7 +119,21 @@ function ensureModel(): Promise<void> {
 
 async function askOllama(item: RawItem): Promise<OrganizedItem> {
   await ensureModel();
-  const res = await fetch(`${ollamaUrl()}/api/chat`, {
+  let res = await chatOllama(item);
+  // A text-only model refuses images, so try again with just the words.
+  if (!res.ok && item.image) {
+    await res.body?.cancel();
+    res = await chatOllama({ ...item, image: undefined });
+  }
+  if (!res.ok) throw new Error(`local model failed: ${res.status} ${await res.text()}`);
+  const data = await res.json() as { message?: { content?: string } };
+  const parsed = Organized.safeParse(JSON.parse(data.message?.content ?? "null"));
+  if (!parsed.success) throw new Error(`local model gave an unusable answer: ${parsed.error.message.slice(0, 200)}`);
+  return tidy(parsed.data);
+}
+
+function chatOllama(item: RawItem): Promise<Response> {
+  return fetch(`${ollamaUrl()}/api/chat`, {
     method: "POST",
     body: JSON.stringify({
       model: localModel(),
@@ -133,9 +147,4 @@ async function askOllama(item: RawItem): Promise<OrganizedItem> {
       }],
     }),
   });
-  if (!res.ok) throw new Error(`local model failed: ${res.status} ${await res.text()}`);
-  const data = await res.json() as { message?: { content?: string } };
-  const parsed = Organized.safeParse(JSON.parse(data.message?.content ?? "null"));
-  if (!parsed.success) throw new Error(`local model gave an unusable answer: ${parsed.error.message.slice(0, 200)}`);
-  return tidy(parsed.data);
 }
