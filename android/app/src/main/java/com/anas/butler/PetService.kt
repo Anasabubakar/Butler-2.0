@@ -65,6 +65,9 @@ class PetService : Service() {
     private lateinit var note: TextView
     private var panelShown = false
     private var busy = false
+    private lateinit var syncButton: Button
+    private var lastSynced: String? = null
+    private var syncing = false
     private var noteTapped: CompletableDeferred<Unit>? = null
     private var operating = false
     private var stopOperating = false
@@ -149,6 +152,13 @@ class PetService : Service() {
                     setOnClickListener { action() }
                 })
             }
+            // Clipboard sync: what you copy here goes to the laptop's clipboard too. Off until you turn it on.
+            addView(Button(ui).apply {
+                syncButton = this
+                text = syncLabel()
+                isAllCaps = false
+                setOnClickListener { toggleSync() }
+            })
         }
         note = TextView(ui).apply {
             background = rounded(0xFF1B1B22.toInt(), 14 * dp)
@@ -247,6 +257,38 @@ class PetService : Service() {
         panel.visibility = if (panelShown) View.VISIBLE else View.GONE
         if (panelShown) placePanel()
         pet.setState(if (panelShown) "summon" else if (restingFace() == "peek") "hide" else "idle")
+    }
+
+    // --- clipboard sync ------------------------------------------------------------------
+
+    private fun syncLabel() = getString(if (Config(this).clipboardSync) R.string.pet_sync_on else R.string.pet_sync_off)
+
+    private fun toggleSync() {
+        val config = Config(this)
+        config.clipboardSync = !config.clipboardSync
+        syncButton.text = syncLabel()
+        say(getString(if (config.clipboardSync) R.string.pet_sync_turned_on else R.string.pet_sync_turned_off))
+    }
+
+    /**
+     * Butler's hands saw you copy something. Android only lets the app in front read the
+     * clipboard, so a see-through screen opens for a moment to read it, then it goes to the laptop.
+     */
+    fun copiedSomething() {
+        val config = Config(this)
+        if (!config.clipboardSync || !config.isReady || busy || syncing) return // the pet's own copying isn't yours
+        syncing = true
+        scope.launch {
+            try {
+                delay(400) // let the app finish copying
+                val text = ClipReadActivity.read(this@PetService)
+                if (text.isNullOrBlank() || text.length > SYNC_MAX || text == lastSynced) return@launch
+                lastSynced = text
+                runCatching { ButlerClient(config).send("laptop", "sync", text = text) }
+            } finally {
+                syncing = false
+            }
+        }
     }
 
     private fun say(text: String) {
@@ -502,7 +544,10 @@ class PetService : Service() {
         val body = message.optString("body").takeIf { !message.isNull("body") }.orEmpty()
         when (message.optString("kind")) {
             "reminder" -> announce(getString(R.string.inbox_reminder), body, null)
-            "sync" -> copyToClipboard(body) // what you copied on the laptop, quietly
+            "sync" -> { // what you copied on the laptop, quietly
+                lastSynced = body // so it isn't sent straight back
+                copyToClipboard(body)
+            }
             "clip" -> {
                 copyToClipboard(body)
                 announce(getString(R.string.inbox_copied, from), body.take(200), null)
@@ -584,6 +629,7 @@ class PetService : Service() {
         private const val INBOX_CHANNEL = "inbox"
         private const val INBOX_EVERY_MS = 20_000L
         private const val MAX_STEPS = 15
+        private const val SYNC_MAX = 20_000 // characters; bigger copies stay on the phone
 
         /** The running pet, so the Ask sheet can hand it screen tasks. */
         var instance: PetService? = null
