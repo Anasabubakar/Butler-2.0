@@ -33,6 +33,16 @@ Log out and back in (Wayland only loads new extensions at login), then run:
 gnome-extensions enable butler-pet@anasmasama.dev
 ```
 
+## Update it
+
+Install the `update-pet` command once, from the repo folder:
+
+```sh
+mkdir -p ~/.local/bin && ln -sf "$PWD/desktop/gnome/update-pet.sh" ~/.local/bin/update-pet
+```
+
+After that, run `update-pet` whenever the pet changes, then log out and back in.
+
 ## Try it without logging out
 
 This opens a separate GNOME desktop in a window, with the pet in it:
