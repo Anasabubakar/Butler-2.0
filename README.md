@@ -108,6 +108,10 @@ Ask Butler can add events to your Google Calendar and send email from your Gmail
 
 Without this, calendar requests open a filled-in event for you to save, and email requests ask you to connect first.
 
+### Find similar and search by meaning
+
+With `GEMINI_API_KEY` set, every organized item also gets an embedding (numbers that capture what it's about). On the website, the **≈** button on a card shows the items closest to it, and searches add a **Close in meaning** row, so "saving money" finds "budget tips" without the exact words. Items saved before this existed are filled in when the server starts.
+
 ## Install the Android app
 
 Every push builds a debug APK. Download `butler-debug-apk` from the latest run on the repo's **Actions** tab, install it, open **Butler**, and enter:
