@@ -24,14 +24,21 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Butler">
 
+        <!-- Opening Butler shows your library; setup comes first if it isn't done. -->
         <activity
-            android:name=".SettingsActivity"
+            android:name=".LibraryActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="@string/library_settings" />
 
         <!-- Shows up as "Butler" in every app's Share menu. -->
         <activity
