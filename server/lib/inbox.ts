@@ -79,6 +79,12 @@ export async function send(to: string[], message: NewMessage) {
   await sql`insert into messages ${sql(rows)}`;
 }
 
+/** Deletes messages from `from` that haven't been delivered yet, and says how many. */
+export async function cancelFrom(from: string): Promise<number> {
+  const gone = await sql`delete from messages where from_device = ${from} and delivered_at is null returning id`;
+  return gone.length;
+}
+
 /** The devices a message for `target` should go to: a device name, a kind, or "all". */
 export async function resolveTarget(target: string, from: string): Promise<string[]> {
   const all = await devices();
