@@ -130,6 +130,10 @@ Every morning at 08:00 your time, Butler sends a note to your phone and laptop. 
 
 Every Sunday at 18:00 your time, Butler sends a note with what you saved that week: how many, by topic and app, your top tags, and three worth another look (ones you wrote a note on come first). Ask "what did I save this week?" for it any time. Set `BUTLER_RECAP_AT` for a different time, or `BUTLER_RECAP=off` to stop it.
 
+### Clipboard sync
+
+Turn on **Clipboard sync** in the laptop pet's menu, and whatever you copy on the laptop lands on your phone's clipboard within about 20 seconds. Copies from password managers are skipped, only your latest copy waits on the server, and it's deleted once the phone takes it. It only works one way: Android doesn't let apps read your clipboard in the background. To send the other way, ask Butler on the phone to "send what I copied to my laptop".
+
 ## Install the Android app
 
 Every push builds a debug APK. Download `butler-debug-apk` from the latest run on the repo's **Actions** tab, install it, open **Butler**, and enter:

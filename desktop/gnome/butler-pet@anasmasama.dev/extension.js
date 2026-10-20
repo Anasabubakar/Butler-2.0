@@ -7,6 +7,7 @@ import Clutter from 'gi://Clutter';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import Soup from 'gi://Soup?version=3.0';
 import St from 'gi://St';
@@ -25,6 +26,10 @@ const HOP_X = 56;       // how far it moves left when it wakes up
 const HOP_Y = 118;      // how far it moves up
 const INBOX_EVERY = 20;  // seconds between checks for reminders and things sent here
 const DOWNLOADS = GLib.build_filenamev([GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD) ?? GLib.get_home_dir(), 'Butler']);
+// Clipboard sync is on while this file exists; the menu button makes and removes it.
+const SYNC_FLAG = GLib.build_filenamev([GLib.get_user_config_dir(), 'butler', 'clipboard-sync']);
+const SYNC_MAX = 20000; // characters; bigger copies stay on the laptop
+const syncLabel = on => `Clipboard sync: ${on ? 'on' : 'off'}`;
 const BROWSERS = ['firefox', 'google-chrome', 'chromium', 'brave-browser', 'microsoft-edge', 'vivaldi', 'opera'];
 
 // Feed pages, where the address bar shows the feed rather than the post you're looking at.
@@ -174,6 +179,17 @@ export default class ButlerPetExtension extends Extension {
             this._menu.add_child(button);
         }
 
+        // Clipboard sync: what you copy here lands on your phone's clipboard too. Off until you turn it on.
+        this._syncOn = GLib.file_test(SYNC_FLAG, GLib.FileTest.EXISTS);
+        this._syncButton = new St.Button({label: syncLabel(this._syncOn), style_class: 'butler-action', x_expand: true, can_focus: false});
+        this._syncButton.connect('clicked', () => this._toggleSync());
+        this._menu.add_child(this._syncButton);
+        this._selection = global.display.get_selection();
+        this._selectionId = this._selection.connect('owner-changed', (_selection, type) => {
+            if (type === Meta.SelectionType.SELECTION_CLIPBOARD)
+                this._clipboardChanged();
+        });
+
         // Ask Butler: always at the top of the menu. Click it, type what you want, press Enter.
         this._ask = new St.Entry({hint_text: 'Ask me anything…', style_class: 'butler-ask', can_focus: true, x_expand: true});
         // Typing only reaches the box once Butler holds the keyboard, so take it on click.
@@ -249,6 +265,11 @@ export default class ButlerPetExtension extends Extension {
         if (this._inboxId)
             GLib.source_remove(this._inboxId);
         this._inboxId = 0;
+        this._selection?.disconnect(this._selectionId);
+        this._selection = null;
+        if (this._syncId)
+            GLib.source_remove(this._syncId);
+        this._syncId = 0;
         this._stopClip();
         Main.layoutManager.disconnect(this._monitorsId);
         this._answer?.(false);
@@ -939,6 +960,55 @@ export default class ButlerPetExtension extends Extension {
         });
     }
 
+    // --- clipboard sync ----------------------------------------------------------------
+
+    _toggleSync() {
+        this._syncOn = !this._syncOn;
+        try {
+            if (this._syncOn) {
+                GLib.mkdir_with_parents(GLib.path_get_dirname(SYNC_FLAG), 0o700);
+                GLib.file_set_contents(SYNC_FLAG, '');
+            } else {
+                GLib.unlink(SYNC_FLAG);
+            }
+        } catch (e) {
+            logError(e, 'Butler: clipboard sync setting');
+        }
+        this._syncButton.label = syncLabel(this._syncOn);
+        this._say(this._syncOn
+            ? 'Clipboard sync is on. What you copy here goes to your phone.\n\n(Passwords from password managers are skipped.)'
+            : 'Clipboard sync is off.');
+    }
+
+    /** Something new was copied: send it to the phone, once things settle. */
+    _clipboardChanged() {
+        if (!this._syncOn || this._busy) // the pet's own copying while it works isn't yours
+            return;
+        const types = this._selection.get_mimetypes(Meta.SelectionType.SELECTION_CLIPBOARD);
+        if (types.includes('x-kde-passwordManagerHint'))
+            return;
+        if (this._syncId)
+            GLib.source_remove(this._syncId);
+        this._syncId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 800, () => {
+            this._syncId = 0;
+            this._syncClipboard();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    async _syncClipboard() {
+        const config = loadConfig();
+        const text = await this._readClipboard();
+        if (!config || !text.trim() || text.length > SYNC_MAX || text === this._lastSynced)
+            return;
+        this._lastSynced = text;
+        try {
+            await this._send(config, '/api/send', {device: 'laptop', target: 'phone', kind: 'sync', text});
+        } catch (e) {
+            // no phone yet, or offline: the next copy tries again
+        }
+    }
+
     /**
      * Sends something to another device: what you copied ("clipboard"), the page you're
      * on ("link"), a screenshot ("screen") or words ("text").
@@ -1023,6 +1093,10 @@ export default class ButlerPetExtension extends Extension {
         switch (message.kind) {
         case 'reminder':
             return this._announce('Reminder', message.body);
+        case 'sync':
+            this._lastSynced = message.body ?? ''; // so it isn't sent straight back
+            St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, this._lastSynced);
+            return;
         case 'clip':
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, message.body ?? '');
             return this._announce(`Copied${from}`, `${(message.body ?? '').slice(0, 200)}\n\n(Ready to paste.)`);
