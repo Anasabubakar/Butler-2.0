@@ -420,6 +420,26 @@ app.post("/api/command", async (c) => {
       const rows = await spending.since(spending.startOf(period, new Date(), timeZone), cat);
       return json({ action: "answer", say: spending.compose(rows, period, cat) });
     }
+    case "focus": {
+      const minutes = Math.round(Math.min(240, Math.max(1, p.minutes ?? 25)));
+      const on = p.text?.trim() ? ` on ${p.text.trim().slice(0, 100)}` : "";
+      const span = `${minutes} minute${minutes === 1 ? "" : "s"}`;
+      const to = (await inbox.devices()).map((d) => d.name);
+      await stopFocus();
+      await inbox.send(to, {
+        from_device: FOCUS, kind: "reminder", due_at: new Date(Date.now() + minutes * 60_000).toISOString(),
+        body: `Focus time's up${on}: ${span} done. Stand up, stretch, drink water. 🎉`,
+      });
+      const end = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit" })
+        .format(new Date(Date.now() + minutes * 60_000));
+      return json({
+        action: "answer",
+        say: `Focus${on} for ${span}, until ${end}. I'll tell you on all your devices when it's time for a break. ` +
+          `Say "stop focus" to cancel.`,
+      });
+    }
+    case "unfocus":
+      return json({ action: "answer", say: (await stopFocus()) ? "Focus timer stopped." : "There's no focus timer running." });
     case "recap":
       return json({ action: "answer", say: await weekInButler(new Date(), timeZone) });
     case "recall": {
@@ -690,6 +710,13 @@ async function briefIfDue(now = new Date()) {
 }
 
 const RECAP_AT = env("BUTLER_RECAP_AT", "18:00")!;
+
+const FOCUS = "Butler focus"; // the sender of focus-timer reminders, so they can be cancelled
+
+/** Cancels a running focus timer. True if there was one. */
+async function stopFocus(): Promise<boolean> {
+  return (await inbox.cancelFrom(FOCUS)) > 0;
+}
 
 /** The weekly recap, plus this week's spending if you logged any. */
 async function weekInButler(now: Date, timeZone: string): Promise<string> {
