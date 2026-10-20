@@ -49,5 +49,12 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:text="@string/save" />
+
+        <Button
+            android:id="@+id/start_pet"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/start_pet" />
     </LinearLayout>
 </ScrollView>

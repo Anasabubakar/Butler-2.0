@@ -12,7 +12,7 @@ Everything runs on one machine you own: the database, the server, your files, an
 | `server/lib/` | Rules (platform, kind, link cleanup), page metadata, the AI organizer, database and auth |
 | `db/migrations/` | Postgres schema, applied automatically when the server starts |
 | `web/` | The library website: search, browse by collection, platform and tag |
-| `android/` | Android app: "Save to Butler" in every app's Share menu, with offline queueing |
+| `android/` | Android app: "Save to Butler" in every app's Share menu, with offline queueing, and Little Butler peeking from the corner |
 | `deploy/` | Docker Compose setup for a VPS: Postgres, the server, HTTPS (Caddy), nightly backups |
 | `tests/` | Unit tests |
 | `desktop/gnome/` | Desktop pet for GNOME: peeks from the screen corner, saves and copies what you're looking at |
@@ -104,6 +104,15 @@ Every push builds a debug APK. Download `butler-debug-apk` from the latest run o
 - Token: your `BUTLER_TOKEN`
 
 Then in TikTok, Instagram, YouTube, Chrome or Gallery: **Share → Save to Butler**, add a note if you like, tap **Save**. If you're offline it uploads when you're back.
+
+### Little Butler on your phone
+
+Tap **Start Little Butler** on the setup screen. It asks for two switches, one at a time:
+
+1. **Display over other apps**, so the pet can peek from the corner.
+2. **Butler** under **Accessibility**, so it can screenshot and tap for you. It only does that when you press one of its buttons. On Android 13 and newer, an app installed from an APK has this switch greyed out at first: open Butler's **App info**, tap **⋮**, choose **Allow restricted settings**, and try again.
+
+Then tap the pet for **Save this** (a screenshot plus the post's link, using Share → Copy link inside apps), **Copy this**, **Analyze this** and **Solve this**. Screenshots need Android 11 or newer, and Share, Analyze and Solve need `GEMINI_API_KEY` on the server.
 
 ## Develop
 

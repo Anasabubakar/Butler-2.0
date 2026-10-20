@@ -1,0 +1,2341 @@
+{
+  "version": 1,
+  "frameSize": {
+    "w": 192,
+    "h": 240
+  },
+  "sourceSize": {
+    "w": 256,
+    "h": 320
+  },
+  "framesPerState": 12,
+  "states": {
+    "idle": {
+      "duration": 3200,
+      "loop": true,
+      "pose": "idle",
+      "fps": 3.75,
+      "frames": [
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 0.9985,
+          "sy": 1.0045,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 0.9974019237886467,
+          "sy": 1.00779422863406,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 0.997,
+          "sy": 1.009,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 0.9974019237886467,
+          "sy": 1.00779422863406,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 0.9985,
+          "sy": 1.0045,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1.0015,
+          "sy": 0.9955,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1.0025980762113533,
+          "sy": 0.99220577136594,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1.003,
+          "sy": 0.991,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1.0025980762113533,
+          "sy": 0.99220577136594,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1.0015,
+          "sy": 0.9955,
+          "alpha": 1
+        }
+      ]
+    },
+    "blink": {
+      "duration": 180,
+      "loop": false,
+      "pose": "blink",
+      "next": "idle",
+      "fps": 66.66666666666667,
+      "frames": [
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "blink",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "blink",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "blink",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "blink",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "blink",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "blink",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "blink",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "blink",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        }
+      ]
+    },
+    "peek": {
+      "duration": 1600,
+      "loop": true,
+      "pose": "peek",
+      "fps": 7.5,
+      "frames": [
+        {
+          "pose": "peek",
+          "x": 0,
+          "y": 151,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "peek",
+          "x": 0,
+          "y": 152,
+          "rotation": 0.29999999999999993,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "peek",
+          "x": 0,
+          "y": 152.73205080756887,
+          "rotation": 0.5196152422706631,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "peek",
+          "x": 0,
+          "y": 153,
+          "rotation": 0.6,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "peek",
+          "x": 0,
+          "y": 152.73205080756887,
+          "rotation": 0.5196152422706632,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "peek",
+          "x": 0,
+          "y": 152,
+          "rotation": 0.29999999999999993,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "peek",
+          "x": 0,
+          "y": 151,
+          "rotation": 7.347880794884119e-17,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "peek",
+          "x": 0,
+          "y": 150,
+          "rotation": -0.30000000000000004,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "peek",
+          "x": 0,
+          "y": 149.26794919243113,
+          "rotation": -0.519615242270663,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "peek",
+          "x": 0,
+          "y": 149,
+          "rotation": -0.6,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "peek",
+          "x": 0,
+          "y": 149.26794919243113,
+          "rotation": -0.5196152422706631,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "peek",
+          "x": 0,
+          "y": 150,
+          "rotation": -0.30000000000000027,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        }
+      ]
+    },
+    "summon": {
+      "duration": 520,
+      "loop": false,
+      "pose": "summon",
+      "next": "idle",
+      "fps": 23.076923076923077,
+      "frames": [
+        {
+          "pose": "peek",
+          "x": 0,
+          "y": 155,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "peek",
+          "x": 0,
+          "y": 113.63646857133024,
+          "rotation": -1.536723037316889,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "peek",
+          "x": 0,
+          "y": 79.48840775331779,
+          "rotation": -2.654054922054751,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "summon",
+          "x": 0,
+          "y": 52.066846856006634,
+          "rotation": -3.2978163244549448,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "summon",
+          "x": 0,
+          "y": 30.847331436387186,
+          "rotation": -3.47314034589907,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "summon",
+          "x": 0,
+          "y": 15.255805115375486,
+          "rotation": -3.2394156279739614,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "summon",
+          "x": 0,
+          "y": 4.658509848658742,
+          "rotation": -2.6995130233116353,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "summon",
+          "x": 0,
+          "y": -1.6432771286015377,
+          "rotation": -1.98465162622804,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "summon",
+          "x": 0,
+          "y": -4.413243301769486,
+          "rotation": -1.2366811216706046,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": -4.4747778214380265,
+          "rotation": -0.5897899826788334,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": -2.7008717742745487,
+          "rotation": -0.15367230373168916,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": -1.2246467991473533e-15,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        }
+      ]
+    },
+    "listen": {
+      "duration": 2000,
+      "loop": true,
+      "pose": "listen",
+      "fps": 6,
+      "frames": [
+        {
+          "pose": "listen",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "listen",
+          "x": 0,
+          "y": -0.5176380902050415,
+          "rotation": 0.9999999999999999,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "listen",
+          "x": 0,
+          "y": -0.9999999999999999,
+          "rotation": 1.7320508075688772,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "listen",
+          "x": 0,
+          "y": -1.414213562373095,
+          "rotation": 2,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "listen",
+          "x": 0,
+          "y": -1.7320508075688772,
+          "rotation": 1.7320508075688774,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "listen",
+          "x": 0,
+          "y": -1.9318516525781366,
+          "rotation": 0.9999999999999999,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "listen",
+          "x": 0,
+          "y": -2,
+          "rotation": 2.4492935982947064e-16,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "listen",
+          "x": 0,
+          "y": -1.9318516525781366,
+          "rotation": -1.0000000000000002,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "listen",
+          "x": 0,
+          "y": -1.7320508075688774,
+          "rotation": -1.732050807568877,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "listen",
+          "x": 0,
+          "y": -1.4142135623730951,
+          "rotation": -2,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "listen",
+          "x": 0,
+          "y": -0.9999999999999999,
+          "rotation": -1.7320508075688772,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "listen",
+          "x": 0,
+          "y": -0.517638090205042,
+          "rotation": -1.0000000000000009,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        }
+      ]
+    },
+    "think": {
+      "duration": 2200,
+      "loop": true,
+      "pose": "think",
+      "fps": 5.454545454545454,
+      "frames": [
+        {
+          "pose": "think",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "think",
+          "x": 0,
+          "y": 0,
+          "rotation": 0.6999999999999998,
+          "sx": 1,
+          "sy": 1.0025,
+          "alpha": 1
+        },
+        {
+          "pose": "think",
+          "x": 0,
+          "y": 0,
+          "rotation": 1.212435565298214,
+          "sx": 1,
+          "sy": 1.0043301270189222,
+          "alpha": 1
+        },
+        {
+          "pose": "think",
+          "x": 0,
+          "y": 0,
+          "rotation": 1.4,
+          "sx": 1,
+          "sy": 1.005,
+          "alpha": 1
+        },
+        {
+          "pose": "think",
+          "x": 0,
+          "y": 0,
+          "rotation": 1.2124355652982142,
+          "sx": 1,
+          "sy": 1.0043301270189222,
+          "alpha": 1
+        },
+        {
+          "pose": "think",
+          "x": 0,
+          "y": 0,
+          "rotation": 0.6999999999999998,
+          "sx": 1,
+          "sy": 1.0025,
+          "alpha": 1
+        },
+        {
+          "pose": "think",
+          "x": 0,
+          "y": 0,
+          "rotation": 1.7145055188062944e-16,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "think",
+          "x": 0,
+          "y": 0,
+          "rotation": -0.7000000000000001,
+          "sx": 1,
+          "sy": 0.9975,
+          "alpha": 1
+        },
+        {
+          "pose": "think",
+          "x": 0,
+          "y": 0,
+          "rotation": -1.2124355652982137,
+          "sx": 1,
+          "sy": 0.9956698729810778,
+          "alpha": 1
+        },
+        {
+          "pose": "think",
+          "x": 0,
+          "y": 0,
+          "rotation": -1.4,
+          "sx": 1,
+          "sy": 0.995,
+          "alpha": 1
+        },
+        {
+          "pose": "think",
+          "x": 0,
+          "y": 0,
+          "rotation": -1.212435565298214,
+          "sx": 1,
+          "sy": 0.9956698729810778,
+          "alpha": 1
+        },
+        {
+          "pose": "think",
+          "x": 0,
+          "y": 0,
+          "rotation": -0.7000000000000006,
+          "sx": 1,
+          "sy": 0.9975,
+          "alpha": 1
+        }
+      ]
+    },
+    "work": {
+      "duration": 1500,
+      "loop": true,
+      "pose": "work",
+      "fps": 8,
+      "frames": [
+        {
+          "pose": "work",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -0.9999999999999999,
+          "rotation": 0.5999999999999999,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -1.7320508075688772,
+          "rotation": 1.0392304845413263,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -2,
+          "rotation": 1.2,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -1.7320508075688774,
+          "rotation": 1.0392304845413265,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -0.9999999999999999,
+          "rotation": 0.5999999999999999,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -2.4492935982947064e-16,
+          "rotation": 1.4695761589768238e-16,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -1.0000000000000002,
+          "rotation": -0.6000000000000001,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -1.732050807568877,
+          "rotation": -1.039230484541326,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -2,
+          "rotation": -1.2,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -1.7320508075688772,
+          "rotation": -1.0392304845413263,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -1.0000000000000009,
+          "rotation": -0.6000000000000005,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        }
+      ]
+    },
+    "success": {
+      "duration": 850,
+      "loop": false,
+      "pose": "success",
+      "next": "idle",
+      "fps": 14.117647058823529,
+      "frames": [
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9845047093737214,
+          "alpha": 1
+        },
+        {
+          "pose": "success",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9702647550399421,
+          "alpha": 1
+        },
+        {
+          "pose": "success",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9584337734105158,
+          "alpha": 1
+        },
+        {
+          "pose": "success",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9499702402555015,
+          "alpha": 1
+        },
+        {
+          "pose": "success",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9455598206965488,
+          "alpha": 1
+        },
+        {
+          "pose": "success",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9455598206965486,
+          "alpha": 1
+        },
+        {
+          "pose": "success",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9499702402555015,
+          "alpha": 1
+        },
+        {
+          "pose": "success",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9584337734105158,
+          "alpha": 1
+        },
+        {
+          "pose": "success",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9702647550399421,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9845047093737214,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        }
+      ]
+    },
+    "error": {
+      "duration": 650,
+      "loop": false,
+      "pose": "error",
+      "next": "idle",
+      "fps": 18.46153846153846,
+      "frames": [
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 2.48081453278505,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 1.855021682505907,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": -0.614689214926755,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": -1.889659116318144,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": -0.8846849740182516,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0.7372374783485416,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 1.079805209324654,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0.23050845559753352,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": -0.4122270405568684,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": -0.24808145327850528,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        }
+      ]
+    },
+    "sleep": {
+      "duration": 4000,
+      "loop": true,
+      "pose": "sleep",
+      "fps": 3,
+      "frames": [
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.006,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.0103923048454133,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.012,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.0103923048454133,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.006,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.994,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9896076951545867,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.988,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9896076951545867,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.994,
+          "alpha": 1
+        }
+      ]
+    },
+    "drag": {
+      "duration": 1100,
+      "loop": true,
+      "pose": "drag",
+      "fps": 10.909090909090908,
+      "frames": [
+        {
+          "pose": "drag",
+          "x": 0,
+          "y": -5,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "drag",
+          "x": 0,
+          "y": -4.223542864692438,
+          "rotation": 3.4999999999999996,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "drag",
+          "x": 0,
+          "y": -3.5,
+          "rotation": 6.06217782649107,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "drag",
+          "x": 0,
+          "y": -2.8786796564403576,
+          "rotation": 7,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "drag",
+          "x": 0,
+          "y": -2.401923788646684,
+          "rotation": 6.062177826491071,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "drag",
+          "x": 0,
+          "y": -2.102222521132795,
+          "rotation": 3.4999999999999996,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "drag",
+          "x": 0,
+          "y": -2,
+          "rotation": 8.572527594031472e-16,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "drag",
+          "x": 0,
+          "y": -2.102222521132795,
+          "rotation": -3.500000000000001,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "drag",
+          "x": 0,
+          "y": -2.401923788646684,
+          "rotation": -6.0621778264910695,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "drag",
+          "x": 0,
+          "y": -2.878679656440357,
+          "rotation": -7,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "drag",
+          "x": 0,
+          "y": -3.5,
+          "rotation": -6.06217782649107,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "drag",
+          "x": 0,
+          "y": -4.223542864692437,
+          "rotation": -3.500000000000003,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        }
+      ]
+    },
+    "pleased": {
+      "duration": 1000,
+      "loop": false,
+      "pose": "pleased",
+      "next": "idle",
+      "fps": 12,
+      "frames": [
+        {
+          "pose": "pleased",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "pleased",
+          "x": 0,
+          "y": -1.1269302273657187,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "pleased",
+          "x": 0,
+          "y": -2.16256326982239,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "pleased",
+          "x": 0,
+          "y": -3.022998297417033,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "pleased",
+          "x": 0,
+          "y": -3.6385279814180733,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "pleased",
+          "x": 0,
+          "y": -3.9592857675237307,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "pleased",
+          "x": 0,
+          "y": -3.959285767523731,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "pleased",
+          "x": 0,
+          "y": -3.6385279814180738,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "pleased",
+          "x": 0,
+          "y": -3.0229982974170335,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "pleased",
+          "x": 0,
+          "y": -2.1625632698223898,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "pleased",
+          "x": 0,
+          "y": -1.1269302273657202,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "pleased",
+          "x": 0,
+          "y": -4.898587196589413e-16,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        }
+      ]
+    },
+    "speak": {
+      "duration": 700,
+      "loop": true,
+      "pose": "speak",
+      "fps": 17.142857142857142,
+      "frames": [
+        {
+          "pose": "speak",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "speak",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.004,
+          "alpha": 1
+        },
+        {
+          "pose": "speak",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.0069282032302755,
+          "alpha": 1
+        },
+        {
+          "pose": "speak",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.008,
+          "alpha": 1
+        },
+        {
+          "pose": "speak",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.0069282032302755,
+          "alpha": 1
+        },
+        {
+          "pose": "speak",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.004,
+          "alpha": 1
+        },
+        {
+          "pose": "speak",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.996,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9930717967697245,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.992,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9930717967697245,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.996,
+          "alpha": 1
+        }
+      ]
+    },
+    "attention": {
+      "duration": 2200,
+      "loop": true,
+      "pose": "attention",
+      "fps": 5.454545454545454,
+      "frames": [
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": 0.3499999999999999,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": 0.606217782649107,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": 0.7,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": 0.6062177826491071,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": 0.3499999999999999,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": 8.572527594031472e-17,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": -0.35000000000000003,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": -0.6062177826491069,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": -0.7,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": -0.606217782649107,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": -0.3500000000000003,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        }
+      ]
+    },
+    "hide": {
+      "duration": 400,
+      "loop": false,
+      "pose": "hide",
+      "next": "peek",
+      "fps": 30,
+      "frames": [
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 38.54620586025546,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "idle",
+          "x": 0,
+          "y": 70.10518407212624,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "hide",
+          "x": 0,
+          "y": 95.37565740045079,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "hide",
+          "x": 0,
+          "y": 115.05634861006763,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "hide",
+          "x": 0,
+          "y": 129.8459804658152,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "hide",
+          "x": 0,
+          "y": 140.44327573253193,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "hide",
+          "x": 0,
+          "y": 147.54695717505635,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "hide",
+          "x": 0,
+          "y": 151.8557475582269,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "hide",
+          "x": 0,
+          "y": 154.06836964688205,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "hide",
+          "x": 0,
+          "y": 154.88354620586026,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "hide",
+          "x": 0,
+          "y": 155,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        }
+      ]
+    },
+    "surprised": {
+      "duration": 700,
+      "loop": false,
+      "pose": "surprised",
+      "next": "idle",
+      "fps": 17.142857142857142,
+      "frames": [
+        {
+          "pose": "surprised",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "surprised",
+          "x": 0,
+          "y": -2.535593011572867,
+          "rotation": 0,
+          "sx": 0.9929566860789643,
+          "sy": 1.0112693022736572,
+          "alpha": 1
+        },
+        {
+          "pose": "surprised",
+          "x": 0,
+          "y": -4.865767357100378,
+          "rotation": 0,
+          "sx": 0.9864839795636101,
+          "sy": 1.0216256326982238,
+          "alpha": 1
+        },
+        {
+          "pose": "surprised",
+          "x": 0,
+          "y": -6.801746169188324,
+          "rotation": 0,
+          "sx": 0.9811062606411436,
+          "sy": 1.0302299829741703,
+          "alpha": 1
+        },
+        {
+          "pose": "surprised",
+          "x": 0,
+          "y": -8.186687958190666,
+          "rotation": 0,
+          "sx": 0.9772592001161371,
+          "sy": 1.0363852798141808,
+          "alpha": 1
+        },
+        {
+          "pose": "surprised",
+          "x": 0,
+          "y": -8.908392976928393,
+          "rotation": 0,
+          "sx": 0.9752544639529767,
+          "sy": 1.0395928576752373,
+          "alpha": 1
+        },
+        {
+          "pose": "surprised",
+          "x": 0,
+          "y": -8.908392976928395,
+          "rotation": 0,
+          "sx": 0.9752544639529767,
+          "sy": 1.0395928576752373,
+          "alpha": 1
+        },
+        {
+          "pose": "surprised",
+          "x": 0,
+          "y": -8.186687958190666,
+          "rotation": 0,
+          "sx": 0.9772592001161371,
+          "sy": 1.0363852798141808,
+          "alpha": 1
+        },
+        {
+          "pose": "surprised",
+          "x": 0,
+          "y": -6.801746169188325,
+          "rotation": 0,
+          "sx": 0.9811062606411436,
+          "sy": 1.0302299829741703,
+          "alpha": 1
+        },
+        {
+          "pose": "surprised",
+          "x": 0,
+          "y": -4.865767357100377,
+          "rotation": 0,
+          "sx": 0.9864839795636101,
+          "sy": 1.0216256326982238,
+          "alpha": 1
+        },
+        {
+          "pose": "surprised",
+          "x": 0,
+          "y": -2.5355930115728706,
+          "rotation": 0,
+          "sx": 0.9929566860789643,
+          "sy": 1.0112693022736572,
+          "alpha": 1
+        },
+        {
+          "pose": "surprised",
+          "x": 0,
+          "y": -1.102182119232618e-15,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        }
+      ]
+    },
+    "record": {
+      "duration": 1500,
+      "loop": true,
+      "pose": "work",
+      "fps": 8,
+      "frames": [
+        {
+          "pose": "work",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -0.9999999999999999,
+          "rotation": 0.5999999999999999,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -1.7320508075688772,
+          "rotation": 1.0392304845413263,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -2,
+          "rotation": 1.2,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -1.7320508075688774,
+          "rotation": 1.0392304845413265,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -0.9999999999999999,
+          "rotation": 0.5999999999999999,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -2.4492935982947064e-16,
+          "rotation": 1.4695761589768238e-16,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -1.0000000000000002,
+          "rotation": -0.6000000000000001,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -1.732050807568877,
+          "rotation": -1.039230484541326,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -2,
+          "rotation": -1.2,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -1.7320508075688772,
+          "rotation": -1.0392304845413263,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "work",
+          "x": 0,
+          "y": -1.0000000000000009,
+          "rotation": -0.6000000000000005,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        }
+      ]
+    },
+    "transfer": {
+      "duration": 1800,
+      "loop": true,
+      "pose": "attention",
+      "fps": 6.666666666666667,
+      "frames": [
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": 0.5999999999999999,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": 1.0392304845413263,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": 1.2,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": 1.0392304845413265,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": 0.5999999999999999,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": 1.4695761589768238e-16,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": -0.6000000000000001,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": -1.039230484541326,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": -1.2,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": -1.0392304845413263,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "attention",
+          "x": 0,
+          "y": 0,
+          "rotation": -0.6000000000000005,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        }
+      ]
+    },
+    "offline": {
+      "duration": 3500,
+      "loop": true,
+      "pose": "error",
+      "fps": 3.4285714285714284,
+      "frames": [
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.002,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.0034641016151378,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.004,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.0034641016151378,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.002,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.998,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9965358983848622,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.996,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9965358983848622,
+          "alpha": 1
+        },
+        {
+          "pose": "error",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.998,
+          "alpha": 1
+        }
+      ]
+    },
+    "quiet": {
+      "duration": 4000,
+      "loop": true,
+      "pose": "sleep",
+      "fps": 3,
+      "frames": [
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 151,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 151,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.002,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 151,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.0034641016151378,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 151,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.004,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 151,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.0034641016151378,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 151,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1.002,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 151,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 1,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 151,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.998,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 151,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9965358983848622,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 151,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.996,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 151,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.9965358983848622,
+          "alpha": 1
+        },
+        {
+          "pose": "sleep",
+          "x": 0,
+          "y": 151,
+          "rotation": 0,
+          "sx": 1,
+          "sy": 0.998,
+          "alpha": 1
+        }
+      ]
+    }
+  }
+}
