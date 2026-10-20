@@ -34,3 +34,28 @@ test("local model: pulls once, sends the image, queues requests and tidies the a
     await server.shutdown();
   }
 });
+
+test("local model: a model that can't see gets the words without the image", async () => {
+  const sent: { images?: string[] }[] = [];
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+    const body = await req.json();
+    if (new URL(req.url).pathname === "/api/pull") return Response.json({ status: "success" });
+    sent.push(body.messages[0]);
+    if (body.messages[0].images) return Response.json({ error: "this model does not support images" }, { status: 500 });
+    const answer = { title: "A TikTok post", summary: "A saved post.", tags: ["tiktok"], category: "other" };
+    return Response.json({ message: { content: JSON.stringify(answer) } });
+  });
+  Deno.env.set("BUTLER_AI", "local");
+  Deno.env.set("OLLAMA_URL", `http://localhost:${server.addr.port}`);
+  try {
+    const out = await organize({
+      kind: "image", platform: "tiktok", url: "https://www.tiktok.com/@a/video/1", body: null, note: null,
+      image: { data: "aGk=", mediaType: "image/png" },
+    });
+    assert.deepEqual(out.title, "A TikTok post");
+    assert.deepEqual(sent.map((m) => Boolean(m.images)), [true, false]);
+  } finally {
+    Deno.env.delete("BUTLER_AI");
+    await server.shutdown();
+  }
+});
