@@ -6,10 +6,56 @@ const base = () => Deno.env.get("GEMINI_URL") ?? "https://generativelanguage.goo
 
 export const geminiReady = () => Boolean(Deno.env.get("GEMINI_API_KEY"));
 
-/** The chosen model first, then fallbacks, since Google retires model names often. */
-function models(): string[] {
+// Fastest first, for when Google won't list the models this key can use.
+const FALLBACK = ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-2.5-flash"];
+const LIST_FOR_MS = 6 * 60 * 60 * 1000;
+let listed: { base: string; at: number; names: string[] } | null = null;
+
+/** The models this key can call generateContent on, or null if Google won't say. */
+async function available(key: string): Promise<string[] | null> {
+  if (listed && listed.base === base() && Date.now() - listed.at < LIST_FOR_MS) return listed.names;
+  const names: string[] = [];
+  let page = "";
+  try {
+    do {
+      const res = await fetch(`${base()}/models?pageSize=1000${page && `&pageToken=${encodeURIComponent(page)}`}`, {
+        headers: { "x-goog-api-key": key },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) return null;
+      const data = await res.json() as { models?: { name?: string; supportedGenerationMethods?: string[] }[]; nextPageToken?: string };
+      if (!Array.isArray(data.models)) return null;
+      for (const m of data.models) {
+        if (m.name && m.supportedGenerationMethods?.includes("generateContent")) names.push(m.name.replace(/^models\//, ""));
+      }
+      page = data.nextPageToken ?? "";
+    } while (page);
+  } catch {
+    return null;
+  }
+  listed = { base: base(), at: Date.now(), names };
+  return names;
+}
+
+/**
+ * The fast general models out of `names`, best first: stable before preview,
+ * Flash-Lite before Flash, newest before older ("-latest" counts as newest).
+ */
+export function fastest(names: string[]): string[] {
+  const usable = names.filter((n) => /^gemini-.*flash/.test(n) && !/image|tts|audio|live|exp|embedding|8b|computer/.test(n));
+  const version = (n: string) => n.includes("-latest") ? Infinity : Number(n.match(/^gemini-(\d+(?:\.\d+)?)/)?.[1] ?? 0);
+  const preview = (n: string) => /preview/.test(n) ? 1 : 0;
+  const lite = (n: string) => n.includes("lite") ? 0 : 1;
+  return usable.sort((a, b) => preview(a) - preview(b) || lite(a) - lite(b) || version(b) - version(a) || a.localeCompare(b));
+}
+
+/** The models to try, in order: your choice if set, then the fastest this key can use. */
+export async function geminiModels(key = Deno.env.get("GEMINI_API_KEY") ?? ""): Promise<string[]> {
   const chosen = Deno.env.get("BUTLER_GEMINI_MODEL");
-  return [...new Set([chosen, "gemini-flash-latest", "gemini-2.5-flash"].filter((m): m is string => Boolean(m)))];
+  const names = await available(key);
+  const ranked = names ? fastest(names) : FALLBACK;
+  const first = chosen && (!names || names.includes(chosen)) ? [chosen] : [];
+  return [...new Set([...first, ...ranked])].slice(0, 4);
 }
 
 export interface Picture {
@@ -29,7 +75,7 @@ export async function askGemini<T>(prompt: string, picture: Picture | Picture[] 
   parts.push({ text: prompt });
 
   let lastError = "no Gemini model answered";
-  for (const model of models()) {
+  for (const model of await geminiModels(key)) {
     // Thinking off is much faster; a model that refuses that gets asked again without it.
     for (const thinking of [true, false]) {
       const res = await fetch(`${base()}/models/${model}:generateContent`, {
