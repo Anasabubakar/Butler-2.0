@@ -25,6 +25,18 @@ const HOP_X = 56;       // how far it moves left when it wakes up
 const HOP_Y = 118;      // how far it moves up
 const BROWSERS = ['firefox', 'google-chrome', 'chromium', 'brave-browser', 'microsoft-edge', 'vivaldi', 'opera'];
 
+// Feed pages, where the address bar shows the feed rather than the post you're looking at.
+const FEEDS = [
+    /^https?:\/\/(www\.)?tiktok\.com\/(foryou|following|explore)?\/?([?#].*)?$/,
+    /^https?:\/\/(www\.)?(x|twitter)\.com\/(home|explore)\/?([?#].*)?$/,
+    /^https?:\/\/(www\.)?instagram\.com\/(explore\/?)?([?#].*)?$/,
+    /^https?:\/\/(www\.|web\.)?facebook\.com\/(watch\/?)?([?#].*)?$/,
+    /^https?:\/\/(www\.)?linkedin\.com\/feed\/?([?#].*)?$/,
+    /^https?:\/\/(www\.)?youtube\.com\/?([?#].*)?$/,
+    /^https?:\/\/(www\.)?threads\.(net|com)\/?([?#].*)?$/,
+];
+const isFeed = url => FEEDS.some(feed => feed.test(url));
+
 const sleep = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
     resolve();
     return GLib.SOURCE_REMOVE;
@@ -325,6 +337,39 @@ export default class ButlerPetExtension extends Extension {
         return {jpeg: new GLib.Bytes(jpeg), rect: window.get_frame_rect()};
     }
 
+    /** Asks Butler where `target` is on the screenshot and clicks it. False if it isn't there. */
+    async _tapOn(config, shot, target) {
+        const spot = await this._send(config, '/api/screen/locate', {target}, shot);
+        if (!spot.found)
+            return false;
+        const {x, y, width, height} = shot.rect;
+        await this._click(x + spot.x / 1000 * width, y + spot.y / 1000 * height);
+        return true;
+    }
+
+    /**
+     * On a feed, the address bar doesn't hold the post's link, so the pet taps the
+     * post's Share button, then Copy link, and reads the link it copied. Null if that fails.
+     */
+    async _linkFromShare(config, pageUrl) {
+        try {
+            const shot = await this._snapWindow();
+            if (!shot || !await this._tapOn(config, shot, 'the Share button of the main post in view'))
+                return null;
+            await sleep(900);
+            const menu = await this._snapWindow();
+            if (!await this._tapOn(config, menu, 'the "Copy link" option'))
+                return null;
+            await sleep(300);
+            const link = (await this._readClipboard()).trim();
+            return /^https?:\/\//.test(link) && link !== pageUrl ? link : null;
+        } catch (e) {
+            return null;
+        } finally {
+            await this._press(Clutter.KEY_Escape); // closes the share menu if it's still open
+        }
+    }
+
     _inBrowser() {
         const wmClass = global.display.focus_window?.get_wm_class()?.toLowerCase() ?? '';
         return BROWSERS.some(name => wmClass.includes(name));
@@ -346,6 +391,10 @@ export default class ButlerPetExtension extends Extension {
                 await this._press(Clutter.KEY_Control_L, Clutter.KEY_l);
                 text = await this._copySelection();
                 await this._press(Clutter.KEY_Escape);
+                if (isFeed(text)) {
+                    this._say('Finding the Share button…');
+                    text = await this._linkFromShare(config, text) ?? text;
+                }
             } else {
                 text = await this._copySelection();
             }
