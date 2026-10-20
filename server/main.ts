@@ -20,6 +20,7 @@ import * as backup from "./lib/backup.ts";
 import * as meaning from "./lib/meaning.ts";
 import { recall } from "./lib/recall.ts";
 import * as brief from "./lib/brief.ts";
+import * as recap from "./lib/recap.ts";
 import * as settings from "./lib/settings.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
@@ -393,6 +394,8 @@ app.post("/api/command", async (c) => {
       const now = new Date();
       return json({ action: "answer", say: brief.compose(await brief.gather(now, timeZone, env("PUBLIC_URL")), now, timeZone) });
     }
+    case "recap":
+      return json({ action: "answer", say: recap.compose(await recap.gather(new Date(), env("PUBLIC_URL"))) });
     case "recall": {
       try {
         const found = await findInLibrary(p.text || said);
