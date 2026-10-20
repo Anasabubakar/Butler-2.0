@@ -38,6 +38,9 @@ interface Item {
   board_x: number | null;
   board_y: number | null;
   board_tilt: number | null;
+  price?: string | null;
+  price_first?: string | null;
+  price_currency?: string | null;
 }
 
 interface Facet { facet: "category" | "platform" | "tag"; value: string; n: number }
@@ -477,6 +480,22 @@ function media(item: Item): HTMLElement | null {
   return el;
 }
 
+/** A saved product's price, with what it was when you saved it if it has dropped. */
+function priceTag(item: Item): HTMLElement | null {
+  if (!item.price || !item.price_currency) return null;
+  const fmt = (v: string) => {
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency: item.price_currency!, currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 })
+        .format(Number(v));
+    } catch {
+      return `${Number(v).toLocaleString()} ${item.price_currency}`;
+    }
+  };
+  const was = item.price_first && Number(item.price_first) > Number(item.price) ? item.price_first : null;
+  return h("p", { class: `price${was ? " down" : ""}`, title: "Butler checks this price twice a day" },
+    fmt(item.price), was ? h("s", {}, fmt(was)) : null);
+}
+
 const COLORS = 6;
 
 function note(item: Item): HTMLElement {
@@ -503,6 +522,7 @@ function note(item: Item): HTMLElement {
     item.status === "failed" ? h("p", { class: "muted" }, "Couldn't organize this one.") : null,
     item.summary ? h("p", { class: "summary" }, item.summary) : null,
     item.note ? h("p", { class: "note-text" }, item.note) : null,
+    priceTag(item),
     !item.summary && item.body ? h("p", { class: "summary" }, item.body.slice(0, 240)) : null,
     item.tags.length
       ? h("div", { class: "tags" }, ...item.tags.map((t) =>
