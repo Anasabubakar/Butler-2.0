@@ -18,7 +18,7 @@ import { calendarUrl, localIso, parseWhen, plan, safeZone } from "./lib/command.
 import * as google from "./lib/google.ts";
 import * as backup from "./lib/backup.ts";
 import * as meaning from "./lib/meaning.ts";
-import { recall } from "./lib/recall.ts";
+import { linkFor, recall } from "./lib/recall.ts";
 import * as brief from "./lib/brief.ts";
 import * as recap from "./lib/recap.ts";
 import * as settings from "./lib/settings.ts";
@@ -525,6 +525,28 @@ app.put("/api/items/:id/place", async (c) => {
   const x = num(body.x, 0, 1), y = num(body.y, 0, 200_000), tilt = num(body.tilt, -15, 15) ?? 0;
   if (x === null || y === null) return c.json({ error: "x (0 to 1) and y are required" }, 400);
   return (await db.place(id, x, y, tilt)) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
+});
+
+// Snooze a note: it comes back as a reminder on every device at `at`.
+app.post("/api/items/:id/remind", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  const item = await db.getItem(id);
+  if (!item) return c.json({ error: "not found" }, 404);
+  const { at } = await c.req.json<{ at?: unknown }>().catch(() => ({ at: undefined }));
+  const due = typeof at === "string" ? new Date(at) : null;
+  if (!due || Number.isNaN(due.getTime()) || due.getTime() < Date.now() - 60_000) {
+    return c.json({ error: "at must be a time in the future" }, 400);
+  }
+  const to = (await inbox.devices()).map((d) => d.name);
+  if (!to.length) return c.json({ error: "no device has checked in with Butler yet" }, 404);
+  const title = item.title ?? item.body?.slice(0, 200) ?? item.url ?? "something you saved";
+  const link = linkFor(item, env("PUBLIC_URL"));
+  await inbox.send(to, {
+    from_device: "Butler", kind: "reminder", due_at: due.toISOString(),
+    body: `From your library: ${title}${link ? `\n${link}` : ""}`,
+  });
+  return c.json({ ok: true, devices: to.length });
 });
 
 app.use("/api/board/*", requireSession);
