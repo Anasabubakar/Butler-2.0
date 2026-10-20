@@ -2,7 +2,7 @@
 
 A small charcoal butler that peeks out from the bottom-right corner of your screen. Tap it and it hops up out of the way, with quick actions:
 
-- **Save this**: in a browser it saves the page's link to Butler. In any other app it saves the text you've selected.
+- **Save this**: saves a screenshot of the window you're in, plus the page's link in a browser or the text you've selected in any other app.
 - **Copy this**: copies what you've selected.
 - **Analyze this** and **Solve this**: coming next, once there's a vision model to read the screen.
 

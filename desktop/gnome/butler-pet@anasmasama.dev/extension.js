@@ -4,7 +4,9 @@
 // It lives inside GNOME Shell, which is what lets it stay on top of every
 // window and press keys for you on Wayland.
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Shell from 'gi://Shell';
 import Soup from 'gi://Soup?version=3.0';
 import St from 'gi://St';
 
@@ -278,18 +280,40 @@ export default class ButlerPetExtension extends Extension {
         return (await this._readClipboard()).trim();
     }
 
+    /** A PNG of the focused window, without the pet or its menu. Null if there is no window. */
+    _snapWindow() {
+        if (!global.display.focus_window)
+            return Promise.resolve(null);
+        const stream = Gio.MemoryOutputStream.new_resizable();
+        return new Promise((resolve, reject) => {
+            new Shell.Screenshot().screenshot_window(false, false, stream, (shot, result) => {
+                try {
+                    shot.screenshot_window_finish(result);
+                    stream.close(null);
+                    resolve(stream.steal_as_bytes());
+                } catch (e) {
+                    reject(new Error("couldn't take a screenshot"));
+                }
+            });
+        });
+    }
+
     _inBrowser() {
         const wmClass = global.display.focus_window?.get_wm_class()?.toLowerCase() ?? '';
         return BROWSERS.some(name => wmClass.includes(name));
     }
 
-    /** In a browser: the page's link, read from the address bar. Elsewhere: the selected text. */
+    /**
+     * Saves a screenshot of the focused window, plus the page's link in a browser
+     * (read from the address bar) or the selected text anywhere else.
+     */
     _saveThis() {
         this._work('Grabbing it…', async () => {
             const config = loadConfig();
             if (!config)
                 throw new Error('set your save URL and token in ~/.config/butler/pet.json');
 
+            const shot = await this._snapWindow().catch(() => null);
             let text;
             if (this._inBrowser()) {
                 await this._press(Clutter.KEY_Control_L, Clutter.KEY_l);
@@ -298,10 +322,13 @@ export default class ButlerPetExtension extends Extension {
             } else {
                 text = await this._copySelection();
             }
-            if (!text)
+            if (!text && !shot)
                 throw new Error('nothing selected to save');
 
-            await this._post(config, {device: 'laptop', text});
+            const fields = {device: 'laptop'};
+            if (text)
+                fields.text = text;
+            await this._post(config, fields, shot);
             return /^https?:\/\//.test(text) ? 'Saved the link to Butler' : 'Saved to Butler';
         });
     }
@@ -321,10 +348,12 @@ export default class ButlerPetExtension extends Extension {
         }, 'think');
     }
 
-    _post(config, fields) {
+    _post(config, fields, png = null) {
         const form = new Soup.Multipart('multipart/form-data');
         for (const [name, value] of Object.entries(fields))
             form.append_form_string(name, value);
+        if (png)
+            form.append_form_file('file', 'screenshot.png', 'image/png', png);
         const message = Soup.Message.new_from_multipart(config.url, form);
         message.request_headers.append('x-butler-token', config.token);
         return new Promise((resolve, reject) => {
