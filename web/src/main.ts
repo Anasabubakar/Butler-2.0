@@ -213,7 +213,12 @@ function renderLibrary() {
 
 // --- Google: lets Ask Butler add calendar events and send email as you ---------------
 
-interface GoogleStatus { configured: boolean; connected: boolean; email: string | null }
+interface GoogleStatus {
+  configured: boolean;
+  connected: boolean;
+  email: string | null;
+  backup: { at: string; ok: boolean; note: string } | null;
+}
 
 async function renderGoogle(button: HTMLButtonElement) {
   const result = new URLSearchParams(location.search).get("google");
@@ -225,9 +230,13 @@ async function renderGoogle(button: HTMLButtonElement) {
   if (!status?.configured) return; // the server has no Google client set up
   button.hidden = false;
   button.textContent = status.connected ? `Google: ${status.email ?? "connected"}` : "Connect Google";
-  button.title = status.connected
-    ? "Butler can add calendar events and send email you approve. Click to disconnect."
-    : "Let Ask Butler add calendar events and send email you approve";
+  const backup = status.backup
+    ? `\nBackup ${new Date(status.backup.at).toLocaleString()}: ${status.backup.ok ? "" : "failed, "}${status.backup.note}`
+    : "";
+  button.title = (status.connected
+    ? "Butler can add calendar events, send email you approve, and back up to your Drive. Click to disconnect."
+    : "Let Ask Butler add calendar events and send email you approve") + backup;
+  if (status.connected && status.backup && !status.backup.ok) button.textContent += " ⚠";
   button.onclick = async () => {
     if (!status.connected) {
       location.href = "/api/google/connect";
