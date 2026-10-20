@@ -132,7 +132,7 @@ Every Sunday at 18:00 your time, Butler sends a note with what you saved that we
 
 ### Dead-link rescue
 
-Every link you save (except social media posts, which the Archive can't copy) is also saved to the Internet Archive's Wayback Machine. Once a month Butler checks old links; if a page has disappeared, its note says so and opens the saved copy instead, and Ask Butler links to the copy too. Set `BUTLER_ARCHIVE=off` to stop it. Archived pages are public on archive.org, so don't save private pages if that matters to you.
+Every public link you save is also saved to the Internet Archive's Wayback Machine. Once a month Butler checks old links; if a page has disappeared, its note says so and opens the saved copy instead, and Ask Butler links to the copy too. Set `BUTLER_ARCHIVE=off` to stop it. Social posts (the Archive can't copy them), Google Docs, Dropbox and other private links, and links carrying a token or key are never sent, since archive.org copies are public.
 
 ### Clipboard sync
 
