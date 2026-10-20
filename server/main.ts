@@ -386,6 +386,29 @@ app.post("/api/command", async (c) => {
     }
     case "screen":
       return json({ action: "screen", say: p.reply, goal: p.text || said });
+    case "recall": {
+      try {
+        const found = await findInLibrary(p.text || said);
+        return json({ action: "answer", ...await recall(said, found, env("PUBLIC_URL")) });
+      } catch (e) {
+        return c.json({ error: String(e).slice(0, 300) }, 502);
+      }
+    }
+    case "message": {
+      const who = (p.person ?? "").trim();
+      if (!who) return json({ action: "answer", say: "Who should I message?" });
+      let name = who;
+      let phone = /^\+?[\d\s()-]{7,}$/.test(who) ? who.replace(/[^\d+]/g, "") : null;
+      if (!phone && google.googleConfigured() && await google.account()) {
+        const found = (await google.findPeople(who).catch(() => [])).find((f) => f.phone);
+        if (found) ({ name, phone } = { name: found.name, phone: found.phone });
+      }
+      return json({
+        action: "message",
+        say: p.reply,
+        message: { app: p.app ?? "whatsapp", person: who, name, phone, text: p.text || said, attach_screen: Boolean(p.attach_screen) },
+      });
+    }
     default:
       return json({ action: "answer", say: p.reply || "I'm not sure how to help with that yet." });
   }
