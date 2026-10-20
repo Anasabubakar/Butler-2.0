@@ -119,6 +119,15 @@ Every push builds a debug APK. Download `butler-debug-apk` from the latest run o
 - Save URL: `https://butler.yourdomain.com/api/save`
 - Token: your `BUTLER_TOKEN`
 
+So each new build installs over the old app (keeping its settings and switches), give CI one fixed signing key, once, from your laptop:
+
+```sh
+keytool -genkeypair -keystore ~/.android/butler.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Butler"
+base64 -w0 ~/.android/butler.keystore | gh secret set ANDROID_DEBUG_KEYSTORE -R Anasabubakar/Butler-2.0
+```
+
+Without it, every build has a different key and Android makes you uninstall first. After adding it, uninstall once more and install the next build; from then on updates install over the top.
+
 Then in TikTok, Instagram, YouTube, Chrome or Gallery: **Share → Save to Butler**, add a note if you like, tap **Save**. If you're offline it uploads when you're back.
 
 ### Little Butler on your phone
