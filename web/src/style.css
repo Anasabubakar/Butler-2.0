@@ -89,6 +89,7 @@ button { cursor: pointer; }
 
 /* phone */
 @media (max-width: 760px) {
+  .top .ring { display: none; } /* on the phone itself there is nothing to ring */
   .top { padding: 10px 16px; gap: 10px; }
   .brand { font-size: 0; gap: 0; }
   .layout { grid-template-columns: 1fr; padding: 16px; gap: 16px; }
