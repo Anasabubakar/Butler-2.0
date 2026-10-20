@@ -1093,6 +1093,10 @@ export default class ButlerPetExtension extends Extension {
         switch (message.kind) {
         case 'reminder':
             return this._announce('Reminder', message.body);
+        case 'sync':
+            this._lastSynced = message.body ?? ''; // so it isn't sent straight back
+            St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, this._lastSynced);
+            return;
         case 'clip':
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, message.body ?? '');
             return this._announce(`Copied${from}`, `${(message.body ?? '').slice(0, 200)}\n\n(Ready to paste.)`);
