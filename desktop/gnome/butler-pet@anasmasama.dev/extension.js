@@ -4,6 +4,7 @@
 // It lives inside GNOME Shell, which is what lets it stay on top of every
 // window and press keys for you on Wayland.
 import Clutter from 'gi://Clutter';
+import GdkPixbuf from 'gi://GdkPixbuf';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
@@ -293,22 +294,35 @@ export default class ButlerPetExtension extends Extension {
         return (await this._readClipboard()).trim();
     }
 
-    /** A PNG of the focused window, without the pet or its menu. Null if there is no window. */
-    _snapWindow() {
-        if (!global.display.focus_window)
-            return Promise.resolve(null);
+    /**
+     * A screenshot of the focused window, without the pet or its menu, as a JPEG no wider
+     * than 1600 pixels (small enough to send quickly), plus where the window is on screen.
+     * Null if there is no window.
+     */
+    async _snapWindow() {
+        const window = global.display.focus_window;
+        if (!window)
+            return null;
         const stream = Gio.MemoryOutputStream.new_resizable();
-        return new Promise((resolve, reject) => {
+        await new Promise((resolve, reject) => {
             new Shell.Screenshot().screenshot_window(false, false, stream, (shot, result) => {
                 try {
                     shot.screenshot_window_finish(result);
                     stream.close(null);
-                    resolve(stream.steal_as_bytes());
+                    resolve();
                 } catch (e) {
                     reject(new Error("couldn't take a screenshot"));
                 }
             });
         });
+        let pixbuf = GdkPixbuf.Pixbuf.new_from_stream(
+            Gio.MemoryInputStream.new_from_bytes(stream.steal_as_bytes()), null);
+        if (pixbuf.get_width() > 1600) {
+            const height = Math.round(pixbuf.get_height() * 1600 / pixbuf.get_width());
+            pixbuf = pixbuf.scale_simple(1600, height, GdkPixbuf.InterpType.BILINEAR);
+        }
+        const [, jpeg] = pixbuf.save_to_bufferv('jpeg', ['quality'], ['85']);
+        return {jpeg: new GLib.Bytes(jpeg), rect: window.get_frame_rect()};
     }
 
     _inBrowser() {
@@ -361,12 +375,12 @@ export default class ButlerPetExtension extends Extension {
         }, 'think');
     }
 
-    _post(config, fields, png = null) {
+    _post(config, fields, shot = null) {
         const form = new Soup.Multipart('multipart/form-data');
         for (const [name, value] of Object.entries(fields))
             form.append_form_string(name, value);
-        if (png)
-            form.append_form_file('file', 'screenshot.png', 'image/png', png);
+        if (shot)
+            form.append_form_file('file', 'screenshot.jpg', 'image/jpeg', shot.jpeg);
         const message = Soup.Message.new_from_multipart(config.url, form);
         message.request_headers.append('x-butler-token', config.token);
         return new Promise((resolve, reject) => {
