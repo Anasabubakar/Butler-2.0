@@ -6,7 +6,10 @@ const wayback = () => Deno.env.get("WAYBACK_URL") ?? "https://web.archive.org";
 /** Feeds and profiles change all the time, and the Archive can't copy most social posts. */
 const SKIP = /^https?:\/\/([^/]+\.)?(tiktok|instagram|facebook|x|twitter|threads|snapchat)\.(com|net)\//i;
 
-export const worthArchiving = (url: string) => /^https?:\/\//i.test(url) && !SKIP.test(url);
+/** Links that are private or carry a secret: copying them to a public archive would leak them. */
+const PRIVATE = /^https?:\/\/([^/]+\.)?(docs\.google|drive\.google|mail\.google|dropbox|notion|onedrive\.live|1drv|wetransfer)\.[a-z.]+\/|^https?:\/\/(localhost|127\.|10\.|192\.168\.)|[?&](token|key|sig|signature|code|auth|password|secret)=/i;
+
+export const worthArchiving = (url: string) => /^https?:\/\//i.test(url) && !SKIP.test(url) && !PRIVATE.test(url);
 
 /**
  * Asks the Archive to copy `url` and returns a link to the copy, "busy" (try later) or
