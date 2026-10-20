@@ -142,6 +142,7 @@ class PetService : Service() {
                 R.string.pet_copy to ::copyThis,
                 R.string.pet_analyze to { look("analyze") },
                 R.string.pet_solve to { look("solve") },
+                R.string.pet_translate to { look("translate") },
                 R.string.pet_send_laptop to ::sendToLaptop,
                 R.string.pet_library to ::openLibrary,
                 R.string.pet_talk to { askButler(talk = true) },

@@ -172,6 +172,7 @@ export default class ButlerPetExtension extends Extension {
             ['Copy this', () => this._copyThis()],
             ['Analyze this', () => this._look('analyze')],
             ['Solve this', () => this._look('solve')],
+            ['Translate this', () => this._look('translate')],
             ['Send to phone', () => this._sendToPhone()],
             ['Ring my phone', () => this._ringPhone()],
             ['Talk to Butler', () => this._talk()],
@@ -685,7 +686,7 @@ export default class ButlerPetExtension extends Extension {
 
     /** Analyze this (mode=analyze) or Solve this (mode=solve): Butler looks at the window and answers. */
     _look(mode) {
-        this._work(mode === 'solve' ? 'Working it out…' : 'Having a look…', async () => {
+        this._work({solve: 'Working it out…', translate: 'Translating…'}[mode] ?? 'Having a look…', async () => {
             const config = loadConfig();
             if (!config)
                 throw new Error('set your save URL and token in ~/.config/butler/pet.json');
