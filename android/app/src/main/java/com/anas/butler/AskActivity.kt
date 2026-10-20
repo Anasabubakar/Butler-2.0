@@ -15,11 +15,14 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
 import java.io.File
+import kotlin.coroutines.resume
 
 /**
  * Ask Butler: type or say what you want ("remind me at 3 to call Mum", "send this to my
@@ -107,6 +110,13 @@ class AskActivity : AppCompatActivity() {
         result.optString("open").takeIf { it.startsWith("https://") }?.let {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it)))
         }
+        result.optString("confirm").takeIf { it.isNotEmpty() }?.let { id ->
+            show(say)
+            if (!confirm(say)) return getString(R.string.ask_not_sent)
+            show(getString(R.string.pet_sending))
+            return JSONObject(ButlerClient(Config(this)).post("/api/command/confirm", mapOf("confirm" to id), null))
+                .optString("say")
+        }
         val send = result.optJSONObject("send") ?: return say
         val target = send.optString("target", "laptop")
         val butler = ButlerClient(Config(this))
@@ -127,6 +137,17 @@ class AskActivity : AppCompatActivity() {
                 ?: throw IllegalStateException(getString(R.string.ask_nothing_to_send)))
         }
         return say.ifBlank { getString(R.string.ask_sent, to.joinToString()) }
+    }
+
+    /** Asks Send or Cancel, for things that need your yes first, like an email. */
+    private suspend fun confirm(text: String): Boolean = suspendCancellableCoroutine { cont ->
+        val dialog = AlertDialog.Builder(this)
+            .setMessage(text)
+            .setPositiveButton(R.string.ask_send) { _, _ -> if (cont.isActive) cont.resume(true) }
+            .setNegativeButton(R.string.cancel) { _, _ -> if (cont.isActive) cont.resume(false) }
+            .setOnCancelListener { if (cont.isActive) cont.resume(false) }
+            .show()
+        cont.invokeOnCancellation { dialog.dismiss() }
     }
 
     private fun clipboardText(): String? =
