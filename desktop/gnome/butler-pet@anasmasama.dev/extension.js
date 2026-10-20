@@ -102,7 +102,12 @@ export default class ButlerPetExtension extends Extension {
             this._menu.add_child(button);
         }
 
-        this._note = new St.Label({style_class: 'butler-note', visible: false});
+        this._note = new St.Label({style_class: 'butler-note', visible: false, reactive: true});
+        this._note.clutter_text.line_wrap = true;
+        this._note.connect('button-release-event', () => {
+            this._noteTapped?.();
+            return Clutter.EVENT_STOP;
+        });
 
         for (const actor of [this._menu, this._note, this._pet])
             Main.layoutManager.addTopChrome(actor);
@@ -214,8 +219,10 @@ export default class ButlerPetExtension extends Extension {
         const [, menuH] = this._menu.get_preferred_height(-1);
         const [, menuW] = this._menu.get_preferred_width(-1);
         this._menu.set_position(right - menuW, monitor.y + monitor.height - HOP_Y - menuH);
+        // Notes grow upwards, so a long answer never covers the pet.
         const [, noteW] = this._note.get_preferred_width(-1);
-        this._note.set_position(right - noteW, monitor.y + monitor.height - HOP_Y - PET_H + 20);
+        const [, noteH] = this._note.get_preferred_height(noteW);
+        this._note.set_position(right - noteW, monitor.y + monitor.height - HOP_Y - PET_H + 64 - noteH);
     }
 
     _toggle() {
@@ -250,6 +257,22 @@ export default class ButlerPetExtension extends Extension {
         this._place(false);
     }
 
+    /** Waits long enough to read the note (2 to 30 seconds), or until it's tapped. */
+    _hold(ms) {
+        return new Promise(resolve => {
+            const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.min(30000, Math.max(2200, ms)), () => {
+                this._noteTapped = null;
+                resolve();
+                return GLib.SOURCE_REMOVE;
+            });
+            this._noteTapped = () => {
+                GLib.source_remove(id);
+                this._noteTapped = null;
+                resolve();
+            };
+        });
+    }
+
     /** Wraps an action: hides the menu, shows a working face, then a result. */
     async _work(working, action, clip = 'work') {
         if (this._busy)
@@ -266,7 +289,7 @@ export default class ButlerPetExtension extends Extension {
             this._play('error');
             this._say(`Couldn't do that: ${e.message}`);
         }
-        await sleep(2200);
+        await this._hold(this._note.text.length * 50);
         if (!this._pet)
             return;
         this._note.hide();
