@@ -45,6 +45,9 @@ export const KEYS = [
   "enter", "tab", "escape", "backspace", "back", "home", "up", "down", "left", "right", "page_up", "page_down",
 ] as const;
 
+/** Gemini fills fields it doesn't need with "", which isn't a valid key or direction. */
+const blankToNull = (v: unknown) => (typeof v === "string" ? v.trim().toLowerCase() || null : v);
+
 const Step = z.object({
   do: z.enum(STEP_ACTIONS),
   x: z.number().nullish(),
@@ -52,8 +55,8 @@ const Step = z.object({
   x2: z.number().nullish(),
   y2: z.number().nullish(),
   text: z.string().nullish(),
-  key: z.preprocess((v) => (typeof v === "string" ? v.toLowerCase() : v), z.enum(KEYS).nullish()),
-  direction: z.enum(["up", "down", "left", "right"]).nullish(),
+  key: z.preprocess(blankToNull, z.enum(KEYS).nullish()),
+  direction: z.preprocess(blankToNull, z.enum(["up", "down", "left", "right"]).nullish()),
   say: z.string().default(""),
 });
 export type Step = z.infer<typeof Step>;
