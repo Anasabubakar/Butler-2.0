@@ -1,0 +1,6 @@
+# Only the settings Butler needs; `supabase init` defaults cover the rest.
+project_id = "butler"
+
+[functions.save]
+# Devices authenticate with the x-butler-token header, not a Supabase login.
+verify_jwt = false

@@ -1,0 +1,9 @@
+<!-- The resting pet: a small semicircle peeking up from the bottom edge. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#1F1B2E" android:pathData="M0,0h48v48h-48z" />
+    <path android:fillColor="#FFB547" android:pathData="M8,40a16,16 0,0 1,32 0z" />
+    <path android:fillColor="#1F1B2E" android:pathData="M19,32m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+    <path android:fillColor="#1F1B2E" android:pathData="M29,32m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+</vector>
