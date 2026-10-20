@@ -15,8 +15,9 @@ Everything runs on one machine you own: the database, the server, your files, an
 | `android/` | Android app: "Save to Butler" in every app's Share menu, with offline queueing |
 | `deploy/` | Docker Compose setup for a VPS: Postgres, the server, HTTPS (Caddy), nightly backups |
 | `tests/` | Unit tests |
+| `desktop/gnome/` | Desktop pet for GNOME: peeks from the screen corner, saves and copies what you're looking at |
 
-Coming next: the Linux/Windows desktop pet (Tauri).
+Coming next: Analyze and Solve on the desktop pet, and the pet on Android.
 
 ## Run it on your VPS
 
