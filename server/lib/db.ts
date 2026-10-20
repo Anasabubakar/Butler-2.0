@@ -138,3 +138,7 @@ export function linksToCheck(limit: number) {
       and (link_checked_at is null or link_checked_at < now() - interval '30 days')
     order by link_checked_at nulls first, created_at limit ${limit}`;
 }
+
+export async function markChecked(id: string, dead: boolean) {
+  await sql`update items set link_checked_at = now(), link_dead = ${dead} where id = ${id}`;
+}
