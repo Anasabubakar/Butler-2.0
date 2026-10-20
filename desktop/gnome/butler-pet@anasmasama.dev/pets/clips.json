@@ -1,0 +1,50 @@
+{
+  "summon": {
+    "frames": 12,
+    "duration": 520,
+    "loop": false,
+    "next": "idle"
+  },
+  "idle": {
+    "frames": 12,
+    "duration": 3200,
+    "loop": true,
+    "next": null
+  },
+  "blink": {
+    "frames": 12,
+    "duration": 180,
+    "loop": false,
+    "next": "idle"
+  },
+  "think": {
+    "frames": 12,
+    "duration": 2200,
+    "loop": true,
+    "next": null
+  },
+  "work": {
+    "frames": 12,
+    "duration": 1500,
+    "loop": true,
+    "next": null
+  },
+  "success": {
+    "frames": 12,
+    "duration": 850,
+    "loop": false,
+    "next": "idle"
+  },
+  "error": {
+    "frames": 12,
+    "duration": 650,
+    "loop": false,
+    "next": "idle"
+  },
+  "hide": {
+    "frames": 12,
+    "duration": 400,
+    "loop": false,
+    "next": "peek"
+  }
+}
