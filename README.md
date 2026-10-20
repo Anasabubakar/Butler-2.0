@@ -134,6 +134,10 @@ Every Sunday at 18:00 your time, Butler sends a note with what you saved that we
 
 Tell Butler what you spend, typed or out loud: "I spent 2,500 on suya", "paid 15k for transport". Ask "how much did I spend this week?" or "what did I spend on food this month?" and it adds it up (by plain arithmetic, not AI). The Sunday recap includes the week's spending. Amounts are in naira unless you say another currency; set `BUTLER_CURRENCY` (like `USD`) to change that.
 
+### Focus timer
+
+Ask Butler "focus for 25 minutes on my essay" (or just "pomodoro"). When the time is up, every device tells you to take a break. "Stop focus" cancels it.
+
 ### Clipboard sync
 
 Turn on **Clipboard sync** in the laptop pet's menu, and whatever you copy on the laptop lands on your phone's clipboard within about 20 seconds. Copies from password managers are skipped, only your latest copy waits on the server, and it's deleted once the phone takes it. On the phone, turn on **Clipboard sync** in the pet's menu too, and it works the other way. Android doesn't let apps read the clipboard in the background, so Butler's Accessibility helper notices when you tap **Copy** (or see a "Copied" message), and a see-through screen opens for a split second to read it. Android then shows "Butler pasted from your clipboard"; that's expected. Copying with a keyboard shortcut, or in an app that copies without a Copy button or message, won't be noticed; use Ask Butler's "send what I copied to my laptop" then.
