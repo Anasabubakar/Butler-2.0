@@ -38,6 +38,7 @@ interface Item {
   board_x: number | null;
   board_y: number | null;
   board_tilt: number | null;
+  share_token?: string | null;
 }
 
 interface Facet { facet: "category" | "platform" | "tag"; value: string; n: number }
@@ -401,6 +402,49 @@ async function tidyUp() {
   notes.forEach((el, i) => setTimeout(() => fasten(el), 500 + Math.min(i, 30) * 25));
 }
 
+// --- public links ------------------------------------------------------------------------
+
+/** Makes a link anyone can open to see this one note, and hands it over (share sheet or clipboard). */
+async function shareNote(item: Item) {
+  let url: string;
+  try {
+    url = (await api<{ url: string }>(`/api/items/${item.id}/share`, { method: "POST" })).url;
+  } catch (e) {
+    if (!(e instanceof SignedOut)) showError(`Couldn't make a link: ${(e as Error).message}`);
+    return;
+  }
+  item.share_token = url.split("/").pop() ?? "shared";
+  document.querySelector(`.note[data-id="${item.id}"]`)?.classList.add("shared");
+  let how = "Link copied.";
+  if (navigator.share && matchMedia("(pointer: coarse)").matches) {
+    try {
+      await navigator.share({ title: item.title ?? "A note", url });
+      how = "Shared.";
+    } catch { /* closed the share sheet: still copy it */ }
+  }
+  if (how !== "Shared.") {
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      how = url; // no clipboard here: show the link itself
+    }
+  }
+  const toast = h("div", { class: "toast undo", role: "status" },
+    `${how} Anyone with it can see this note.`,
+    h("button", {
+      onclick: async () => {
+        toast.remove();
+        await api(`/api/items/${item.id}/share`, { method: "DELETE" }).catch(() => {});
+        item.share_token = null;
+        document.querySelector(`.note[data-id="${item.id}"]`)?.classList.remove("shared");
+        showError("Stopped sharing. The link no longer works.");
+      },
+    }, "Stop sharing"),
+  );
+  document.body.append(toast);
+  setTimeout(() => toast.remove(), 8000);
+}
+
 /** The note is in the bin. It's really deleted a few seconds later, unless you press Undo. */
 function throwAway(item: Item) {
   const at = state.items.findIndex((i) => i.id === item.id);
@@ -517,6 +561,12 @@ function note(item: Item): HTMLElement {
         title: "Find similar",
         onclick: (e) => { e.stopPropagation(); showSimilar(item); },
       }, "≈"),
+      h("button", {
+        class: "icon",
+        "aria-label": "Share a link to this note",
+        title: "Share a link to this note",
+        onclick: (e) => { e.stopPropagation(); shareNote(item); },
+      }, "🔗"),
       del,
     ),
   );
@@ -525,7 +575,7 @@ function note(item: Item): HTMLElement {
     : h("span", { class: "tape", "aria-hidden": "true" }, h("i"), h("i"));
   if (!pinned) fastener.style.setProperty("--tape-tilt", `${(hashOf(item.id + "t") % 16) - 8}deg`);
   el = h("div", {
-    class: `note c${color}${openTarget(item) ? " opens" : ""}`,
+    class: `note c${color}${openTarget(item) ? " opens" : ""}${item.share_token ? " shared" : ""}`,
     "data-id": item.id,
     role: openTarget(item) ? "link" : "article",
     title: openTarget(item) ? "Click to open · drag to move" : "Drag to move",
