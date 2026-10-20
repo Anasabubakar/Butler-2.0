@@ -31,10 +31,11 @@ export interface Item {
   board_y: number | null;
   board_tilt: number | null;
   share_token?: string | null; // set while the note has a public link
+  details?: string | null; // longer notes, like a video's key points
 }
 
 const COLUMNS = sql`id, created_at, device, kind, url, body, note, file_path, mime, thumbnail,
-  platform, title, summary, tags, category, status, error, board_x, board_y, board_tilt, share_token`;
+  platform, title, summary, tags, category, status, error, board_x, board_y, board_tilt, share_token, details`;
 
 /** Applies every db/migrations/*.sql file not applied yet, in name order. */
 export async function migrate(dir: string) {

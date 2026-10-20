@@ -45,11 +45,12 @@ interface Embeddable {
   note: string | null;
   url: string | null;
   body: string | null;
+  details?: string | null;
 }
 
 /** The text that stands for an item: what it's called, what it's about, and your note. */
 export function itemText(item: Embeddable): string {
-  return [item.title, item.summary, item.tags.join(", "), item.note, item.url, item.body?.slice(0, 1000)]
+  return [item.title, item.summary, item.tags.join(", "), item.note, item.url, item.body?.slice(0, 1000), item.details?.slice(0, 1500)]
     .filter(Boolean).join("\n");
 }
 
@@ -57,7 +58,7 @@ export function itemText(item: Embeddable): string {
 export async function embedItem(id: string) {
   if (!meaningReady()) return;
   const [item] = await sql<(Embeddable & { id: string })[]>`
-    select id, title, summary, tags, note, url, body from items where id = ${id}`;
+    select id, title, summary, tags, note, url, body, details from items where id = ${id}`;
   if (!item) return;
   const embedding = await embed(itemText(item), "document");
   await sql`update items set embedding = ${embedding}::real[] where id = ${id}`;
