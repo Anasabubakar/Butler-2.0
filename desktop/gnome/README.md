@@ -1,6 +1,6 @@
 # Butler pet for GNOME
 
-A small pet that peeks out from the bottom-right corner of your screen. Tap it and it hops up out of the way, with quick actions:
+A small charcoal butler that peeks out from the bottom-right corner of your screen. Tap it and it hops up out of the way, with quick actions:
 
 - **Save this**: in a browser it saves the page's link to Butler. In any other app it saves the text you've selected.
 - **Copy this**: copies what you've selected.
@@ -43,4 +43,10 @@ Inside it, run `gnome-extensions enable butler-pet@anasmasama.dev`, then open a 
 
 ## Change how it looks
 
-The pet's images are in `pets/`: `awake.svg`, `working.svg` and `done.svg`, each 84×96. While peeking, only the top 52 pixels show. To change the look, replace the files with images of the same size.
+The pet is the Little Butler from `design/little-butler/`. Its frames live in `pets/`: one folder per animation (summon, idle, blink, think, work, success, error, hide), plus `peek.png` for the still pose it shows while peeking. `pets/clips.json` holds each animation's frame count, timing and the clip that plays next.
+
+After changing the kit, copy the frames again (needs `python3-pil`):
+
+```sh
+python3 desktop/gnome/update-sprites.py
+```
