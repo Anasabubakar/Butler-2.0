@@ -126,6 +126,10 @@ Ask Butler on the phone or laptop can also answer from your library: "what was t
 
 Every morning at 08:00 your time, Butler sends a note to your phone and laptop. It has today's calendar, the reminders still to come, how much you saved in the last day, and one older save worth another look. Ask Butler "what's my day?" to get it any time. It learns your time zone from Ask Butler; set `BUTLER_BRIEF_AT` in `butler.env` for a different time, or `BUTLER_BRIEF=off` to stop it. If the server is down at 08:00, the brief comes when it's back, up to noon.
 
+### Weekly recap
+
+Every Sunday at 18:00 your time, Butler sends a note with what you saved that week: how many, by topic and app, your top tags, and three worth another look (ones you wrote a note on come first). Ask "what did I save this week?" for it any time. Set `BUTLER_RECAP_AT` for a different time, or `BUTLER_RECAP=off` to stop it.
+
 ## Install the Android app
 
 Every push builds a debug APK. Download `butler-debug-apk` from the latest run on the repo's **Actions** tab, install it, open **Butler**, and enter:

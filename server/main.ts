@@ -20,6 +20,7 @@ import * as backup from "./lib/backup.ts";
 import * as meaning from "./lib/meaning.ts";
 import { recall } from "./lib/recall.ts";
 import * as brief from "./lib/brief.ts";
+import * as recap from "./lib/recap.ts";
 import * as settings from "./lib/settings.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
@@ -393,6 +394,8 @@ app.post("/api/command", async (c) => {
       const now = new Date();
       return json({ action: "answer", say: brief.compose(await brief.gather(now, timeZone, env("PUBLIC_URL")), now, timeZone) });
     }
+    case "recap":
+      return json({ action: "answer", say: recap.compose(await recap.gather(new Date(), env("PUBLIC_URL"))) });
     case "recall": {
       try {
         const found = await findInLibrary(p.text || said);
@@ -653,6 +656,24 @@ async function briefIfDue(now = new Date()) {
   console.log(`brief: sent to ${devices.join(", ")}`);
 }
 
+const RECAP_AT = env("BUTLER_RECAP_AT", "18:00")!;
+
+/** Sends the weekly recap to every device on Sunday at BUTLER_RECAP_AT your time. */
+async function recapIfDue(now = new Date()) {
+  if (env("BUTLER_RECAP") === "off") return;
+  const timeZone = await ownerZone();
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "long" }).format(now);
+  const local = localIso(now, timeZone);
+  const day = local.slice(0, 10);
+  if (weekday !== "Sunday" || local.slice(11, 16) < RECAP_AT || await settings.get("recap_sent_on") === day) return;
+  const devices = (await inbox.devices()).map((d) => d.name);
+  if (!devices.length) return;
+  await settings.set("recap_sent_on", day);
+  const body = recap.compose(await recap.gather(now, env("PUBLIC_URL")));
+  await inbox.send(devices, { from_device: "Butler", kind: "note", body });
+  console.log(`recap: sent to ${devices.join(", ")}`);
+}
+
 // --- start ---------------------------------------------------------------------------
 
 if (import.meta.main) {
@@ -662,6 +683,7 @@ if (import.meta.main) {
   setTimeout(backUpSoon, 60_000); // once things settle, then every 6 hours
   setInterval(backUpSoon, 6 * 60 * 60 * 1000);
   setInterval(() => briefIfDue().catch((e) => console.error("brief:", e)), 5 * 60_000);
+  setInterval(() => recapIfDue().catch((e) => console.error("recap:", e)), 5 * 60_000);
   if (geminiReady()) geminiModels().then((m) => console.log("Gemini models, in order:", m.join(", ")));
   Deno.serve({ port: PORT, hostname: env("HOST", "0.0.0.0") }, app.fetch);
 }
