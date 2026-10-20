@@ -29,8 +29,10 @@ services:
       PGHOST: db
       PGUSER: butler
       PGDATABASE: butler
+      BACKUPS_DIR: /backups
     volumes:
       - ./data/files:/data/files
+      - ./backups:/backups:ro # the nightly dumps, copied to Google Drive
 
   # Docker creates ./data/files as root, but Butler runs as the deno user (uid 1993),
   # so it couldn't write screenshots there. This hands the folder over before Butler starts.
