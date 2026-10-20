@@ -30,10 +30,13 @@ export interface Item {
   board_x: number | null;
   board_y: number | null;
   board_tilt: number | null;
+  price?: string | null; // numeric comes back as text
+  price_first?: string | null;
+  price_currency?: string | null;
 }
 
 const COLUMNS = sql`id, created_at, device, kind, url, body, note, file_path, mime, thumbnail,
-  platform, title, summary, tags, category, status, error, board_x, board_y, board_tilt`;
+  platform, title, summary, tags, category, status, error, board_x, board_y, board_tilt, price, price_first, price_currency`;
 
 /** Applies every db/migrations/*.sql file not applied yet, in name order. */
 export async function migrate(dir: string) {
@@ -119,4 +122,22 @@ export function facets() {
 /** Items left pending by a crash or restart. */
 export function stalePending() {
   return sql<Item[]>`select ${COLUMNS} from items where status = 'pending' and created_at < now() - interval '2 minutes'`;
+}
+
+/** Saved shopping links whose price is due a check: ones with a known price, or never tried. */
+export function pricesToCheck(limit: number) {
+  return sql<{ id: string; url: string; title: string | null; price: string | null; price_first: string | null; price_currency: string | null }[]>`
+    select id, url, title, price, price_first, price_currency from items
+    where kind = 'link' and url like 'http%' and created_at > now() - interval '180 days'
+      and (price is not null or (price_checked_at is null and category = 'shopping'))
+      and (price_checked_at is null or price_checked_at < now() - interval '12 hours')
+    order by price_checked_at nulls first limit ${limit}`;
+}
+
+export async function setPrice(id: string, price: { amount: number; currency: string } | null) {
+  if (!price) await sql`update items set price_checked_at = now() where id = ${id}`;
+  else {
+    await sql`update items set price = ${price.amount}, price_currency = ${price.currency},
+      price_first = coalesce(price_first, ${price.amount}), price_checked_at = now() where id = ${id}`;
+  }
 }
