@@ -59,3 +59,28 @@ test("local model: a model that can't see gets the words without the image", asy
     await server.shutdown();
   }
 });
+
+test("local mode: screenshots go to Gemini when there's a key", async () => {
+  let gemini = 0;
+  const server = Deno.serve({ port: 0, onListen() {} }, () => {
+    gemini++;
+    const out = { title: "A reel", summary: "A saved reel.", tags: ["Reel"], category: "funny" };
+    return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] });
+  });
+  Deno.env.set("BUTLER_AI", "local");
+  Deno.env.set("OLLAMA_URL", "http://localhost:1"); // would fail if used
+  Deno.env.set("GEMINI_URL", `http://localhost:${server.addr.port}`);
+  Deno.env.set("GEMINI_API_KEY", "test-key");
+  try {
+    const out = await organize({
+      kind: "image", platform: "instagram", url: null, body: null, note: null,
+      image: { data: "aGk=", mediaType: "image/jpeg" },
+    });
+    assert.deepEqual(out, { title: "A reel", summary: "A saved reel.", tags: ["reel"], category: "funny" });
+    assert.equal(gemini, 1);
+  } finally {
+    Deno.env.delete("BUTLER_AI");
+    Deno.env.delete("GEMINI_API_KEY");
+    await server.shutdown();
+  }
+});
