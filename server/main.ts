@@ -511,7 +511,8 @@ app.get("/api/facets", async (c) => c.json(await db.facets()));
 app.put("/api/items/:id/place", async (c) => {
   const id = c.req.param("id");
   if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
-  const body = await c.req.json<{ x?: unknown; y?: unknown; tilt?: unknown }>().catch(() => ({}));
+  type Spot = { x?: unknown; y?: unknown; tilt?: unknown };
+  const body: Spot = await c.req.json<Spot>().catch(() => ({}));
   const num = (v: unknown, min: number, max: number) =>
     typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : null;
   const x = num(body.x, 0, 1), y = num(body.y, 0, 200_000), tilt = num(body.tilt, -15, 15) ?? 0;
