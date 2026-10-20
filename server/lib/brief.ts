@@ -7,7 +7,7 @@ import { localIso } from "./command.ts";
 export interface Parts {
   events: google.Event[] | null; // null: Google isn't connected
   reminders: { body: string; due: Date }[];
-  savedYesterday: number;
+  savedLastDay: number;
   resurface: { title: string; link: string | null; savedOn: Date } | null;
 }
 
@@ -35,7 +35,7 @@ export function compose(p: Parts, now: Date, timeZone: string): string {
   if (p.reminders.length) {
     lines.push("", "Reminders:", ...p.reminders.map((r) => `• ${clock(r.due, timeZone)} ${r.body}`));
   }
-  if (p.savedYesterday) lines.push("", `You saved ${p.savedYesterday} thing${p.savedYesterday === 1 ? "" : "s"} yesterday.`);
+  if (p.savedLastDay) lines.push("", `You saved ${p.savedLastDay} thing${p.savedLastDay === 1 ? "" : "s"} in the last day.`);
   if (p.resurface) {
     const when = new Intl.DateTimeFormat("en-GB", { timeZone, day: "numeric", month: "short" }).format(p.resurface.savedOn);
     lines.push("", `From your library (saved ${when}): ${p.resurface.title}`);
@@ -73,5 +73,5 @@ export async function gather(now: Date, timeZone: string, publicUrl?: string): P
       link: old.url?.startsWith("https://") ? old.url : old.file_path && base?.startsWith("https://") ? `${base}/files/${old.id}` : null,
     }
     : null;
-  return { events, reminders: reminders.map((r) => ({ body: r.body, due: new Date(r.due) })), savedYesterday: n, resurface };
+  return { events, reminders: reminders.map((r) => ({ body: r.body, due: new Date(r.due) })), savedLastDay: n, resurface };
 }
