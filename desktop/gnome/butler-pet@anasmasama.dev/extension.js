@@ -355,7 +355,7 @@ export default class ButlerPetExtension extends Extension {
             const fields = {device: 'laptop'};
             if (text)
                 fields.text = text;
-            await this._post(config, fields, shot);
+            await this._send(config, '/api/save', fields, shot);
             return /^https?:\/\//.test(text) ? 'Saved the link to Butler' : 'Saved to Butler';
         });
     }
@@ -375,26 +375,33 @@ export default class ButlerPetExtension extends Extension {
         }, 'think');
     }
 
-    _post(config, fields, shot = null) {
+    /** Posts a form to Butler (`path` like /api/save) and returns its JSON answer. */
+    _send(config, path, fields, shot = null) {
         const form = new Soup.Multipart('multipart/form-data');
         for (const [name, value] of Object.entries(fields))
             form.append_form_string(name, value);
         if (shot)
             form.append_form_file('file', 'screenshot.jpg', 'image/jpeg', shot.jpeg);
-        const message = Soup.Message.new_from_multipart(config.url, form);
+        const base = config.url.replace(/\/api\/save\/?$/, '');
+        const message = Soup.Message.new_from_multipart(`${base}${path}`, form);
         message.request_headers.append('x-butler-token', config.token);
         return new Promise((resolve, reject) => {
             this._session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null, (session, result) => {
+                let body;
                 try {
-                    session.send_and_read_finish(result);
-                    const status = message.get_status();
-                    if (status >= 200 && status < 300)
-                        resolve();
-                    else
-                        reject(new Error(status === 401 ? 'Butler refused the token' : `Butler answered ${status}`));
+                    const bytes = session.send_and_read_finish(result);
+                    body = JSON.parse(new TextDecoder().decode(bytes.get_data() ?? new Uint8Array()) || '{}');
                 } catch (e) {
                     reject(new Error("couldn't reach Butler"));
+                    return;
                 }
+                const status = message.get_status();
+                if (status >= 200 && status < 300)
+                    resolve(body);
+                else if (status === 401)
+                    reject(new Error('Butler refused the token'));
+                else
+                    reject(new Error(body.error ?? `Butler answered ${status}`));
             });
         });
     }
