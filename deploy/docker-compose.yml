@@ -22,6 +22,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      files-owner:
+        condition: service_completed_successfully
     env_file: [.env, butler.env]
     environment:
       PGHOST: db
@@ -29,6 +31,14 @@ services:
       PGDATABASE: butler
     volumes:
       - ./data/files:/data/files
+
+  # Docker creates ./data/files as root, but Butler runs as the deno user (uid 1993),
+  # so it couldn't write screenshots there. This hands the folder over before Butler starts.
+  files-owner:
+    image: busybox:1.37
+    volumes:
+      - ./data/files:/data/files
+    command: chown -R 1993:1993 /data/files
 
   # Local AI for organizing saves, used when butler.env has BUTLER_AI=local.
   # Turn it on with COMPOSE_PROFILES=local-ai in .env.
