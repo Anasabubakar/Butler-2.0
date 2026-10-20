@@ -14,6 +14,7 @@ import android.telephony.PhoneNumberUtils
 import android.telephony.TelephonyManager
 import android.view.Gravity
 import android.view.View
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
@@ -75,7 +76,13 @@ class AskActivity : AppCompatActivity() {
             action == EditorInfo.IME_ACTION_SEND
         }
         findViewById<Button>(R.id.ask_talk).setOnClickListener { talk() }
-        if (intent.getBooleanExtra(EXTRA_TALK, false) && savedInstanceState == null) talk()
+        if (intent.getBooleanExtra(EXTRA_TALK, false) && savedInstanceState == null) {
+            talk()
+        } else {
+            // Ready to type straight away: box focused, keyboard up.
+            input.requestFocus()
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+        }
     }
 
     override fun onDestroy() {
