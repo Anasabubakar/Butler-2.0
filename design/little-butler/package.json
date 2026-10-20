@@ -1,0 +1,13 @@
+{
+  "name": "little-butler",
+  "version": "0.1.0",
+  "description": "Soft 3D mascot sprites, motion engine and framework-independent companion controls",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {".": "./src/index.js", "./motion": "./src/motion.js"},
+  "files": ["src", "assets", "docs", "README.md"],
+  "scripts": {"start": "node tools/serve.mjs", "test": "node tests/motion.test.js", "build:assets": "node tools/export-motion.mjs && python3 tools/build_assets.py", "build:demo":"node tools/standalone.mjs"},
+  "license": "UNLICENSED",
+  "private": true
+}
