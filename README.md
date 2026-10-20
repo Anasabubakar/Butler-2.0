@@ -16,7 +16,9 @@ Everything runs on one machine you own: the database, the server, your files, an
 | `deploy/` | Docker Compose setup for a VPS: Postgres, the server, HTTPS (Caddy), nightly backups |
 | `tests/` | Unit tests |
 
-Coming next: the Linux/Windows desktop pet (Tauri).
+| `desktop/gnome/` | Desktop pet for GNOME: peeks from the screen corner, saves and copies what you're looking at |
+
+Coming next: Analyze and Solve on the desktop pet, and the pet on Android.
 
 ## Run it on your VPS
 
