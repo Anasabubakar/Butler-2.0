@@ -22,6 +22,7 @@ import { recall } from "./lib/recall.ts";
 import * as brief from "./lib/brief.ts";
 import * as recap from "./lib/recap.ts";
 import * as settings from "./lib/settings.ts";
+import * as streaks from "./lib/streaks.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -137,6 +138,7 @@ app.post("/api/save", async (c) => {
 
   const item = (await db.getItem(id))!;
   organizeItem(id, await rawFor(item)); // runs on after the response
+  celebrate().catch((e) => console.error("celebrate:", e));
   return c.json({ id, kind, platform }, 201);
 });
 
@@ -682,6 +684,26 @@ const BRIEF_AT = env("BUTLER_BRIEF_AT", "08:00")!;
 /** Your time zone, as your devices last said it. */
 async function ownerZone() {
   return safeZone(await settings.get("time_zone") ?? env("BUTLER_TZ"));
+}
+
+/** After a save: cheers on every device for a round number of saves or a saving streak. */
+async function celebrate() {
+  const notes: string[] = [];
+  const reached = streaks.milestone(await streaks.total());
+  if (reached && reached > Number(await settings.get("milestone_cheered") ?? 0)) {
+    await settings.set("milestone_cheered", String(reached));
+    notes.push(streaks.milestoneNote(reached));
+  }
+  const timeZone = await ownerZone();
+  const today = localIso(new Date(), timeZone).slice(0, 10);
+  if (await settings.get("streak_checked_on") !== today) { // the day's first save
+    await settings.set("streak_checked_on", today);
+    const days = streaks.streak(await streaks.savedDays(timeZone), today);
+    if (streaks.streakWorthCheering(days)) notes.push(streaks.streakNote(days));
+  }
+  if (!notes.length) return;
+  const devices = (await inbox.devices()).map((d) => d.name);
+  await inbox.send(devices, { from_device: "Butler", kind: "note", body: notes.join("\n\n") });
 }
 
 /** Sends the brief to every device once a day, at BUTLER_BRIEF_AT your time (unless it's past noon). */
