@@ -168,6 +168,7 @@ export default class ButlerPetExtension extends Extension {
             ['Solve this', () => this._look('solve')],
             ['Send to phone', () => this._sendToPhone()],
             ['Ask Butler…', () => this._openAsk()],
+            ['Talk to Butler', () => this._talk()],
         ]) {
             const button = new St.Button({label, style_class: 'butler-action', x_expand: true, can_focus: false});
             button.connect('clicked', () => run());
@@ -393,6 +394,10 @@ export default class ButlerPetExtension extends Extension {
     }
 
     _toggle() {
+        if (this._stopRecording) {
+            this._stopRecording();
+            return;
+        }
         if (this._busy)
             return;
         if (this._awake) {
@@ -665,23 +670,109 @@ export default class ButlerPetExtension extends Extension {
         this._work('On it…', async () => {
             const config = this._config();
             const shot = await this._snapWindow().catch(() => null);
-            const result = await this._send(config, '/api/command',
-                {device: 'laptop', kind: 'laptop', text, tz: timeZone()}, shot);
-            if (result.open)
-                Gio.AppInfo.launch_default_for_uri(result.open, null);
-            if (result.confirm) {
-                this._say(result.say);
-                if (!await this._confirm())
-                    return 'Okay, not sent.';
-                this._say('Sending…');
-                return (await this._send(config, '/api/command/confirm', {confirm: result.confirm})).say;
-            }
-            if (result.send) {
-                const {sent_to: to} = await this._sendContent(config, result.send, shot);
-                return result.say || `Sent to ${to.join(', ')}`;
-            }
-            return result.say;
+            return this._doCommand(config, {text}, shot);
         }, 'think');
+    }
+
+    /**
+     * Talk to Butler: records until you tap the pet or the note (or 20 seconds pass),
+     * then sends the clip like a typed request.
+     */
+    _talk() {
+        this._work('Listening… tap me when you\'re done', async () => {
+            const config = this._config();
+            const shot = await this._snapWindow().catch(() => null);
+            const wav = await this._record();
+            this._play('think');
+            this._say('On it…');
+            return this._doCommand(config, {}, shot, [{field: 'audio', name: 'voice.wav', mime: 'audio/wav', bytes: wav}]);
+        }, 'summon');
+    }
+
+    /** Records the microphone to a WAV clip with PipeWire (or PulseAudio, or ALSA). */
+    async _record() {
+        const path = GLib.build_filenamev([GLib.get_user_runtime_dir(), `butler-voice-${Date.now()}.wav`]);
+        const recorders = [
+            ['pw-record', '--rate', '16000', '--channels', '1', path],
+            ['parecord', '--rate=16000', '--channels=1', '--file-format=wav', path],
+            ['arecord', '-q', '-f', 'S16_LE', '-r', '16000', '-c', '1', path],
+        ];
+        const argv = recorders.find(([program]) => GLib.find_program_in_path(program));
+        if (!argv)
+            throw new Error('no audio recorder found (install pipewire-bin or pulseaudio-utils)');
+        const proc = Gio.Subprocess.new(argv, Gio.SubprocessFlags.STDERR_SILENCE);
+        await new Promise(resolve => {
+            const id = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 20, () => {
+                this._noteTapped = null;
+                this._stopRecording = null;
+                resolve();
+                return GLib.SOURCE_REMOVE;
+            });
+            this._noteTapped = this._stopRecording = () => {
+                GLib.source_remove(id);
+                this._noteTapped = this._stopRecording = null;
+                resolve();
+            };
+        });
+        proc.send_signal(2); // like Ctrl+C, so the recorder finishes the file properly
+        await new Promise(resolve => proc.wait_async(null, () => resolve()));
+        try {
+            const [, bytes] = GLib.file_get_contents(path);
+            if (bytes.length < 8000)
+                throw new Error("I didn't hear anything");
+            return new GLib.Bytes(bytes);
+        } finally {
+            GLib.unlink(path);
+        }
+    }
+
+    /** Asks Butler and does the part of its plan that happens on this laptop. */
+    async _doCommand(config, fields, shot, files = []) {
+        const result = await this._send(config, '/api/command',
+            {device: 'laptop', kind: 'laptop', tz: timeZone(), ...fields}, shot, files);
+        if (result.heard)
+            this._say(`“${result.heard}”\n\nOn it…`);
+        if (result.message)
+            return this._handoff(result.message, shot, result.say);
+        if (result.open)
+            Gio.AppInfo.launch_default_for_uri(result.open, null);
+        if (result.confirm) {
+            this._say(result.say);
+            if (!await this._confirm())
+                return 'Okay, not sent.';
+            this._say('Sending…');
+            return (await this._send(config, '/api/command/confirm', {confirm: result.confirm})).say;
+        }
+        if (result.send) {
+            const {sent_to: to} = await this._sendContent(config, result.send, shot);
+            return result.say || `Sent to ${to.join(', ')}`;
+        }
+        return result.say;
+    }
+
+    /**
+     * WhatsApp or Telegram: opens the chat in your browser with the message typed in, and
+     * puts the screenshot on the clipboard if you wanted it sent. You press Send.
+     */
+    _handoff({app, name, phone, text, attach_screen: attach}, shot, say) {
+        const enc = encodeURIComponent;
+        const digits = phone?.replace(/[^\d]/g, '');
+        const url = app === 'telegram'
+            ? `https://t.me/share/url?url=${enc(text)}`
+            : digits ? `https://web.whatsapp.com/send?phone=${digits}&text=${enc(text)}`
+                : `https://web.whatsapp.com/send?text=${enc(text)}`;
+        Gio.AppInfo.launch_default_for_uri(url, null);
+        const where = app === 'telegram' ? 'Telegram' : 'WhatsApp';
+        const who = digits || app === 'telegram' ? `pick ${name}` : `pick ${name} (I couldn't find their number)`;
+        let extra = '';
+        if (shot && attach) {
+            const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(Gio.MemoryInputStream.new_from_bytes(shot.jpeg), null);
+            const [, png] = pixbuf.save_to_bufferv('png', [], []);
+            St.Clipboard.get_default().set_content(St.ClipboardType.CLIPBOARD, 'image/png', new GLib.Bytes(png));
+            extra = ' Press Ctrl+V there to add the screenshot.';
+        }
+        const how = digits && app !== 'telegram' ? 'Check it and press Send.' : `${who[0].toUpperCase()}${who.slice(1)}, then press Send.`;
+        return `${say ? `${say}\n\n` : ''}Opened ${where} with the message. ${how}${extra}`;
     }
 
     /** Shows Send / Cancel under the note and waits for your answer (Cancel after 2 minutes). */
@@ -859,13 +950,18 @@ export default class ButlerPetExtension extends Extension {
         });
     }
 
-    /** Posts a form to Butler (`path` like /api/save) and returns its JSON answer. */
-    _send(config, path, fields, shot = null) {
+    /**
+     * Posts a form to Butler (`path` like /api/save) and returns its JSON answer.
+     * `files` are extra attachments: [{field, name, mime, bytes}].
+     */
+    _send(config, path, fields, shot = null, files = []) {
         const form = new Soup.Multipart('multipart/form-data');
         for (const [name, value] of Object.entries(fields))
             form.append_form_string(name, value);
         if (shot)
             form.append_form_file('file', 'screenshot.jpg', 'image/jpeg', shot.jpeg);
+        for (const {field, name, mime, bytes} of files)
+            form.append_form_file(field, name, mime, bytes);
         const base = config.url.replace(/\/api\/save\/?$/, '');
         const message = Soup.Message.new_from_multipart(`${base}${path}`, form);
         message.request_headers.append('x-butler-token', config.token);
