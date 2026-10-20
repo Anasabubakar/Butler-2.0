@@ -60,6 +60,8 @@
     <string name="ask_no_link">open the page in your browser first</string>
     <string name="ask_nothing_to_send">nothing to send</string>
     <string name="ask_sent">Sent to %1$s</string>
+    <string name="ask_send">Send</string>
+    <string name="ask_not_sent">Okay, not sent.</string>
     <string name="inbox_channel">Reminders and things sent to this phone</string>
     <string name="inbox_from">\u0020from %1$s</string>
     <string name="inbox_reminder">Reminder</string>
