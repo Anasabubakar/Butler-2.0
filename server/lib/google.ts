@@ -16,6 +16,7 @@ export const SCOPES = [
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/contacts.readonly",
   "https://www.googleapis.com/auth/contacts.other.readonly",
+  "https://www.googleapis.com/auth/drive.file", // only files Butler itself makes: the backups
 ];
 
 const clientId = () => Deno.env.get("GOOGLE_CLIENT_ID") ?? "";
@@ -102,12 +103,17 @@ async function accessToken(): Promise<string> {
   return cached.token;
 }
 
-async function google<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(url, {
+/** A request to a Google API as you. */
+export async function authorized(url: string, init: RequestInit = {}, timeoutMs = 30_000): Promise<Response> {
+  return fetch(url, {
     ...init,
-    headers: { authorization: `Bearer ${await accessToken()}`, "content-type": "application/json", ...init.headers },
-    signal: AbortSignal.timeout(30_000),
+    headers: { authorization: `Bearer ${await accessToken()}`, ...init.headers },
+    signal: AbortSignal.timeout(timeoutMs),
   });
+}
+
+async function google<T>(url: string, init: RequestInit = {}): Promise<T> {
+  const res = await authorized(url, { ...init, headers: { "content-type": "application/json", ...init.headers } });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Google answered ${res.status}: ${data.error?.message ?? ""}`.trim());
   return data as T;

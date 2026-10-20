@@ -16,6 +16,7 @@ import { LOOK_MODES, type LookMode, locate, look, MAX_STEPS, nextStep } from "./
 import * as inbox from "./lib/inbox.ts";
 import { calendarUrl, parseWhen, plan, safeZone } from "./lib/command.ts";
 import * as google from "./lib/google.ts";
+import * as backup from "./lib/backup.ts";
 import * as meaning from "./lib/meaning.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
@@ -25,6 +26,7 @@ const TOKEN = env("BUTLER_TOKEN", "")!;
 const PASSWORD_HASH = env("BUTLER_PASSWORD_HASH", "")!;
 const SESSION_SECRET = env("SESSION_SECRET", "")!;
 const FILES_DIR = env("FILES_DIR", join(ROOT, "data/files"))!;
+const BACKUPS_DIR = env("BACKUPS_DIR", join(ROOT, "deploy/backups"))!;
 const WEB_DIR = env("WEB_DIR", join(ROOT, "web/dist"))!;
 const COOKIE_SECURE = env("COOKIE_SECURE", "true") !== "false";
 
@@ -521,7 +523,12 @@ app.use("/api/google/*", requireSession);
 
 app.get("/api/google/status", async (c) => {
   const account = google.googleConfigured() ? await google.account() : null;
-  return c.json({ configured: google.googleConfigured(), connected: Boolean(account), email: account?.email ?? null });
+  return c.json({
+    configured: google.googleConfigured(),
+    connected: Boolean(account),
+    email: account?.email ?? null,
+    backup: backup.lastBackup(),
+  });
 });
 
 app.get("/api/google/connect", (c) => {
@@ -544,6 +551,7 @@ app.get("/api/google/callback", async (c) => {
     console.error("google connect:", e);
     return c.redirect("/?google=failed");
   }
+  backUpSoon(); // a fresh connection may have just allowed backups
   return c.redirect("/?google=connected");
 });
 
@@ -582,12 +590,25 @@ app.get("*", async (c) => {
   return index ? c.html(index) : c.text("Website not built: run npm run build in web/", 404);
 });
 
+// --- backups to Google Drive -------------------------------------------------------------
+
+let backingUp = false;
+function backUpSoon() {
+  if (backingUp) return;
+  backingUp = true;
+  backup.backUp(BACKUPS_DIR, FILES_DIR)
+    .then((r) => (r.ok ? console.log : console.warn)("backup:", r.note))
+    .finally(() => (backingUp = false));
+}
+
 // --- start ---------------------------------------------------------------------------
 
 if (import.meta.main) {
   await db.migrate(join(ROOT, "db/migrations"));
   for (const item of await db.stalePending()) organizeItem(item.id, await rawFor(item));
   meaning.backfill().catch((e) => console.error("embedding backfill:", e)); // items saved before this existed
+  setTimeout(backUpSoon, 60_000); // once things settle, then every 6 hours
+  setInterval(backUpSoon, 6 * 60 * 60 * 1000);
   if (geminiReady()) geminiModels().then((m) => console.log("Gemini models, in order:", m.join(", ")));
   Deno.serve({ port: PORT, hostname: env("HOST", "0.0.0.0") }, app.fetch);
 }
