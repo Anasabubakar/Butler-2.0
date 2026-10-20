@@ -17,12 +17,15 @@ export interface Picture {
   mediaType: string;
 }
 
-/** Asks Gemini about a picture and returns its JSON answer, checked against `schema`. */
-export async function askGemini<T>(prompt: string, picture: Picture | null, schema: z.ZodType<T>): Promise<T> {
+/**
+ * Asks Gemini about a picture (or several attachments, such as a screenshot and a voice
+ * clip) and returns its JSON answer, checked against `schema`.
+ */
+export async function askGemini<T>(prompt: string, picture: Picture | Picture[] | null, schema: z.ZodType<T>): Promise<T> {
   const key = Deno.env.get("GEMINI_API_KEY");
   if (!key) throw new Error("GEMINI_API_KEY is not set");
   const parts: unknown[] = [];
-  if (picture) parts.push({ inline_data: { mime_type: picture.mediaType, data: picture.data } });
+  for (const p of [picture ?? []].flat()) parts.push({ inline_data: { mime_type: p.mediaType, data: p.data } });
   parts.push({ text: prompt });
 
   let lastError = "no Gemini model answered";
