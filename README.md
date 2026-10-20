@@ -96,6 +96,18 @@ Until the secrets exist, the Deploy workflow skips itself.
 
 The backups sit on the same disk as everything else, so they protect against mistakes, not against losing the VM. Oracle can reclaim Always Free VMs that stay idle for a week. Copy `deploy/backups` and `deploy/data/files` somewhere else now and then (for example with `rclone` to Google Drive).
 
+### Connect Google (calendar and email)
+
+Ask Butler can add events to your Google Calendar and send email from your Gmail, after you tap **Send**. Set it up once:
+
+1. At [console.cloud.google.com](https://console.cloud.google.com), create a project, then enable the **Google Calendar API**, **Gmail API** and **People API**.
+2. **OAuth consent screen**: External, add your own address as a test user, then press **Publish app** so it's **In production**. Left in Testing, Google signs you out every 7 days. Google will call the app unverified; that's expected for a personal app, and you click past it once.
+3. **Credentials → Create credentials → OAuth client ID → Web application**, with the redirect URI `https://butler.yourdomain.com/api/google/callback`.
+4. Add the client ID and secret to `butler.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, plus `PUBLIC_URL=https://butler.yourdomain.com`, and run `docker compose up -d`.
+5. On the website, press **Connect Google** and allow it.
+
+Without this, calendar requests open a filled-in event for you to save, and email requests ask you to connect first.
+
 ## Install the Android app
 
 Every push builds a debug APK. Download `butler-debug-apk` from the latest run on the repo's **Actions** tab, install it, open **Butler**, and enter:
@@ -130,3 +142,4 @@ cd android && ./gradlew assembleDebug  # needs the Android SDK
 - Saved files are only served to a signed-in browser, from paths the server looked up itself.
 - Keep `butler.env` and `.env` off GitHub (they're git-ignored). If the token leaks, change it in `butler.env`, run `docker compose up -d`, and update the phone.
 - The organizer treats saved content as data, not instructions, because anything you save could contain text written to manipulate an AI.
+- Ask Butler never sends an email without your **Send**. The Google refresh token sits in the database on your server; **Disconnect** on the website revokes it.
