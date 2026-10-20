@@ -56,6 +56,31 @@ function loadConfig() {
     return null;
 }
 
+// Where you last left the pet: its distance from the screen's right and bottom edges.
+const SPOT_FILE = GLib.build_filenamev([GLib.get_user_state_dir(), 'butler', 'pet-spot.json']);
+const SNAP = 24;        // dropped this close to the bottom, it docks and peeks again
+
+function loadSpot() {
+    try {
+        const [, bytes] = GLib.file_get_contents(SPOT_FILE);
+        const {right, bottom} = JSON.parse(new TextDecoder().decode(bytes));
+        if (Number.isFinite(right) && Number.isFinite(bottom))
+            return {right, bottom};
+    } catch (e) {
+        // never moved yet
+    }
+    return {right: EDGE, bottom: 0};
+}
+
+function saveSpot(spot) {
+    try {
+        GLib.mkdir_with_parents(GLib.path_get_dirname(SPOT_FILE), 0o700);
+        GLib.file_set_contents(SPOT_FILE, JSON.stringify(spot));
+    } catch (e) {
+        console.error('butler-pet: could not remember where the pet is', e);
+    }
+}
+
 export default class ButlerPetExtension extends Extension {
     enable() {
         this._session = new Soup.Session({timeout: 30});
@@ -68,6 +93,8 @@ export default class ButlerPetExtension extends Extension {
         this._peeking = false;
         this._clipId = 0;
         this._clips = this._loadClips();
+        this._spot = loadSpot();
+        this._drag = null;
 
         this._pet = new St.Widget({
             reactive: true,
@@ -79,8 +106,37 @@ export default class ButlerPetExtension extends Extension {
         });
         this._face = new St.Bin({width: PET_W, height: PET_H, style_class: 'butler-face'});
         this._pet.add_child(this._face);
+        // Press and move to drag it anywhere; a press without moving is a tap.
+        this._pet.connect('button-press-event', (_actor, event) => {
+            if (this._busy || event.get_button() !== Clutter.BUTTON_PRIMARY)
+                return Clutter.EVENT_PROPAGATE;
+            const [px, py] = event.get_coords();
+            this._drag = {px, py, x: this._pet.x, y: this._pet.y, moved: false, grab: global.stage.grab(this._pet)};
+            return Clutter.EVENT_STOP;
+        });
+        this._pet.connect('motion-event', (_actor, event) => {
+            if (!this._drag)
+                return Clutter.EVENT_PROPAGATE;
+            const [px, py] = event.get_coords();
+            const dx = px - this._drag.px, dy = py - this._drag.py;
+            if (!this._drag.moved && Math.hypot(dx, dy) < 8)
+                return Clutter.EVENT_STOP;
+            if (!this._drag.moved)
+                this._startDrag();
+            const monitor = Main.layoutManager.primaryMonitor;
+            this._pet.set_position(
+                Math.min(Math.max(this._drag.x + dx, monitor.x), monitor.x + monitor.width - PET_W),
+                Math.min(Math.max(this._drag.y + dy, monitor.y), monitor.y + monitor.height - PET_H));
+            return Clutter.EVENT_STOP;
+        });
         this._pet.connect('button-release-event', () => {
-            this._toggle();
+            const drag = this._drag;
+            this._drag = null;
+            drag?.grab.dismiss();
+            if (drag?.moved)
+                this._endDrag();
+            else
+                this._toggle();
             return Clutter.EVENT_STOP;
         });
         this._pet.connect('touch-event', (_actor, event) => {
@@ -113,10 +169,12 @@ export default class ButlerPetExtension extends Extension {
             Main.layoutManager.addTopChrome(actor);
 
         this._monitorsId = Main.layoutManager.connect('monitors-changed', () => this._place(false));
-        this._peek();
+        this._rest();
     }
 
     disable() {
+        this._drag?.grab.dismiss();
+        this._drag = null;
         this._stopClip();
         Main.layoutManager.disconnect(this._monitorsId);
         for (const actor of [this._menu, this._note, this._pet]) {
@@ -201,28 +259,81 @@ export default class ButlerPetExtension extends Extension {
         this._place(false);
     }
 
+    /** Docked pets sit on the bottom edge and peek; anywhere else they stand. */
+    _docked() {
+        return this._spot.bottom <= 0;
+    }
+
+    /** Where the resting pet's top-left corner is. */
+    _home(monitor) {
+        return {
+            x: Math.min(Math.max(monitor.x + monitor.width - this._spot.right - PET_W, monitor.x), monitor.x + monitor.width - PET_W),
+            y: Math.min(Math.max(monitor.y + monitor.height - this._spot.bottom - PET_H, monitor.y), monitor.y + monitor.height - PET_H),
+        };
+    }
+
     _place(animate) {
         const monitor = Main.layoutManager.primaryMonitor;
         if (!monitor)
             return;
-        const x = monitor.x + monitor.width - PET_W - EDGE - (this._awake ? HOP_X : 0);
+        let {x, y} = this._home(monitor);
+        // A docked pet hops up and away from the edge when it wakes; elsewhere it stays put.
+        if (this._awake && this._docked()) {
+            x = Math.max(x - HOP_X, monitor.x);
+            y -= HOP_Y;
+        }
         const height = this._peeking ? PEEK_H : PET_H;
-        const y = monitor.y + monitor.height - height - (this._awake ? HOP_Y : 0);
+        if (this._peeking)
+            y = monitor.y + monitor.height - PEEK_H;
         if (animate) {
             this._pet.ease({x, y, height, duration: 380, mode: Clutter.AnimationMode.EASE_OUT_BACK});
         } else {
             this._pet.set_position(x, y);
             this._pet.height = height;
         }
-        // The menu and notes sit to the left of the awake pet.
-        const right = monitor.x + monitor.width - PET_W - EDGE - HOP_X - 12;
+        // The menu and notes sit beside the pet: on its left if there's room, else its right.
+        const beside = width => (x - 12 - width >= monitor.x ? x - 12 - width : x + PET_W + 12);
+        const within = (top, h) => Math.min(Math.max(top, monitor.y), monitor.y + monitor.height - h);
         const [, menuH] = this._menu.get_preferred_height(-1);
         const [, menuW] = this._menu.get_preferred_width(-1);
-        this._menu.set_position(right - menuW, monitor.y + monitor.height - HOP_Y - menuH);
+        this._menu.set_position(beside(menuW), within(y + PET_H - menuH, menuH));
         // Notes grow upwards, so a long answer never covers the pet.
         const [, noteW] = this._note.get_preferred_width(-1);
         const [, noteH] = this._note.get_preferred_height(noteW);
-        this._note.set_position(right - noteW, monitor.y + monitor.height - HOP_Y - PET_H + 64 - noteH);
+        this._note.set_position(beside(noteW), within(y + 64 - noteH, noteH));
+    }
+
+    /** Settles down where it is: peeking on the bottom edge, or standing anywhere else. */
+    _rest() {
+        if (this._docked()) {
+            this._peek();
+        } else {
+            this._play('idle');
+            this._place(false);
+        }
+    }
+
+    _startDrag() {
+        this._drag.moved = true;
+        this._awake = false;
+        this._menu.hide();
+        if (!this._busy)
+            this._note.hide();
+        if (this._peeking) {
+            this._unpeek();
+            this._drag.y = this._pet.y;
+        }
+        this._play('idle');
+    }
+
+    /** Stays where it was dropped, and remembers the spot for next time. */
+    _endDrag() {
+        const monitor = Main.layoutManager.primaryMonitor;
+        const right = monitor.x + monitor.width - this._pet.x - PET_W;
+        const bottom = monitor.y + monitor.height - this._pet.y - PET_H;
+        this._spot = {right: Math.max(0, Math.round(right)), bottom: bottom < SNAP ? 0 : Math.round(bottom)};
+        saveSpot(this._spot);
+        this._rest();
     }
 
     _toggle() {
@@ -240,10 +351,14 @@ export default class ButlerPetExtension extends Extension {
         this._place(true);
     }
 
-    /** Sinks below the edge, then peeks again. */
+    /** Goes back to its spot: sinks below the edge and peeks if docked, or just settles. */
     async _goHome() {
         this._awake = false;
         this._menu.hide();
+        if (!this._docked()) {
+            this._rest();
+            return;
+        }
         this._play('hide');
         this._place(true);
         await sleep(this._clips.hide.duration);
