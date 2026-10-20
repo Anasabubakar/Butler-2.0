@@ -167,7 +167,6 @@ export default class ButlerPetExtension extends Extension {
             ['Analyze this', () => this._look('analyze')],
             ['Solve this', () => this._look('solve')],
             ['Send to phone', () => this._sendToPhone()],
-            ['Ask Butler…', () => this._openAsk()],
             ['Talk to Butler', () => this._talk()],
         ]) {
             const button = new St.Button({label, style_class: 'butler-action', x_expand: true, can_focus: false});
@@ -175,8 +174,13 @@ export default class ButlerPetExtension extends Extension {
             this._menu.add_child(button);
         }
 
-        // Ask Butler: type what you want, press Enter.
-        this._ask = new St.Entry({hint_text: 'Remind me… / Send this to my phone…', style_class: 'butler-ask', can_focus: true, visible: false});
+        // Ask Butler: always at the top of the menu. Click it, type what you want, press Enter.
+        this._ask = new St.Entry({hint_text: 'Ask me anything…', style_class: 'butler-ask', can_focus: true, x_expand: true});
+        // Typing only reaches the box once Butler holds the keyboard, so take it on click.
+        this._ask.clutter_text.connect('button-press-event', () => {
+            this._openAsk();
+            return Clutter.EVENT_PROPAGATE;
+        });
         this._ask.clutter_text.connect('activate', () => {
             const text = this._ask.text.trim();
             this._closeAsk();
@@ -190,7 +194,24 @@ export default class ButlerPetExtension extends Extension {
             this._goHome();
             return Clutter.EVENT_STOP;
         });
-        this._menu.add_child(this._ask);
+        this._menu.insert_child_at_index(this._ask, 1); // right under the title
+        // Whenever the menu goes away, so does Butler's hold on the keyboard.
+        this._menu.connect('notify::visible', () => {
+            if (!this._menu.visible)
+                this._closeAsk();
+        });
+        // While you're typing, a click anywhere outside the menu closes it.
+        this._menu.connect('captured-event', (_actor, event) => {
+            if (!this._askGrab || event.type() !== Clutter.EventType.BUTTON_PRESS)
+                return Clutter.EVENT_PROPAGATE;
+            const [x, y] = event.get_coords();
+            const [mx, my] = this._menu.get_transformed_position();
+            const [w, h] = this._menu.get_transformed_size();
+            if (x >= mx && x < mx + w && y >= my && y < my + h)
+                return Clutter.EVENT_PROPAGATE;
+            this._goHome();
+            return Clutter.EVENT_STOP;
+        });
 
         // Send / Cancel, for things that need your yes first, like an email.
         this._confirmBox = new St.BoxLayout({style_class: 'butler-menu', visible: false});
@@ -653,21 +674,20 @@ export default class ButlerPetExtension extends Extension {
 
     /** Shows the typing box and takes the keyboard until Enter or Escape. */
     _openAsk() {
-        if (this._busy)
+        if (this._busy || this._askGrab)
             return;
-        this._ask.text = '';
-        this._ask.show();
-        this._place(false);
         this._askGrab = Main.pushModal(this._menu);
         global.stage.set_key_focus(this._ask);
     }
 
+    /** Hands the keyboard back to your apps and empties the box. */
     _closeAsk() {
         if (this._askGrab) {
             Main.popModal(this._askGrab);
             this._askGrab = null;
         }
-        this._ask?.hide();
+        if (this._ask)
+            this._ask.text = '';
     }
 
     /** Sends what you typed, plus a screenshot of the window you're on, and does what Butler decides. */

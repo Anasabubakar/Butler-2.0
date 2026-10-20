@@ -118,13 +118,28 @@ class PetService : Service() {
                 setTextColor(0xFF555B66.toInt())
                 setPadding((8 * dp).toInt(), (4 * dp).toInt(), (8 * dp).toInt(), (4 * dp).toInt())
             })
+            // Looks like a text box; tapping it opens the Ask sheet with the keyboard up.
+            // (A box inside the floating pet can't take typing itself.)
+            addView(TextView(ui).apply {
+                setText(R.string.pet_ask_box)
+                setTextColor(0xFF8A8F99.toInt())
+                textSize = 16f
+                background = GradientDrawable().apply {
+                    setColor(0xFFF4F4F6.toInt())
+                    setStroke(dp.toInt(), 0xFFD9DBE0.toInt())
+                    cornerRadius = 10 * dp
+                }
+                setPadding((12 * dp).toInt(), (10 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt())
+                setOnClickListener { askButler(talk = false) }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins((4 * dp).toInt(), (4 * dp).toInt(), (4 * dp).toInt(), (6 * dp).toInt())
+            })
             for ((label, action) in listOf<Pair<Int, () -> Unit>>(
                 R.string.pet_save to ::saveThis,
                 R.string.pet_copy to ::copyThis,
                 R.string.pet_analyze to { look("analyze") },
                 R.string.pet_solve to { look("solve") },
                 R.string.pet_send_laptop to ::sendToLaptop,
-                R.string.pet_ask to { askButler(talk = false) },
                 R.string.pet_talk to { askButler(talk = true) },
                 R.string.pet_hide to { stopSelf() },
             )) {
