@@ -124,7 +124,7 @@ Tap **Start Little Butler** on the setup screen. It asks for two switches, one a
 1. **Display over other apps**, so the pet can peek from the corner.
 2. **Butler** under **Accessibility**, so it can screenshot and tap for you. It only does that when you press one of its buttons. On Android 13 and newer, an app installed from an APK has this switch greyed out at first: open Butler's **App info**, tap **⋮**, choose **Allow restricted settings**, and try again.
 
-Drag the pet anywhere on the screen; it stays where you drop it, and peeks again if you drop it on the bottom edge. Tap it for **Save this** (a screenshot plus the post's link, using Share → Copy link inside apps), **Copy this**, **Analyze this** and **Solve this**. Screenshots need Android 11 or newer, and Share, Analyze and Solve need `GEMINI_API_KEY` on the server.
+Drag the pet anywhere on the screen; it stays where you drop it, and peeks again if you drop it on the bottom edge. Tap it for **Save this** (a screenshot plus the post's link, using Share → Copy link inside apps), **Copy this**, **Analyze this** and **Solve this**. It also has **Send to laptop** (the page, the selected text, or a screenshot) and **Ask Butler** / **Talk to Butler**: type or say what you want, like "remind me at 3 to call Mum" or "send this to my laptop". Talk uses the phone's own speech recognizer. Reminders and things your laptop sends arrive as notifications; files land in Downloads/Butler. Screenshots need Android 11 or newer, and Share, Analyze, Solve and Ask Butler need `GEMINI_API_KEY` on the server.
 
 ## Develop
 
