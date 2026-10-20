@@ -152,6 +152,8 @@ base64 -w0 ~/.android/butler.keystore | gh secret set ANDROID_DEBUG_KEYSTORE -R 
 
 Without it, every build has a different key and Android makes you uninstall first. After adding it, uninstall once more and install the next build; from then on updates install over the top.
 
+Opening **Butler** shows your whole library, the same as the website, files included. It signs in with your token, so there's no password. The ⚙ button in the corner opens setup. The pet's menu has **Open library** too.
+
 Then in TikTok, Instagram, YouTube, Chrome or Gallery: **Share → Save to Butler**, add a note if you like, tap **Save**. If you're offline it uploads when you're back.
 
 ### Little Butler on your phone

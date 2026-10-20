@@ -29,7 +29,10 @@ class SettingsActivity : AppCompatActivity() {
             config.deviceName = device.text.toString().ifBlank { config.deviceName }
             val msg = if (config.isReady) R.string.settings_saved else R.string.settings_incomplete
             Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-            if (config.isReady) finish()
+            if (config.isReady) {
+                if (isTaskRoot) startActivity(Intent(this, LibraryActivity::class.java)) // first setup
+                finish()
+            }
         }
 
         // Little Butler needs two switches, asked for one at a time.
