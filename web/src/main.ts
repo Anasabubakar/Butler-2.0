@@ -401,6 +401,56 @@ async function tidyUp() {
   notes.forEach((el, i) => setTimeout(() => fasten(el), 500 + Math.min(i, 30) * 25));
 }
 
+// --- snooze: bring a note back later as a reminder -------------------------------------
+
+/** Sensible "later"s from now, in this browser's time zone. */
+function laterTimes(now = new Date()): [string, Date][] {
+  const at = (days: number, hour: number) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() + days);
+    d.setHours(hour, 0, 0, 0);
+    return d;
+  };
+  const day = now.getDay(); // 0 Sunday … 6 Saturday
+  const times: [string, Date][] = [["In an hour", new Date(now.getTime() + 3_600_000)]];
+  if (now.getHours() < 19) times.push(["This evening", at(0, 20)]);
+  times.push(["Tomorrow morning", at(1, 9)]);
+  times.push([day === 6 || day === 0 ? "Next weekend" : "This weekend", at((6 - day + 7) % 7 || 7, 10)]);
+  times.push(["Next week", at((8 - day) % 7 || 7, 9)]);
+  return times;
+}
+
+function snooze(item: Item, button: HTMLElement) {
+  document.querySelector(".snooze")?.remove();
+  const close = () => {
+    menu.remove();
+    removeEventListener("pointerdown", outside, true);
+  };
+  const outside = (e: Event) => { if (!menu.contains(e.target as Node)) close(); };
+  const when = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  const menu = h("div", { class: "snooze", role: "menu" },
+    h("p", {}, "Remind me…"),
+    ...laterTimes().map(([label, time]) =>
+      h("button", {
+        role: "menuitem",
+        onclick: async () => {
+          close();
+          try {
+            await api(`/api/items/${item.id}/remind`, { method: "POST", body: JSON.stringify({ at: time.toISOString() }) });
+            showError(`I'll bring “${item.title ?? "this"}” back ${when.format(time)} on all your devices.`);
+          } catch (e) {
+            if (!(e instanceof SignedOut)) showError(`Couldn't set that: ${(e as Error).message}`);
+          }
+        },
+      }, h("span", {}, label), h("small", {}, when.format(time)))),
+  );
+  document.body.append(menu);
+  const r = button.getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(innerWidth - menu.offsetWidth - 8, r.right - menu.offsetWidth))}px`;
+  menu.style.top = `${r.bottom + menu.offsetHeight + 8 < innerHeight ? r.bottom + 6 : r.top - menu.offsetHeight - 6}px`;
+  addEventListener("pointerdown", outside, true);
+}
+
 /** The note is in the bin. It's really deleted a few seconds later, unless you press Undo. */
 function throwAway(item: Item) {
   const at = state.items.findIndex((i) => i.id === item.id);
@@ -517,6 +567,12 @@ function note(item: Item): HTMLElement {
         title: "Find similar",
         onclick: (e) => { e.stopPropagation(); showSimilar(item); },
       }, "≈"),
+      h("button", {
+        class: "icon",
+        "aria-label": "Remind me later",
+        title: "Remind me later",
+        onclick: (e) => { e.stopPropagation(); snooze(item, e.currentTarget as HTMLElement); },
+      }, "⏰"),
       del,
     ),
   );
