@@ -44,7 +44,7 @@
     <string name="allow_hands">Turn on Butler in Accessibility, then tap Start again. If it\'s greyed out, open Butler\'s App info, tap ⋮ and choose Allow restricted settings first.</string>
     <string name="pet_started">Little Butler is in the corner</string>
     <string name="pet_send_laptop">Send to laptop</string>
-    <string name="pet_ask">Ask Butler</string>
+    <string name="pet_ask_box">Ask me anything…</string>
     <string name="pet_talk">Talk to Butler</string>
     <string name="pet_sending">Sending…</string>
     <string name="pet_sent_page">Sent the page to your laptop</string>
