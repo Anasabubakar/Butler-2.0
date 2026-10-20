@@ -21,6 +21,14 @@ test("social posts and non-web links aren't archived", () => {
   assert.equal(worthArchiving("ftp://files.example/a"), false);
 });
 
+test("private links and links with secrets in them stay off the public archive", () => {
+  assert.equal(worthArchiving("https://docs.google.com/document/d/abc/edit"), false);
+  assert.equal(worthArchiving("https://www.dropbox.com/s/abc/file.pdf"), false);
+  assert.equal(worthArchiving("https://shop.example/reset?token=abc123"), false);
+  assert.equal(worthArchiving("http://192.168.1.4/router"), false);
+  assert.equal(worthArchiving("https://blog.example/post?ref=home"), true);
+});
+
 test("a page is dead only when the site says it's gone", async () => {
   const s = site({ "/gone": 410, "/missing": 404, "/broken": 500 });
   try {
