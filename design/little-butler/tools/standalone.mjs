@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+const root=new URL('../',import.meta.url);
+const read=p=>fs.readFileSync(new URL(p,root),'utf8');
+const data=p=>'data:image/'+(p.endsWith('.webp')?'webp':'png')+';base64,'+fs.readFileSync(new URL(p,root)).toString('base64');
+const poses=Object.fromEntries(fs.readdirSync(new URL('assets/poses/',root)).map(p=>[p.slice(0,-4),data('assets/poses/'+p)]));
+const animations=Object.fromEntries(fs.readdirSync(new URL('assets/animations/',root)).filter(p=>p.endsWith('.webp')).map(p=>[p.slice(0,-5),data('assets/animations/'+p)]));
+const motion=read('src/motion.js').replaceAll('export ','');
+const component=read('src/index.js').replace(/^import .*;$/m,'').replace(/^export \{.*;$/m,'').replace('export class','class').replace('im.src=new URL(`${name}.png`,new URL(base,document.baseURI)).href;','im.src=INLINE_POSES[name];');
+let html=read('index.html').replace('src="assets/poses/idle.png"',`src="${poses.idle}"`);
+html=html.replace("import {STATES} from './src/index.js';",`const INLINE_POSES=${JSON.stringify(poses)};\nconst INLINE_ANIMATIONS=${JSON.stringify(animations)};\n${motion}\n${component}`);
+html=html.replace('src="assets/animations/${name}.webp"','src="${INLINE_ANIMATIONS[name]}"');
+fs.writeFileSync(new URL('demo.html',root),html);
+console.log('Created self-contained demo.html (open directly; no server or install needed).');
