@@ -2,7 +2,7 @@
 // screenshot, explaining or solving what's on screen, and organizing screenshots.
 import { z } from "npm:zod@4.3.6";
 
-const BASE = "https://generativelanguage.googleapis.com/v1beta";
+const base = () => Deno.env.get("GEMINI_URL") ?? "https://generativelanguage.googleapis.com/v1beta";
 
 export const geminiReady = () => Boolean(Deno.env.get("GEMINI_API_KEY"));
 
@@ -29,7 +29,7 @@ export async function askGemini<T>(prompt: string, picture: Picture | null, sche
   for (const model of models()) {
     // Thinking off is much faster; a model that refuses that gets asked again without it.
     for (const thinking of [true, false]) {
-      const res = await fetch(`${BASE}/models/${model}:generateContent`, {
+      const res = await fetch(`${base()}/models/${model}:generateContent`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-goog-api-key": key },
         body: JSON.stringify({
