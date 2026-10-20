@@ -2,9 +2,11 @@
 
 A small charcoal butler that peeks out from the bottom-right corner of your screen. Tap it and it hops up out of the way, with quick actions:
 
-- **Save this**: saves a screenshot of the window you're in, plus the page's link in a browser or the text you've selected in any other app.
+- **Save this**: saves a screenshot of the window you're in, plus the page's link in a browser or the text you've selected in any other app. On a feed (TikTok For You, the X home page, Instagram and so on), the address bar doesn't hold the post's link, so the pet taps the post's Share button, then Copy link, and saves that link instead.
 - **Copy this**: copies what you've selected.
-- **Analyze this** and **Solve this**: coming next, once there's a vision model to read the screen.
+- **Analyze this** and **Solve this**: Butler looks at the window and explains it, or solves the problem on it. The answer shows beside the pet (tap it to close) and is copied so you can paste it.
+
+Share, Analyze and Solve need a Gemini key on the server (`GEMINI_API_KEY` in `deploy/butler.env`). The key stays on the server: the pet sends the screenshot to Butler, and Butler asks Gemini.
 
 It runs as a GNOME Shell extension (GNOME 46 to 48). Living inside the desktop is what lets it stay on top of every window and press keys for you on Wayland.
 

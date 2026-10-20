@@ -4,6 +4,7 @@
 // It lives inside GNOME Shell, which is what lets it stay on top of every
 // window and press keys for you on Wayland.
 import Clutter from 'gi://Clutter';
+import GdkPixbuf from 'gi://GdkPixbuf';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
@@ -23,6 +24,18 @@ const EDGE = 40;        // gap from the right edge while peeking
 const HOP_X = 56;       // how far it moves left when it wakes up
 const HOP_Y = 118;      // how far it moves up
 const BROWSERS = ['firefox', 'google-chrome', 'chromium', 'brave-browser', 'microsoft-edge', 'vivaldi', 'opera'];
+
+// Feed pages, where the address bar shows the feed rather than the post you're looking at.
+const FEEDS = [
+    /^https?:\/\/(www\.)?tiktok\.com\/(foryou|following|explore)?\/?([?#].*)?$/,
+    /^https?:\/\/(www\.)?(x|twitter)\.com\/(home|explore)\/?([?#].*)?$/,
+    /^https?:\/\/(www\.)?instagram\.com\/(explore\/?)?([?#].*)?$/,
+    /^https?:\/\/(www\.|web\.)?facebook\.com\/(watch\/?)?([?#].*)?$/,
+    /^https?:\/\/(www\.)?linkedin\.com\/feed\/?([?#].*)?$/,
+    /^https?:\/\/(www\.)?youtube\.com\/?([?#].*)?$/,
+    /^https?:\/\/(www\.)?threads\.(net|com)\/?([?#].*)?$/,
+];
+const isFeed = url => FEEDS.some(feed => feed.test(url));
 
 const sleep = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
     resolve();
@@ -46,8 +59,10 @@ function loadConfig() {
 export default class ButlerPetExtension extends Extension {
     enable() {
         this._session = new Soup.Session({timeout: 30});
-        this._keyboard = Clutter.get_default_backend().get_default_seat()
-            .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+        const seat = Clutter.get_default_backend().get_default_seat();
+        this._keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+        // Made once and kept: a pointer made at the moment of use drops its first events.
+        this._pointer = seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
         this._awake = false;
         this._busy = false;
         this._peeking = false;
@@ -79,15 +94,20 @@ export default class ButlerPetExtension extends Extension {
         for (const [label, run] of [
             ['Save this', () => this._saveThis()],
             ['Copy this', () => this._copyThis()],
-            ['Analyze this', () => this._soon()],
-            ['Solve this', () => this._soon()],
+            ['Analyze this', () => this._look('analyze')],
+            ['Solve this', () => this._look('solve')],
         ]) {
             const button = new St.Button({label, style_class: 'butler-action', x_expand: true, can_focus: false});
             button.connect('clicked', () => run());
             this._menu.add_child(button);
         }
 
-        this._note = new St.Label({style_class: 'butler-note', visible: false});
+        this._note = new St.Label({style_class: 'butler-note', visible: false, reactive: true});
+        this._note.clutter_text.line_wrap = true;
+        this._note.connect('button-release-event', () => {
+            this._noteTapped?.();
+            return Clutter.EVENT_STOP;
+        });
 
         for (const actor of [this._menu, this._note, this._pet])
             Main.layoutManager.addTopChrome(actor);
@@ -104,7 +124,7 @@ export default class ButlerPetExtension extends Extension {
             actor.destroy();
         }
         this._pet = this._face = this._menu = this._note = null;
-        this._keyboard = null;
+        this._keyboard = this._pointer = null;
         this._session?.abort();
         this._session = null;
     }
@@ -199,8 +219,10 @@ export default class ButlerPetExtension extends Extension {
         const [, menuH] = this._menu.get_preferred_height(-1);
         const [, menuW] = this._menu.get_preferred_width(-1);
         this._menu.set_position(right - menuW, monitor.y + monitor.height - HOP_Y - menuH);
+        // Notes grow upwards, so a long answer never covers the pet.
         const [, noteW] = this._note.get_preferred_width(-1);
-        this._note.set_position(right - noteW, monitor.y + monitor.height - HOP_Y - PET_H + 20);
+        const [, noteH] = this._note.get_preferred_height(noteW);
+        this._note.set_position(right - noteW, monitor.y + monitor.height - HOP_Y - PET_H + 64 - noteH);
     }
 
     _toggle() {
@@ -235,6 +257,22 @@ export default class ButlerPetExtension extends Extension {
         this._place(false);
     }
 
+    /** Waits long enough to read the note (2 to 30 seconds), or until it's tapped. */
+    _hold(ms) {
+        return new Promise(resolve => {
+            const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.min(30000, Math.max(2200, ms)), () => {
+                this._noteTapped = null;
+                resolve();
+                return GLib.SOURCE_REMOVE;
+            });
+            this._noteTapped = () => {
+                GLib.source_remove(id);
+                this._noteTapped = null;
+                resolve();
+            };
+        });
+    }
+
     /** Wraps an action: hides the menu, shows a working face, then a result. */
     async _work(working, action, clip = 'work') {
         if (this._busy)
@@ -251,7 +289,7 @@ export default class ButlerPetExtension extends Extension {
             this._play('error');
             this._say(`Couldn't do that: ${e.message}`);
         }
-        await sleep(2200);
+        await this._hold(this._note.text.length * 50);
         if (!this._pet)
             return;
         this._note.hide();
@@ -268,6 +306,17 @@ export default class ButlerPetExtension extends Extension {
         await sleep(60);
     }
 
+    /** Moves the mouse to (x, y) and clicks, with small gaps so every event lands. */
+    async _click(x, y) {
+        const now = () => GLib.get_monotonic_time();
+        this._pointer.notify_absolute_motion(now(), x, y);
+        await sleep(40);
+        this._pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.PRESSED);
+        await sleep(40);
+        this._pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.RELEASED);
+        await sleep(40);
+    }
+
     _readClipboard() {
         return new Promise(resolve => St.Clipboard.get_default()
             .get_text(St.ClipboardType.CLIPBOARD, (_clipboard, text) => resolve(text ?? '')));
@@ -280,22 +329,70 @@ export default class ButlerPetExtension extends Extension {
         return (await this._readClipboard()).trim();
     }
 
-    /** A PNG of the focused window, without the pet or its menu. Null if there is no window. */
-    _snapWindow() {
-        if (!global.display.focus_window)
-            return Promise.resolve(null);
+    /**
+     * A screenshot of the focused window, without the pet or its menu, as a JPEG no wider
+     * than 1600 pixels (small enough to send quickly), plus where the window is on screen.
+     * Null if there is no window.
+     */
+    async _snapWindow() {
+        const window = global.display.focus_window;
+        if (!window)
+            return null;
         const stream = Gio.MemoryOutputStream.new_resizable();
-        return new Promise((resolve, reject) => {
+        const area = await new Promise((resolve, reject) => {
             new Shell.Screenshot().screenshot_window(false, false, stream, (shot, result) => {
                 try {
-                    shot.screenshot_window_finish(result);
+                    const [, captured] = shot.screenshot_window_finish(result);
                     stream.close(null);
-                    resolve(stream.steal_as_bytes());
+                    resolve(captured);
                 } catch (e) {
                     reject(new Error("couldn't take a screenshot"));
                 }
             });
         });
+        let pixbuf = GdkPixbuf.Pixbuf.new_from_stream(
+            Gio.MemoryInputStream.new_from_bytes(stream.steal_as_bytes()), null);
+        if (pixbuf.get_width() > 1600) {
+            const height = Math.round(pixbuf.get_height() * 1600 / pixbuf.get_width());
+            pixbuf = pixbuf.scale_simple(1600, height, GdkPixbuf.InterpType.BILINEAR);
+        }
+        const [, jpeg] = pixbuf.save_to_bufferv('jpeg', ['quality'], ['85']);
+        // The captured area is exactly what the picture shows, so clicks land where Gemini points.
+        const rect = area?.width ? area : window.get_frame_rect();
+        return {jpeg: new GLib.Bytes(jpeg), rect};
+    }
+
+    /** Asks Butler where `target` is on the screenshot and clicks it. False if it isn't there. */
+    async _tapOn(config, shot, target) {
+        const spot = await this._send(config, '/api/screen/locate', {target}, shot);
+        if (!spot.found)
+            return false;
+        const {x, y, width, height} = shot.rect;
+        await this._click(x + spot.x / 1000 * width, y + spot.y / 1000 * height);
+        return true;
+    }
+
+    /**
+     * On a feed, the address bar doesn't hold the post's link, so the pet taps the
+     * post's Share button, then Copy link, and reads the link it copied. Null if that fails.
+     */
+    async _linkFromShare(config, pageUrl) {
+        try {
+            const shot = await this._snapWindow();
+            if (!shot || !await this._tapOn(config, shot, 'the Share button of the main post in view'))
+                return null;
+            await sleep(900);
+            const menu = await this._snapWindow();
+            if (!await this._tapOn(config, menu, 'the "Copy link" option'))
+                return null;
+            await sleep(300);
+            const link = (await this._readClipboard()).trim();
+            return /^https?:\/\//.test(link) && link !== pageUrl ? link : null;
+        } catch (e) {
+            return null;
+        } finally {
+            await this._press(Clutter.KEY_Escape); // closes the share menu if it's still open
+        }
     }
 
     _inBrowser() {
@@ -319,6 +416,10 @@ export default class ButlerPetExtension extends Extension {
                 await this._press(Clutter.KEY_Control_L, Clutter.KEY_l);
                 text = await this._copySelection();
                 await this._press(Clutter.KEY_Escape);
+                if (isFeed(text)) {
+                    this._say('Finding the Share button…');
+                    text = await this._linkFromShare(config, text) ?? text;
+                }
             } else {
                 text = await this._copySelection();
             }
@@ -328,7 +429,7 @@ export default class ButlerPetExtension extends Extension {
             const fields = {device: 'laptop'};
             if (text)
                 fields.text = text;
-            await this._post(config, fields, shot);
+            await this._send(config, '/api/save', fields, shot);
             return /^https?:\/\//.test(text) ? 'Saved the link to Butler' : 'Saved to Butler';
         });
     }
@@ -342,32 +443,48 @@ export default class ButlerPetExtension extends Extension {
         });
     }
 
-    _soon() {
-        this._work('One sec…', () => {
-            throw new Error('this needs a vision model on your gateway. Coming next');
+    /** Analyze this (mode=analyze) or Solve this (mode=solve): Butler looks at the window and answers. */
+    _look(mode) {
+        this._work(mode === 'solve' ? 'Working it out…' : 'Having a look…', async () => {
+            const config = loadConfig();
+            if (!config)
+                throw new Error('set your save URL and token in ~/.config/butler/pet.json');
+            const shot = await this._snapWindow();
+            if (!shot)
+                throw new Error('open the window you want me to look at');
+            const {answer} = await this._send(config, '/api/screen/look', {mode}, shot);
+            St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, answer);
+            return `${answer}\n\n(Copied, so you can paste it.)`;
         }, 'think');
     }
 
-    _post(config, fields, png = null) {
+    /** Posts a form to Butler (`path` like /api/save) and returns its JSON answer. */
+    _send(config, path, fields, shot = null) {
         const form = new Soup.Multipart('multipart/form-data');
         for (const [name, value] of Object.entries(fields))
             form.append_form_string(name, value);
-        if (png)
-            form.append_form_file('file', 'screenshot.png', 'image/png', png);
-        const message = Soup.Message.new_from_multipart(config.url, form);
+        if (shot)
+            form.append_form_file('file', 'screenshot.jpg', 'image/jpeg', shot.jpeg);
+        const base = config.url.replace(/\/api\/save\/?$/, '');
+        const message = Soup.Message.new_from_multipart(`${base}${path}`, form);
         message.request_headers.append('x-butler-token', config.token);
         return new Promise((resolve, reject) => {
             this._session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null, (session, result) => {
+                let body;
                 try {
-                    session.send_and_read_finish(result);
-                    const status = message.get_status();
-                    if (status >= 200 && status < 300)
-                        resolve();
-                    else
-                        reject(new Error(status === 401 ? 'Butler refused the token' : `Butler answered ${status}`));
+                    const bytes = session.send_and_read_finish(result);
+                    body = JSON.parse(new TextDecoder().decode(bytes.get_data() ?? new Uint8Array()) || '{}');
                 } catch (e) {
                     reject(new Error("couldn't reach Butler"));
+                    return;
                 }
+                const status = message.get_status();
+                if (status >= 200 && status < 300)
+                    resolve(body);
+                else if (status === 401)
+                    reject(new Error('Butler refused the token'));
+                else
+                    reject(new Error(body.error ?? `Butler answered ${status}`));
             });
         });
     }

@@ -11,6 +11,8 @@ import * as db from "./lib/db.ts";
 import { fetchMeta } from "./lib/meta.ts";
 import { organize, type RawItem } from "./lib/organize.ts";
 import { cleanUrl, extractUrl, kindFor, platformFor } from "./lib/rules.ts";
+import { geminiReady } from "./lib/gemini.ts";
+import { LOOK_MODES, type LookMode, locate, look } from "./lib/screen.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -123,6 +125,51 @@ app.post("/api/save", async (c) => {
   const item = (await db.getItem(id))!;
   organizeItem(id, await rawFor(item)); // runs on after the response
   return c.json({ id, kind, platform }, 201);
+});
+
+// --- the desktop pet asks about a screenshot here, with the same token as saves --------
+
+async function screenshotForm(c: Context) {
+  if (!sameSecret(c.req.header("x-butler-token") ?? "", TOKEN)) return { error: c.json({ error: "bad token" }, 401) };
+  if (!geminiReady()) return { error: c.json({ error: "no vision model: set GEMINI_API_KEY on the server" }, 503) };
+  const form = await c.req.formData().catch(() => null);
+  const file = form?.get("file");
+  if (!form || !(file instanceof File) || !VISION_TYPES.some((t) => t === file.type)) {
+    return { error: c.json({ error: "expected a screenshot in the file field" }, 400) };
+  }
+  if (file.size > MAX_VISION_BYTES) return { error: c.json({ error: "screenshot too large" }, 413) };
+  const text = (k: string) => {
+    const v = form.get(k);
+    return typeof v === "string" && v.trim() ? v.trim().slice(0, 500) : null;
+  };
+  const picture = { data: encodeBase64(new Uint8Array(await file.arrayBuffer())), mediaType: file.type };
+  return { picture, text };
+}
+
+// Where a button is: {found, x, y} on a 0 to 1000 grid over the screenshot.
+app.post("/api/screen/locate", async (c) => {
+  const got = await screenshotForm(c);
+  if (got.error) return got.error;
+  const target = got.text("target");
+  if (!target) return c.json({ error: "target is required" }, 400);
+  try {
+    return c.json(await locate(got.picture, target));
+  } catch (e) {
+    return c.json({ error: String(e).slice(0, 300) }, 502);
+  }
+});
+
+// Explains (mode=analyze) or solves (mode=solve) what's on the screenshot.
+app.post("/api/screen/look", async (c) => {
+  const got = await screenshotForm(c);
+  if (got.error) return got.error;
+  const mode = got.text("mode") as LookMode | null;
+  if (!mode || !LOOK_MODES.includes(mode)) return c.json({ error: "mode must be analyze or solve" }, 400);
+  try {
+    return c.json({ answer: await look(got.picture, mode, got.text("question")) });
+  } catch (e) {
+    return c.json({ error: String(e).slice(0, 300) }, 502);
+  }
 });
 
 app.post("/api/login", async (c) => {
