@@ -23,7 +23,19 @@ class HandsService : AccessibilityService() {
         instance = this
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    /** Notices you copying: a tap on a Copy button, or a "Copied" message from the system or the app. */
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null || event.packageName == packageName) return
+        val words = (event.text.joinToString(" ") + " " + (event.contentDescription ?: "")).trim()
+        val copied = when (event.eventType) {
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> words.length <= 30 && COPY.containsMatchIn(words)
+            AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED,
+            AccessibilityEvent.TYPE_ANNOUNCEMENT,
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> COPIED.containsMatchIn(words)
+            else -> false
+        }
+        if (copied) PetService.instance?.copiedSomething()
+    }
 
     override fun onInterrupt() {}
 
@@ -140,6 +152,9 @@ class HandsService : AccessibilityService() {
     }
 
     companion object {
+        private val COPY = Regex("\\bcopy\\b", RegexOption.IGNORE_CASE)
+        private val COPIED = Regex("\\bcopied\\b", RegexOption.IGNORE_CASE)
+
         /** Set while you've turned the helper on in Accessibility settings. */
         @Volatile
         var instance: HandsService? = null
