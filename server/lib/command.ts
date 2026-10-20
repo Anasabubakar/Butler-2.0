@@ -3,7 +3,7 @@
 import { z } from "npm:zod@4.3.6";
 import { askGemini, type Picture } from "./gemini.ts";
 
-export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "answer"] as const;
+export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "screen", "answer"] as const;
 export const APPS = ["whatsapp", "telegram"] as const;
 export const CONTENTS = ["text", "clipboard", "link", "screen"] as const;
 
@@ -92,6 +92,8 @@ Choose exactly one action:
   text = the email body, written as the owner (no signature), attach_screen = true if they want the screenshot attached ("send this").
 - "message": a WhatsApp or Telegram message to someone. app = "whatsapp" or "telegram", person = who, as said,
   text = the message, written as the owner, attach_screen = true if they want the screenshot sent too.
+- "screen": do something on the screen they're looking at for them: click, type, scroll, fill in, open, select.
+  text = the goal in plain words, e.g. "open the first video" or "search YouTube for jollof rice".
 - "answer": anything else. Put the answer in reply, plain and short (under 120 words). Use the screenshot if it helps.
 
 Times are ISO 8601 with the offset, like ${now}. "Tonight" means 20:00, "morning" 09:00, "afternoon" 15:00.
