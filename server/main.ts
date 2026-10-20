@@ -12,7 +12,7 @@ import { fetchMeta } from "./lib/meta.ts";
 import { organize, type RawItem } from "./lib/organize.ts";
 import { cleanUrl, extractUrl, kindFor, platformFor } from "./lib/rules.ts";
 import { geminiReady } from "./lib/gemini.ts";
-import { LOOK_MODES, type LookMode, locate, look } from "./lib/screen.ts";
+import { LOOK_MODES, type LookMode, locate, look, MAX_STEPS, nextStep } from "./lib/screen.ts";
 import * as inbox from "./lib/inbox.ts";
 import { calendarUrl, parseWhen, plan, safeZone } from "./lib/command.ts";
 import * as google from "./lib/google.ts";
@@ -379,6 +379,8 @@ app.post("/api/command", async (c) => {
       organizeItem(id, await rawFor((await db.getItem(id))!));
       return json({ action: "save", say: p.reply || "Saved to Butler." });
     }
+    case "screen":
+      return json({ action: "screen", say: p.reply, goal: p.text || said });
     case "message": {
       const who = (p.person ?? "").trim();
       if (!who) return json({ action: "answer", say: "Who should I message?" });
@@ -413,6 +415,25 @@ app.post("/api/command/confirm", async (c) => {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
   return c.json({ say: `Sent to ${pending.email.to.name}.` });
+});
+
+// The screen helper: the next single step towards a goal, from a screenshot.
+app.post("/api/screen/step", async (c) => {
+  const got = await screenshotForm(c);
+  if (got.error) return got.error;
+  const goal = got.text("goal");
+  if (!goal) return c.json({ error: "goal is required" }, 400);
+  let done: string[] = [];
+  try {
+    const parsed = JSON.parse(got.text("done") ?? "[]");
+    if (Array.isArray(parsed)) done = parsed.map((d) => String(d).slice(0, 200));
+  } catch { /* none yet */ }
+  if (done.length >= MAX_STEPS) return c.json({ do: "stop", say: `I stopped after ${MAX_STEPS} steps. Take it from here.` });
+  try {
+    return c.json(await nextStep(got.picture, goal, done, got.text("kind") === "phone" ? "phone" : "laptop"));
+  } catch (e) {
+    return c.json({ error: String(e).slice(0, 300) }, 502);
+  }
 });
 
 app.post("/api/login", async (c) => {

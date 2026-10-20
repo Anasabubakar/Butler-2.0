@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { locate, look } from "../server/lib/screen.ts";
+import { locate, look, nextStep } from "../server/lib/screen.ts";
 
 /** A fake Gemini that answers each request with the next reply in line. */
 function fakeGemini(replies: { status: number; body: unknown }[]) {
@@ -59,6 +59,21 @@ test("a bad key stops at once", async () => {
   try {
     await assert.rejects(locate(picture, "Copy link"), /API key not valid/);
     assert.equal(gemini.calls.length, 1);
+  } finally {
+    await gemini.close();
+  }
+});
+
+test("the next step keeps clicks on the grid and tells Gemini what's been done", async () => {
+  const gemini = fakeGemini([answer({ do: "click", x: 1100, y: -5, say: "Clicking Search", key: "" })]);
+  try {
+    const step = await nextStep(picture, "search for jollof rice", ["Opened YouTube"], "phone");
+    assert.equal(step.do, "click");
+    assert.deepEqual([step.x, step.y], [1000, 0]);
+    const prompt = gemini.calls[0].body.contents[0].parts[1].text;
+    assert.match(prompt, /1\. Opened YouTube/);
+    assert.match(prompt, /long_press/);
+    assert.match(prompt, /send a message, email or money/);
   } finally {
     await gemini.close();
   }

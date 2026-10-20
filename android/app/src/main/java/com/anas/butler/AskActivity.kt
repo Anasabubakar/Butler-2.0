@@ -121,6 +121,12 @@ class AskActivity : AppCompatActivity() {
     private suspend fun act(result: JSONObject, shot: ByteArray?): String {
         val say = result.optString("say")
         result.optJSONObject("message")?.let { return handoff(it, shot, say) }
+        if (result.optString("action") == "screen") {
+            val pet = PetService.instance ?: throw IllegalStateException(getString(R.string.ask_start_pet))
+            pet.operateSoon(result.optString("goal"))
+            finish() // out of the way, so the pet can see and tap the app underneath
+            return say
+        }
         result.optString("open").takeIf { it.startsWith("https://") }?.let {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it)))
         }

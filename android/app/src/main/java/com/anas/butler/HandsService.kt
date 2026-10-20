@@ -61,10 +61,39 @@ class HandsService : AccessibilityService() {
     }
 
     /** Taps the screen at (x, y) in screen pixels. */
-    suspend fun tap(x: Float, y: Float): Boolean = suspendCancellableCoroutine { cont ->
-        val path = Path().apply { moveTo(x, y) }
+    suspend fun tap(x: Float, y: Float): Boolean = stroke(Path().apply { moveTo(x, y) }, 60)
+
+    /** Presses and holds at (x, y). */
+    suspend fun longPress(x: Float, y: Float): Boolean = stroke(Path().apply { moveTo(x, y) }, 800)
+
+    /** Drags (or swipes) from one point to another over `ms` milliseconds. */
+    suspend fun drag(x1: Float, y1: Float, x2: Float, y2: Float, ms: Long = 500): Boolean =
+        stroke(Path().apply { moveTo(x1, y1); lineTo(x2, y2) }, ms)
+
+    /** Types `text` into the field that has focus. False if no field has focus. */
+    fun type(text: String): Boolean {
+        val field = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return false
+        val now = field.text?.toString().orEmpty().takeUnless { field.isShowingHintText }.orEmpty()
+        val args = android.os.Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, now + text)
+        }
+        return field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+    }
+
+    /** Presses the keyboard's Enter (Search, Go, Send…) on the field that has focus. Android 11+. */
+    fun enter(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+        val field = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return false
+        return field.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+    }
+
+    fun home() {
+        performGlobalAction(GLOBAL_ACTION_HOME)
+    }
+
+    private suspend fun stroke(path: Path, ms: Long): Boolean = suspendCancellableCoroutine { cont ->
         val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0, 60))
+            .addStroke(GestureDescription.StrokeDescription(path, 0, ms))
             .build()
         val started = dispatchGesture(gesture, object : GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) {

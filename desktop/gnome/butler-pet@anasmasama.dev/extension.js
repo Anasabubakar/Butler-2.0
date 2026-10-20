@@ -398,6 +398,11 @@ export default class ButlerPetExtension extends Extension {
             this._stopRecording();
             return;
         }
+        if (this._operating) {
+            this._operating.stop = true;
+            this._say('Stopping…');
+            return;
+        }
         if (this._busy)
             return;
         if (this._awake) {
@@ -734,6 +739,8 @@ export default class ButlerPetExtension extends Extension {
             this._say(`“${result.heard}”\n\nOn it…`);
         if (result.message)
             return this._handoff(result.message, shot, result.say);
+        if (result.goal)
+            return this._operate(config, result.goal);
         if (result.open)
             Gio.AppInfo.launch_default_for_uri(result.open, null);
         if (result.confirm) {
@@ -748,6 +755,123 @@ export default class ButlerPetExtension extends Extension {
             return result.say || `Sent to ${to.join(', ')}`;
         }
         return result.say;
+    }
+
+    // --- doing things on screen ----------------------------------------------------------
+
+    /**
+     * Works towards `goal` on the focused window one step at a time: a screenshot, Butler
+     * picks the next click or keypress, the pet does it, repeat. Tap the pet to stop.
+     */
+    async _operate(config, goal) {
+        const done = [];
+        this._operating = {stop: false};
+        try {
+            for (let i = 1; i <= 15; i++) {
+                if (this._operating.stop)
+                    return 'Stopped.';
+                const shot = await this._snapWindow();
+                if (!shot)
+                    throw new Error('open the window you want me to work in');
+                const step = await this._send(config, '/api/screen/step',
+                    {goal, done: JSON.stringify(done), kind: 'laptop'}, shot);
+                if (step.do === 'done')
+                    return step.say || 'Done.';
+                if (step.do === 'stop')
+                    return step.say || "I couldn't finish that.";
+                if (this._operating.stop)
+                    return 'Stopped.';
+                this._say(`Step ${i}: ${step.say || step.do}\n\n(Tap me to stop.)`);
+                await this._perform(step, shot.rect);
+                done.push(`${step.do}${step.text ? ` "${step.text}"` : ''}${step.key ? ` ${step.key}` : ''}: ${step.say}`);
+                await sleep(step.do === 'wait' ? 1500 : 800);
+            }
+            return 'I stopped after 15 steps. Take it from here.';
+        } finally {
+            this._operating = null;
+        }
+    }
+
+    /** Does one step. Positions are on the 0 to 1000 grid over the window in `rect`. */
+    async _perform(step, rect) {
+        const at = (x, y) => [rect.x + x / 1000 * rect.width, rect.y + y / 1000 * rect.height];
+        const now = () => GLib.get_monotonic_time();
+        // The pet and its note mustn't catch the clicks.
+        this._pet.reactive = false;
+        this._note.hide();
+        try {
+            switch (step.do) {
+            case 'click':
+                await this._click(...at(step.x, step.y));
+                break;
+            case 'double_click':
+                await this._click(...at(step.x, step.y));
+                await this._click(...at(step.x, step.y));
+                break;
+            case 'long_press': {
+                this._pointer.notify_absolute_motion(now(), ...at(step.x, step.y));
+                await sleep(40);
+                this._pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.PRESSED);
+                await sleep(700);
+                this._pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.RELEASED);
+                break;
+            }
+            case 'type': {
+                // Pasting types any language and symbol exactly; your clipboard is put back after.
+                const clipboard = St.Clipboard.get_default();
+                const before = await this._readClipboard();
+                clipboard.set_text(St.ClipboardType.CLIPBOARD, step.text ?? '');
+                await sleep(60);
+                await this._press(Clutter.KEY_Control_L, Clutter.KEY_v);
+                await sleep(200);
+                clipboard.set_text(St.ClipboardType.CLIPBOARD, before);
+                break;
+            }
+            case 'key': {
+                const keys = {
+                    enter: [Clutter.KEY_Return], tab: [Clutter.KEY_Tab], escape: [Clutter.KEY_Escape],
+                    backspace: [Clutter.KEY_BackSpace], up: [Clutter.KEY_Up], down: [Clutter.KEY_Down],
+                    left: [Clutter.KEY_Left], right: [Clutter.KEY_Right], page_up: [Clutter.KEY_Page_Up],
+                    page_down: [Clutter.KEY_Page_Down], home: [Clutter.KEY_Home], back: [Clutter.KEY_Alt_L, Clutter.KEY_Left],
+                }[step.key];
+                if (keys)
+                    await this._press(...keys);
+                break;
+            }
+            case 'scroll': {
+                const direction = {
+                    up: Clutter.ScrollDirection.UP, down: Clutter.ScrollDirection.DOWN,
+                    left: Clutter.ScrollDirection.LEFT, right: Clutter.ScrollDirection.RIGHT,
+                }[step.direction ?? 'down'];
+                this._pointer.notify_absolute_motion(now(), ...at(step.x ?? 500, step.y ?? 500));
+                await sleep(40);
+                for (let i = 0; i < 5; i++) {
+                    this._pointer.notify_discrete_scroll(now(), direction, Clutter.ScrollSource.WHEEL);
+                    await sleep(30);
+                }
+                break;
+            }
+            case 'drag': {
+                const [fromX, fromY] = at(step.x, step.y);
+                const [toX, toY] = at(step.x2 ?? step.x, step.y2 ?? step.y);
+                this._pointer.notify_absolute_motion(now(), fromX, fromY);
+                await sleep(40);
+                this._pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.PRESSED);
+                for (let i = 1; i <= 12; i++) {
+                    await sleep(25);
+                    this._pointer.notify_absolute_motion(now(), fromX + (toX - fromX) * i / 12, fromY + (toY - fromY) * i / 12);
+                }
+                await sleep(40);
+                this._pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.RELEASED);
+                break;
+            }
+            }
+        } finally {
+            if (this._pet) {
+                this._pet.reactive = true;
+                this._note.show();
+            }
+        }
     }
 
     /**
