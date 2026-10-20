@@ -172,6 +172,7 @@ export default class ButlerPetExtension extends Extension {
             ['Analyze this', () => this._look('analyze')],
             ['Solve this', () => this._look('solve')],
             ['Send to phone', () => this._sendToPhone()],
+            ['Ring my phone', () => this._ringPhone()],
             ['Talk to Butler', () => this._talk()],
         ]) {
             const button = new St.Button({label, style_class: 'butler-action', x_expand: true, can_focus: false});
@@ -1053,6 +1054,15 @@ export default class ButlerPetExtension extends Extension {
             }
             await this._sendContent(config, {...target, content: 'screen'}, await this._snapWindow());
             return 'Sent a screenshot to your phone';
+        });
+    }
+
+    // --- "where's my phone?" (and laptop) --------------------------------------------------
+
+    _ringPhone() {
+        this._work('Ringing your phone…', async () => {
+            await this._send(this._config(), '/api/send', {device: 'laptop', target: 'phone', kind: 'ring'});
+            return 'Your phone will ring within 20 seconds, even on silent.';
         });
     }
 
