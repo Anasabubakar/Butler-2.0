@@ -1014,6 +1014,7 @@ export default class ButlerPetExtension extends Extension {
             await this._send(config, '/api/send', {device: 'laptop', target: 'phone', kind: 'sync', text});
         } catch (e) {
             // no phone yet, or offline: the next copy tries again
+            console.warn(`Butler: clipboard sync failed: ${e.message}`);
         }
     }
 
