@@ -50,7 +50,7 @@
     <string name="library_cant_open">No app here can open that link.</string>
     <string name="pet_sync_on">Clipboard sync: on</string>
     <string name="pet_sync_off">Clipboard sync: off</string>
-    <string name="pet_sync_turned_on">Clipboard sync is on. When you tap Copy, it goes to your laptop too. Android will say Butler read your clipboard each time.</string>
+    <string name="pet_sync_turned_on">Clipboard sync is on. When you tap Copy, it goes to your laptop too. Android will say Butler read your clipboard each time. If Android asks, allow Butler to run in the background, or sync stops while the phone is idle.</string>
     <string name="pet_sync_turned_off">Clipboard sync is off.</string>
     <string name="pet_ask_box">Ask me anything…</string>
     <string name="pet_talk">Talk to Butler</string>

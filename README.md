@@ -166,6 +166,8 @@ Butler cheers on every device when you hit a round number of saves (10th, 25th, 
 
 Turn on **Clipboard sync** in the laptop pet's menu, and whatever you copy on the laptop lands on your phone's clipboard within about 20 seconds. Copies from password managers are skipped, only your latest copy waits on the server, and it's deleted once the phone takes it. On the phone, turn on **Clipboard sync** in the pet's menu too, and it works the other way. Android doesn't let apps read the clipboard in the background, so Butler's Accessibility helper notices when you tap **Copy** (or see a "Copied" message), and a see-through screen opens for a split second to read it. Android then shows "Butler pasted from your clipboard"; that's expected. Copying with a keyboard shortcut, or in an app that copies without a Copy button or message, won't be noticed; use Ask Butler's "send what I copied to my laptop" then.
 
+If sync works for a while and then stops, Android has paused Butler to save battery. Butler asks for this when you turn sync on; if you said no, go to Settings → Apps → Butler → Battery and pick **Unrestricted**. The laptop logs failed sends to the system journal (`journalctl -b /usr/bin/gnome-shell | grep Butler`).
+
 ### Find my phone
 
 Press **Ring my phone** in the laptop pet's menu or at the top of the website, or ask Butler "where's my phone?". Within about 20 seconds the phone rings at full alarm volume, even on silent, and buzzes for a minute. Tap the pet or the notification to stop it. It works the other way too ("ring my laptop"); the laptop unmutes and plays a ringtone. A ring that couldn't reach the device within 5 minutes is dropped, so it never goes off hours later.
