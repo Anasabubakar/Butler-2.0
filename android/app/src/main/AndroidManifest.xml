@@ -11,6 +11,8 @@
     <!-- "Message David on WhatsApp": finds David's number. Asked for the first time it's needed. -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Clipboard sync and the inbox need Butler awake: asks to be left out of battery limits. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Lets Butler hand WhatsApp and Telegram exactly the apps it opens with a message. -->
     <queries>
