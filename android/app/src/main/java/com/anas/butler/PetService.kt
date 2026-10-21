@@ -18,6 +18,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.os.IBinder
+import android.os.PowerManager
 import android.provider.MediaStore
 import android.provider.Settings
 import android.view.ContextThemeWrapper
@@ -285,6 +286,21 @@ class PetService : Service() {
         config.clipboardSync = !config.clipboardSync
         syncButton.text = syncLabel()
         say(getString(if (config.clipboardSync) R.string.pet_sync_turned_on else R.string.pet_sync_turned_off))
+        if (config.clipboardSync) askUnrestrictedBattery()
+    }
+
+    /**
+     * Android's battery limits pause Butler while the phone is idle, and then nothing syncs.
+     * Asks once (Android's own Allow / Deny box) to let Butler keep checking in.
+     */
+    private fun askUnrestrictedBattery() {
+        if (getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)) return
+        runCatching {
+            startActivity(
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
     }
 
     /**
