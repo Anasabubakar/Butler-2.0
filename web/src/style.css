@@ -9,7 +9,7 @@
   --chip: #f2eee8;
   --radius: 14px;
   --shadow: 0 1px 2px rgb(31 27 46 / 6%), 0 4px 16px rgb(31 27 46 / 5%);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--b2-font-sans);
   color: var(--text);
   background: var(--bg);
 }
@@ -112,7 +112,7 @@ button { cursor: pointer; }
   --cork-dot: rgb(92 58 22 / 22%);
   --cork-light: rgb(255 240 210 / 18%);
   --ink: #2b2620;
-  --hand: "Caveat", "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
+  --hand: var(--b2-font-hand);
   --n0: #fff3a1; --n1: #ffc9de; --n2: #bfe6ff; --n3: #cdeeb2; --n4: #ffd8a8; --n5: #ddd1ff;
 }
 @media (prefers-color-scheme: dark) {
