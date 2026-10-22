@@ -52,7 +52,9 @@ export async function takeDue(name: string) {
   // A ring that waited more than 5 minutes (the phone was off) would only startle you later.
   await sql`delete from messages where kind = 'ring' and delivered_at is null and due_at < now() - interval '5 minutes'`;
   // Nor should a laptop command from 10 minutes ago start out of the blue when the laptop wakes.
-  await sql`delete from messages where kind in ('task', 'stop') and delivered_at is null and due_at < now() - interval '10 minutes'`;
+  // Switching remote control off ("stop" with body "off") still counts whenever it arrives.
+  await sql`delete from messages where (kind = 'task' or (kind = 'stop' and body is distinct from 'off'))
+    and delivered_at is null and due_at < now() - interval '10 minutes'`;
   const due = await sql<Message[]>`
     update messages set delivered_at = now()
     where id in (
