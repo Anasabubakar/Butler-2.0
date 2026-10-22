@@ -27,7 +27,8 @@ const PEEK_H = 60;      // down to just below its fingers
 const EDGE = 40;        // gap from the right edge while peeking
 const HOP_X = 56;       // how far it moves left when it wakes up
 const HOP_Y = 118;      // how far it moves up
-const INBOX_EVERY = 20;  // seconds between checks for reminders and things sent here
+const INBOX_EVERY = 20;  // seconds to wait before checking again when Butler can't be reached
+const INBOX_WAIT = 25;   // seconds Butler holds each check open, so phone commands arrive at once
 const DOWNLOADS = GLib.build_filenamev([GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD) ?? GLib.get_home_dir(), 'Butler']);
 // Clipboard sync is on while this file exists; the menu button makes and removes it.
 const SYNC_FLAG = GLib.build_filenamev([GLib.get_user_config_dir(), 'butler', 'clipboard-sync']);
@@ -1227,17 +1228,27 @@ export default class ButlerPetExtension extends Extension {
 
     // --- the inbox: reminders and things sent from your phone ---------------------
 
+    /** Asks for messages again and again; each ask waits up to INBOX_WAIT seconds for one. */
+    async _inboxLoop() {
+        while (this._pet) {
+            if (!await this._checkInbox())
+                await sleep(INBOX_EVERY * 1000);
+        }
+    }
+
+    /** True if Butler answered, false if it couldn't be reached (or there's no pet.json). */
     async _checkInbox() {
         const config = loadConfig();
         if (!config || this._checking)
-            return;
+            return false;
         this._checking = true;
         try {
-            const messages = await this._send(config, '/api/inbox', {device: 'laptop', kind: 'laptop'});
+            const messages = await this._send(config, '/api/inbox', {device: 'laptop', kind: 'laptop', wait: String(INBOX_WAIT)});
             for (const message of messages)
                 await this._deliver(config, message);
+            return true;
         } catch (e) {
-            // offline or the server is restarting: try again next time
+            return false; // offline or the server is restarting: try again soon
         } finally {
             this._checking = false;
         }
