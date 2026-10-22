@@ -168,6 +168,14 @@ Turn on **Clipboard sync** in the laptop pet's menu, and whatever you copy on th
 
 If sync works for a while and then stops, Android has paused Butler to save battery. Butler asks for this when you turn sync on; if you said no, go to Settings → Apps → Butler → Battery and pick **Unrestricted**. The laptop logs failed sends to the system journal (`journalctl -b /usr/bin/gnome-shell | grep Butler`).
 
+### Clipboard history
+
+Everything you copy on the laptop with Ctrl+C, text or pictures, is kept with the time you copied it. Press **Super+Shift+V** (or pick **Clipboard history** in the pet's menu) to search it, paste an old copy, pin, or delete. It stays on the laptop. See `desktop/gnome/README.md`.
+
+### Control the laptop from your phone
+
+Tap the phone's pet, then **Tell my laptop**, and type or say what you want: run Claude Code on a project until it's done, open something, or do a task on screen. You get updates on the phone as it goes. It's off until you set a secret word and turn it on in the laptop pet's **Remote control** panel, and every command must contain that word. Setup and the safety rules are in `desktop/gnome/README.md`.
+
 ### Find my phone
 
 Press **Ring my phone** in the laptop pet's menu or at the top of the website, or ask Butler "where's my phone?". Within about 20 seconds the phone rings at full alarm volume, even on silent, and buzzes for a minute. Tap the pet or the notification to stop it. It works the other way too ("ring my laptop"); the laptop unmutes and plays a ringtone. A ring that couldn't reach the device within 5 minutes is dropped, so it never goes off hours later.
@@ -219,4 +227,5 @@ cd android && ./gradlew assembleDebug  # needs the Android SDK
 - Saved files are only served to a signed-in browser, from paths the server looked up itself.
 - Keep `butler.env` and `.env` off GitHub (they're git-ignored). If the token leaks, change it in `butler.env`, run `docker compose up -d`, and update the phone.
 - The organizer treats saved content as data, not instructions, because anything you save could contain text written to manipulate an AI.
+- Remote control is off until you turn it on at the laptop. Commands need your secret word (stored only as a salted hash on the laptop), three misses switch it off, **Switch off** on the phone can only be undone at the laptop, and the laptop logs every command. The word travels with the token, so if the token leaks, change the word as well.
 - Ask Butler never sends an email without your **Send**. The Google refresh token sits in the database on your server; **Disconnect** on the website revokes it.
