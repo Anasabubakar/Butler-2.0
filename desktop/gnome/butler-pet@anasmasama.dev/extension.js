@@ -1264,6 +1264,8 @@ export default class ButlerPetExtension extends Extension {
                     return {ok: false, say: `I stopped before "${step.say}". That's one for you to do yourself.`};
                 if (job.stop)
                     return {ok: false, say: 'Stopped.'};
+                // Every step shows in the bubble here; your phone hears every 20 seconds or so.
+                this._remoteStatus('working', `Step ${i}: ${step.say || step.do}`);
                 if (Date.now() - lastReport > 20 * 1000) {
                     lastReport = Date.now();
                     report(`Step ${i}: ${step.say || step.do}`);
