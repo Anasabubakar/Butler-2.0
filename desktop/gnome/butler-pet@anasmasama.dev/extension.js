@@ -749,13 +749,15 @@ export default class ButlerPetExtension extends Extension {
     async _linkFromShare(config, pageUrl) {
         try {
             const shot = await this._snapWindow();
-            if (!shot || !await this._tapOn(config, shot, 'the Share button of the main post in view'))
+            if (!shot || !await this._tapOn(config, shot, SHARE_BUTTON))
                 return null;
             await sleep(900);
             const menu = await this._snapWindow();
-            if (!await this._tapOn(config, menu, 'the "Copy link" option'))
+            // Emptied first, so only a link Copy link really put there counts.
+            St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, '');
+            if (!await this._tapOn(config, menu, COPY_LINK))
                 return null;
-            await sleep(300);
+            await sleep(500);
             const link = (await this._readClipboard()).trim();
             return /^https?:\/\//.test(link) && link !== pageUrl ? link : null;
         } catch (e) {
