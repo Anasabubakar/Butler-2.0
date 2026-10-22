@@ -1,5 +1,9 @@
 # Design
 
+## Brand
+
+[`brand/BRAND.md`](brand/BRAND.md) is the Butler 2.0 brand: which Figma pages to use (CURRENT and B2, never LEGACY), the logo masters in [`brand/logo/`](brand/logo/), colours, type, voice and the sticky-note board rules. The tokens are in [`web/src/b2-tokens.css`](../web/src/b2-tokens.css).
+
 ## Little Butler
 
 `little-butler/` is Butler's mascot kit (v0.1): a small charcoal shadow butler with a collar and tie. It has 16 poses, 20 animation clips, a web component and an Android sprite view. Its own [README](little-butler/README.md) explains each part, and [BEHAVIOR.md](little-butler/docs/BEHAVIOR.md) covers how it should move and react.
