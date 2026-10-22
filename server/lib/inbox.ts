@@ -5,7 +5,10 @@ import { sql } from "./db.ts";
 export const DEVICE_KINDS = ["laptop", "phone"] as const;
 export type DeviceKind = typeof DEVICE_KINDS[number];
 
-export const MESSAGE_KINDS = ["reminder", "note", "clip", "link", "file", "sync", "ring"] as const;
+export const MESSAGE_KINDS = ["reminder", "note", "clip", "link", "file", "sync", "ring", "task", "stop", "status"] as const;
+
+// Kept only until the device has them: copies, and laptop commands (which carry your secret word).
+const FORGET_ONCE_DELIVERED = ["sync", "task", "stop", "status"];
 export type MessageKind = typeof MESSAGE_KINDS[number];
 
 export interface Device {
@@ -48,6 +51,8 @@ export function devices() {
 export async function takeDue(name: string) {
   // A ring that waited more than 5 minutes (the phone was off) would only startle you later.
   await sql`delete from messages where kind = 'ring' and delivered_at is null and due_at < now() - interval '5 minutes'`;
+  // Nor should a laptop command from 10 minutes ago start out of the blue when the laptop wakes.
+  await sql`delete from messages where kind in ('task', 'stop') and delivered_at is null and due_at < now() - interval '10 minutes'`;
   const due = await sql<Message[]>`
     update messages set delivered_at = now()
     where id in (
@@ -57,7 +62,9 @@ export async function takeDue(name: string) {
       limit 20
       for update skip locked)
     returning id, created_at, from_device, kind, body, url, item_id, due_at`;
-  if (due.some((m) => m.kind === "sync")) await sql`delete from messages where kind = 'sync' and delivered_at is not null`;
+  if (due.some((m) => FORGET_ONCE_DELIVERED.includes(m.kind))) {
+    await sql`delete from messages where kind = any(${FORGET_ONCE_DELIVERED}::text[]) and delivered_at is not null`;
+  }
   return due;
 }
 
