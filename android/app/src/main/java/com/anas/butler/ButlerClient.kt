@@ -43,9 +43,27 @@ class ButlerClient(private val config: Config) {
         return List(sent.length()) { sent.getString(it) }
     }
 
-    /** Checks in and takes whatever is waiting for this phone. */
-    suspend fun inbox(): JSONArray =
-        JSONArray(post("/api/inbox", mapOf("device" to config.deviceName, "kind" to "phone"), null))
+    /** A command for the laptop, secret word and all. The laptop checks the word. Returns who got it. */
+    suspend fun laptopTask(text: String): List<String> =
+        sentTo(post("/api/laptop/task", mapOf("device" to config.deviceName, "text" to text), null))
+
+    /** Stops what the laptop is doing; `off` also switches remote control off there. */
+    suspend fun laptopStop(off: Boolean): List<String> =
+        sentTo(post("/api/laptop/stop", mapOf("device" to config.deviceName, "off" to if (off) "1" else "0"), null))
+
+    private fun sentTo(answer: String): List<String> {
+        val sent = JSONObject(answer).getJSONArray("sent_to")
+        return List(sent.length()) { sent.getString(it) }
+    }
+
+    /** Checks in and takes whatever is waiting for this phone. With `wait`, the server holds on up to 25 seconds for something. */
+    suspend fun inbox(wait: Boolean = false): JSONArray = JSONArray(
+        post("/api/inbox", buildMap {
+            put("device", config.deviceName)
+            put("kind", "phone")
+            if (wait) put("wait", "25")
+        }, null),
+    )
 
     /** A file another device sent here: its bytes and its name. */
     suspend fun download(itemId: String): Pair<ByteArray, String> = withContext(Dispatchers.IO) {

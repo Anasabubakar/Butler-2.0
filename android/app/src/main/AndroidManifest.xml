@@ -67,7 +67,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Ask Butler: type or say what you want, over whatever app you're in. -->
+        <!-- Tell Butler what to do: type or say it, over whatever app you're in, for this phone or the laptop. -->
         <activity
             android:name=".AskActivity"
             android:excludeFromRecents="true"

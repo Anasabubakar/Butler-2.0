@@ -1,19 +1,19 @@
 // "Find similar" and search by meaning: each organized item gets an embedding from
 // Gemini, a list of numbers where items about the same thing end up close together.
 import { sql } from "./db.ts";
-import { geminiReady } from "./gemini.ts";
+import { geminiKeys } from "./gemini.ts";
 
 const base = () => Deno.env.get("GEMINI_URL") ?? "https://generativelanguage.googleapis.com/v1beta";
 const MODEL = "gemini-embedding-001";
 const DIMENSIONS = 768;
 
-export const meaningReady = geminiReady;
+export const meaningReady = () => geminiKeys().length > 0;
 
 /** The embedding of `text`. Documents and search queries are embedded slightly differently. */
 export async function embed(text: string, kind: "document" | "query"): Promise<number[]> {
   const res = await fetch(`${base()}/models/${MODEL}:embedContent`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-goog-api-key": Deno.env.get("GEMINI_API_KEY") ?? "" },
+    headers: { "content-type": "application/json", "x-goog-api-key": geminiKeys()[0] ?? "" },
     body: JSON.stringify({
       content: { parts: [{ text: text.slice(0, 8000) }] },
       taskType: kind === "query" ? "RETRIEVAL_QUERY" : "RETRIEVAL_DOCUMENT",

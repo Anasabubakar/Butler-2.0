@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -9,17 +10,121 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/ask_title"
-        android:textAppearance="?attr/textAppearanceTitleMedium" />
+        android:textAppearance="?attr/textAppearanceTitleLarge"
+        android:textStyle="bold" />
 
-    <EditText
-        android:id="@+id/ask_text"
+    <!-- Who does it: this phone, or the laptop. -->
+    <com.google.android.material.button.MaterialButtonToggleGroup
+        android:id="@+id/ask_where"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        app:checkedButton="@id/ask_phone"
+        app:selectionRequired="true"
+        app:singleSelection="true">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/ask_phone"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ask_on_phone" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/ask_laptop"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ask_on_laptop" />
+    </com.google.android.material.button.MaterialButtonToggleGroup>
+
+    <TextView
+        android:id="@+id/ask_explain"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="@string/laptop_explain"
+        android:textAppearance="?attr/textAppearanceBodySmall"
+        android:visibility="gone" />
+
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
-        android:hint="@string/ask_hint"
-        android:imeOptions="actionSend"
-        android:importantForAutofill="no"
-        android:inputType="textCapSentences" />
+        android:background="@drawable/ask_box"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingEnd="6dp">
+
+        <EditText
+            android:id="@+id/ask_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@null"
+            android:hint="@string/ask_hint"
+            android:imeOptions="actionSend"
+            android:importantForAutofill="no"
+            android:inputType="textCapSentences"
+            android:minHeight="52dp" />
+
+        <Button
+            android:id="@+id/ask_talk"
+            style="?attr/borderlessButtonStyle"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:contentDescription="@string/ask_talk"
+            android:minWidth="0dp"
+            android:padding="0dp"
+            android:text="🎙"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/ask_go"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/ask_go" />
+    </LinearLayout>
+
+    <!-- Examples: tap one to fill the box. -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/ask_examples"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
+
+    <LinearLayout
+        android:id="@+id/ask_working"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <ProgressBar
+            style="?android:attr/progressBarStyleSmall"
+            android:layout_width="20dp"
+            android:layout_height="20dp" />
+
+        <TextView
+            android:id="@+id/ask_working_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:text="@string/pet_thinking"
+            android:textAppearance="?attr/textAppearanceBodyMedium" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/ask_answer"
@@ -30,24 +135,38 @@
         android:textIsSelectable="true"
         android:visibility="gone" />
 
-    <LinearLayout
+    <!-- Laptop only: what it said lately, and Stop / Switch off. -->
+    <TextView
+        android:id="@+id/ask_news"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
+        android:maxLines="6"
+        android:ellipsize="end"
+        android:textAppearance="?attr/textAppearanceBodySmall"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/ask_laptop_controls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
         android:gravity="end"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:visibility="gone">
 
         <Button
-            android:id="@+id/ask_talk"
+            android:id="@+id/ask_stop"
             style="?attr/borderlessButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/ask_talk" />
+            android:text="@string/laptop_stop" />
 
         <Button
-            android:id="@+id/ask_go"
+            android:id="@+id/ask_off"
+            style="?attr/borderlessButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/ask_go" />
+            android:text="@string/laptop_off" />
     </LinearLayout>
 </LinearLayout>

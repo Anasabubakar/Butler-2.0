@@ -19,7 +19,7 @@
     <string name="hands_description">Lets Little Butler see the screen and tap for you, only when you press one of its buttons: Save this, Copy this, Analyze this, Solve this, Send to laptop, or when you ask it to do something on screen. If you turn on clipboard sync, it also notices when you tap Copy, so what you copied can go to your laptop.</string>
     <string name="pet_channel">Little Butler</string>
     <string name="pet_notification">Little Butler is in the corner</string>
-    <string name="pet_menu_title">What should I do?</string>
+    <string name="pet_menu_title">Or tap one</string>
     <string name="pet_save">Save this</string>
     <string name="pet_copy">Copy this</string>
     <string name="pet_analyze">Analyze this</string>
@@ -52,17 +52,17 @@
     <string name="pet_sync_off">Clipboard sync: off</string>
     <string name="pet_sync_turned_on">Clipboard sync is on. When you tap Copy, it goes to your laptop too. Android will say Butler read your clipboard each time. If Android asks, allow Butler to run in the background, or sync stops while the phone is idle.</string>
     <string name="pet_sync_turned_off">Clipboard sync is off.</string>
-    <string name="pet_ask_box">Ask me anything…</string>
+    <string name="pet_ask_box">Tell me what to do…</string>
     <string name="pet_talk">Talk to Butler</string>
     <string name="pet_sending">Sending…</string>
     <string name="pet_sent_page">Sent the page to your laptop</string>
     <string name="pet_sent_text">Sent to your laptop, ready to paste</string>
     <string name="pet_sent_screenshot">Sent a screenshot to your laptop</string>
     <string name="pet_thinking">Thinking…</string>
-    <string name="ask_title">Ask Butler</string>
-    <string name="ask_hint">Remind me… / Send this to my laptop…</string>
+    <string name="ask_title">Tell Butler what to do</string>
+    <string name="ask_hint">e.g. remind me at 5 to call Mum</string>
     <string name="ask_talk">Talk</string>
-    <string name="ask_go">Ask</string>
+    <string name="ask_go">Go</string>
     <string name="ask_no_voice">This phone has no speech recognizer. Type instead.</string>
     <string name="ask_copy_first">copy something first</string>
     <string name="ask_no_link">open the page in your browser first</string>
@@ -74,7 +74,7 @@
     <string name="pet_stopped">Stopped.</string>
     <string name="pet_done">Done.</string>
     <string name="pet_cant_finish">I couldn\'t finish that.</string>
-    <string name="pet_step">Step %1$d: %2$s\n\n(Tap me to stop.)</string>
+    <string name="pet_step">Step %1$d: %2$s</string>
     <string name="pet_too_many_steps">I stopped after %1$d steps. Take it from here.</string>
     <string name="ask_start_pet">start Little Butler first</string>
     <string name="handoff_opened">Opened %1$s with the message. %2$s</string>
@@ -92,4 +92,33 @@
     <string name="inbox_file">Saved to Downloads/Butler%1$s</string>
     <string name="inbox_note">Note%1$s</string>
     <string name="allow_notifications">Allow notifications so reminders can reach you</string>
+    <string name="pet_laptop">Tell my laptop</string>
+    <string name="laptop_explain">Put your secret word anywhere in it. Remote control has to be on at the laptop, and the laptop awake.</string>
+    <string name="laptop_hint">Your secret word, then what to do</string>
+    <string name="laptop_go">Send</string>
+    <string name="laptop_stop">Stop</string>
+    <string name="laptop_off">Switch off</string>
+    <string name="laptop_sent">Sent to %1$s. Watch the pet: its bubble shows what the laptop is doing.</string>
+    <string name="laptop_stopping">Asked the laptop to stop.</string>
+    <string name="laptop_switched_off">Asked the laptop to switch remote control off. Turn it back on at the laptop.</string>
+    <string name="laptop_off_confirm">Switch remote control off? Only you, at the laptop, can turn it back on.</string>
+    <string name="ask_on_phone">📱 This phone</string>
+    <string name="ask_on_laptop">💻 My laptop</string>
+    <string-array name="ask_examples">
+        <item>What does this mean?</item>
+        <item>Remind me at 5 to call Mum</item>
+        <item>Send this to my laptop</item>
+        <item>Search YouTube for jollof rice</item>
+        <item>WhatsApp David I\'m running late</item>
+    </string-array>
+    <string-array name="laptop_examples">
+        <item>In glance, have Claude Code fix the failing test</item>
+        <item>Open YouTube</item>
+        <item>Open my Butler project in VS Code</item>
+    </string-array>
+    <string name="bubble_stop">Stop</string>
+    <string name="bubble_copy">Copy</string>
+    <string name="bubble_share">Share</string>
+    <string name="bubble_laptop">Laptop: %1$s</string>
+    <string name="quiet_channel">Finished jobs on your laptop</string>
 </resources>

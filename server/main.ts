@@ -11,7 +11,7 @@ import * as db from "./lib/db.ts";
 import { fetchMeta } from "./lib/meta.ts";
 import { organize, type RawItem } from "./lib/organize.ts";
 import { cleanUrl, extractUrl, kindFor, platformFor } from "./lib/rules.ts";
-import { geminiModels, geminiReady } from "./lib/gemini.ts";
+import { aiProviders, geminiKeys, geminiModels, geminiReady } from "./lib/gemini.ts";
 import { LOOK_MODES, type LookMode, locate, look, MAX_STEPS, nextStep } from "./lib/screen.ts";
 import * as inbox from "./lib/inbox.ts";
 import { calendarUrl, localIso, parseWhen, plan, safeZone } from "./lib/command.ts";
@@ -28,6 +28,7 @@ import * as share from "./lib/share.ts";
 import * as video from "./lib/video.ts";
 import * as spending from "./lib/spending.ts";
 import * as streaks from "./lib/streaks.ts";
+import * as laptop from "./lib/laptop.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -73,7 +74,7 @@ async function organizeItem(id: string, raw: RawItem) {
 /** A saved YouTube video gets its key points written down. It's extra, so failing is fine. */
 async function watchVideo(id: string, raw: RawItem) {
   const link = video.videoLink(raw.url);
-  if (!link || !geminiReady() || env("BUTLER_VIDEO_NOTES") === "off") return;
+  if (!link || !geminiKeys().length || env("BUTLER_VIDEO_NOTES") === "off") return;
   try {
     await db.updateItem(id, { details: await video.watch(link, raw.pageTitle ?? null) });
     await meaning.embedItem(id); // so searching by meaning finds what was said in it
@@ -226,7 +227,14 @@ app.post("/api/inbox", async (c) => {
   const device = text("device", 100);
   if (!device || !deviceKind) return c.json({ error: "device and kind (laptop or phone) are required" }, 400);
   await inbox.checkIn(device, deviceKind);
-  return c.json(await inbox.takeDue(device));
+  // wait=25 holds the request open until something arrives (or 25 seconds pass).
+  const wait = Math.min(Number(text("wait", 3)) || 0, 25);
+  let due = await inbox.takeDue(device);
+  if (!due.length && wait > 0) {
+    await inbox.waitForMessage(device, wait * 1000, c.req.raw.signal);
+    due = await inbox.takeDue(device);
+  }
+  return c.json(due);
 });
 
 // Sends copied text, a link, a note or a screenshot to another device.
@@ -268,6 +276,69 @@ app.post("/api/send", async (c) => {
   const url = text("url", 4000);
   if (kind !== "file" && kind !== "ring" && !body && !url) return c.json({ error: "nothing to send" }, 400);
   await inbox.send(to, { from_device: device, kind, body, url, item_id });
+  return c.json({ sent_to: to });
+});
+
+// --- controlling the laptop from the phone ---------------------------------------------
+// The server only passes things along: the laptop checks your secret word, and has its own
+// switch for remote control that only you, at the laptop, can turn back on.
+
+// A command for the laptop, as you typed it (secret word included). Forgotten once delivered.
+app.post("/api/laptop/task", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const { text } = await deviceForm(c);
+  const device = text("device", 100);
+  const command = text("text", 2000);
+  if (!device || !command) return c.json({ error: "device and text are required" }, 400);
+  const to = await inbox.resolveTarget(text("target", 100) ?? "laptop", device);
+  if (!to.length) return c.json({ error: "no laptop has checked in with Butler yet" }, 404);
+  await inbox.send(to, { from_device: device, kind: "task", body: command });
+  return c.json({ sent_to: to });
+});
+
+// Stops what the laptop is doing. off=1 also switches remote control off on the laptop.
+app.post("/api/laptop/stop", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const { text } = await deviceForm(c);
+  const device = text("device", 100);
+  if (!device) return c.json({ error: "device is required" }, 400);
+  const to = await inbox.resolveTarget(text("target", 100) ?? "laptop", device);
+  if (!to.length) return c.json({ error: "no laptop has checked in with Butler yet" }, 404);
+  await inbox.send(to, { from_device: device, kind: "stop", body: text("off") === "1" ? "off" : null });
+  return c.json({ sent_to: to });
+});
+
+// The laptop asks what kind of job a command is, once it has taken your secret word out.
+app.post("/api/laptop/plan", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  if (!geminiReady()) return c.json({ error: "no AI model: set GEMINI_API_KEY on the server" }, 503);
+  const { text } = await deviceForm(c);
+  const command = text("text", 2000);
+  if (!command) return c.json({ error: "text is required" }, 400);
+  let folders: string[] = [];
+  try {
+    const parsed = JSON.parse(text("folders", 20_000) ?? "[]");
+    if (Array.isArray(parsed)) folders = parsed.map((f) => String(f).slice(0, 200)).slice(0, 300);
+  } catch { /* no folders */ }
+  try {
+    return c.json(await laptop.planJob(command, folders));
+  } catch (e) {
+    return c.json({ error: String(e).slice(0, 300) }, 502);
+  }
+});
+
+// How a laptop job is going: passed on to your phones as a notification.
+app.post("/api/laptop/status", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const { text } = await deviceForm(c);
+  const device = text("device", 100);
+  const state = text("state", 20) as laptop.State | null;
+  if (!device || !state || !laptop.STATES.includes(state)) {
+    return c.json({ error: `device and state (${laptop.STATES.join(", ")}) are required` }, 400);
+  }
+  const to = await inbox.resolveTarget(text("target", 100) ?? "phone", device);
+  const body = JSON.stringify({ state, title: laptop.statusTitle(state), text: text("text", 3000) ?? "" });
+  await inbox.send(to, { from_device: device, kind: "status", body });
   return c.json({ sent_to: to });
 });
 
@@ -518,7 +589,9 @@ app.post("/api/screen/step", async (c) => {
     const parsed = JSON.parse(got.text("done") ?? "[]");
     if (Array.isArray(parsed)) done = parsed.map((d) => String(d).slice(0, 200));
   } catch { /* none yet */ }
-  if (done.length >= MAX_STEPS) return c.json({ do: "stop", say: `I stopped after ${MAX_STEPS} steps. Take it from here.` });
+  // A screen task from the phone may take more steps (limit=30); 40 at most.
+  const limit = Math.min(Number(got.text("limit")) || MAX_STEPS, 40);
+  if (done.length >= limit) return c.json({ do: "stop", say: `I stopped after ${limit} steps. Take it from here.` });
   try {
     return c.json(await nextStep(got.picture, goal, done, got.text("kind") === "phone" ? "phone" : "laptop"));
   } catch (e) {
@@ -948,7 +1021,8 @@ if (import.meta.main) {
   setInterval(() => recapIfDue().catch((e) => console.error("recap:", e)), 5 * 60_000);
   setInterval(() => watchPrices().catch((e) => console.error("prices:", e)), 30 * 60_000);
   setInterval(() => rescueLinks().catch((e) => console.error("links:", e)), 10 * 60_000);
-  if (geminiReady()) geminiModels().then((m) => console.log("Gemini models, in order:", m.join(", ")));
+  if (geminiReady()) console.log("AI providers, in order:", aiProviders().join(", "));
+  if (geminiKeys().length) geminiModels().then((m) => console.log("Gemini models, in order:", m.join(", ")));
   Deno.serve({ port: PORT, hostname: env("HOST", "0.0.0.0") }, app.fetch);
 }
 

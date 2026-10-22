@@ -51,3 +51,188 @@
 .butler-ask:focus {
   border-color: #f08a24;
 }
+
+/* Clipboard history */
+
+.butler-history {
+  background-color: #ffffff;
+  border-radius: 18px;
+  padding: 14px;
+  spacing: 8px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.butler-history-header {
+  spacing: 8px;
+}
+
+.butler-history-header .butler-ask {
+  margin-top: 0;
+}
+
+.butler-history-title {
+  color: #1b1b22;
+  font-size: 13pt;
+  font-weight: 800;
+  padding-right: 4px;
+}
+
+.butler-history-status,
+.butler-history-hint,
+.butler-history-empty {
+  color: #555b66;
+  font-size: 10pt;
+}
+
+.butler-history-empty {
+  padding: 24px 8px;
+}
+
+.butler-history-bar {
+  spacing: 4px;
+  background-color: #fff1e4;
+  border-radius: 10px;
+  padding: 4px 4px 4px 12px;
+}
+
+.butler-history-count {
+  color: #1b1b22;
+  font-weight: 700;
+}
+
+.butler-history-button {
+  color: #1b1b22;
+  font-size: 10pt;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.butler-history-button:hover,
+.butler-history-icon:hover {
+  background-color: #f4f4f6;
+}
+
+.butler-history-list {
+  spacing: 4px;
+}
+
+.butler-history-row {
+  spacing: 6px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid #ececf0;
+}
+
+.butler-history-row.selected {
+  background-color: #fff1e4;
+  border-color: #f08a24;
+}
+
+.butler-history-body {
+  border-radius: 8px;
+  padding: 4px 6px;
+}
+
+.butler-history-body:hover {
+  background-color: #f4f4f6;
+}
+
+.butler-history-text {
+  color: #1b1b22;
+  font-size: 10.5pt;
+}
+
+.butler-history-image {
+  width: 160px;
+  height: 100px;
+  background-size: contain;
+  background-position: left center;
+  background-repeat: no-repeat;
+}
+
+.butler-history-side {
+  spacing: 2px;
+}
+
+.butler-history-when {
+  color: #555b66;
+  font-size: 9pt;
+  text-align: right;
+}
+
+.butler-history-actions {
+  spacing: 2px;
+}
+
+.butler-history-icon {
+  color: #555b66;
+  padding: 6px;
+  border-radius: 8px;
+}
+
+.butler-history-icon.pinned {
+  color: #f08a24;
+}
+
+.butler-history-footer {
+  spacing: 8px;
+}
+
+/* Remote control */
+
+.butler-remote {
+  spacing: 10px;
+}
+
+.butler-remote-status {
+  color: #1b1b22;
+  font-size: 10.5pt;
+}
+
+.butler-remote-heading {
+  color: #555b66;
+  font-size: 9.5pt;
+  font-weight: 800;
+  padding-top: 6px;
+}
+
+.butler-remote-actions {
+  spacing: 8px;
+}
+
+.butler-remote-switch {
+  color: #ffffff;
+  background-color: #1b1b22;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 10px;
+}
+
+.butler-remote-switch:hover {
+  background-color: #33333d;
+}
+
+.butler-remote-danger {
+  background-color: #c0392b;
+}
+
+.butler-remote-danger:hover {
+  background-color: #a93226;
+}
+
+.butler-remote-log {
+  color: #1b1b22;
+  font-size: 9.5pt;
+  font-family: monospace;
+}
+
+.butler-banner {
+  color: #ffffff;
+  background-color: #c0392b;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 10.5pt;
+  font-weight: 700;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
