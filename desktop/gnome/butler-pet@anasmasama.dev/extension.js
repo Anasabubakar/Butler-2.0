@@ -508,8 +508,8 @@ export default class ButlerPetExtension extends Extension {
         this._drag.moved = true;
         this._awake = false;
         this._menu.hide();
-        if (!this._busy)
-            this._note.hide();
+        if (!this._busy && !this._remoteLine)
+            this._bubble.hide();
         if (this._peeking) {
             this._unpeek();
             this._drag.y = this._pet.y;
@@ -537,8 +537,7 @@ export default class ButlerPetExtension extends Extension {
             return;
         }
         if (this._operating) {
-            this._operating.stop = true;
-            this._say('Stopping…');
+            this._stopOperating();
             return;
         }
         if (this._busy)
@@ -549,7 +548,8 @@ export default class ButlerPetExtension extends Extension {
         }
         this._unpeek();
         this._awake = true;
-        this._note.hide();
+        if (!this._remoteLine)
+            this._bubble.hide();
         this._closeAsk();
         this._menu.show();
         this._play('summon');
@@ -571,25 +571,48 @@ export default class ButlerPetExtension extends Extension {
             this._peek();
     }
 
+    /** Something to say that isn't a job, in the bubble with just ×. */
     _say(text) {
-        this._note.text = text;
-        this._note.show();
-        this._place(false);
+        this._bubble.info(text);
     }
 
-    /** Waits long enough to read the note (2 to 30 seconds), or until it's tapped. */
-    _hold(ms) {
+    /** × on the bubble: it goes, and anything waiting on it stops waiting. */
+    _closeBubble() {
+        this._bubble.hide();
+        this._bubbleClosed?.();
+        this._showRemote();
+    }
+
+    /** Stops a job on the screen; the bubble says so until it has. */
+    _stopOperating() {
+        this._operating.stop = true;
+        this._bubble.progress('Stopping…');
+    }
+
+    /**
+     * Waits long enough to read the bubble (2 to 30 seconds), and for as long as it's open
+     * to read in full, or until × is pressed. With `tappable`, clicking its line ends it too.
+     * Resolves to 'tapped', 'closed' or 'timeout'.
+     */
+    _hold(ms, tappable = false) {
         return new Promise(resolve => {
-            const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.min(30000, Math.max(2200, ms)), () => {
-                this._noteTapped = null;
-                resolve();
+            let left = Math.min(30000, Math.max(2200, ms));
+            const finish = how => {
+                GLib.source_remove(id);
+                this._bubbleClosed = this._noteTapped = null;
+                resolve(how);
+            };
+            const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+                if (!this._bubble?.expanded)
+                    left -= 250;
+                if (left > 0)
+                    return GLib.SOURCE_CONTINUE;
+                this._bubbleClosed = this._noteTapped = null;
+                resolve('timeout');
                 return GLib.SOURCE_REMOVE;
             });
-            this._noteTapped = () => {
-                GLib.source_remove(id);
-                this._noteTapped = null;
-                resolve();
-            };
+            this._bubbleClosed = () => finish('closed');
+            this._noteTapped = tappable ? () => finish('tapped') : null;
         });
     }
 
@@ -600,21 +623,22 @@ export default class ButlerPetExtension extends Extension {
         this._busy = true;
         this._menu.hide();
         this._play(clip);
-        this._say(working);
+        this._bubble.working(working);
         try {
             const done = await action();
             this._play('success');
-            this._say(done);
+            this._bubble.result(done || 'Done.', true);
         } catch (e) {
             this._play('error');
-            this._say(`Couldn't do that: ${e.message}`);
+            this._bubble.result(`Couldn't do that: ${e.message}`, false);
         }
-        await this._hold(this._note.text.length * 50);
+        await this._hold(this._bubble.text.length * 50);
         if (!this._pet)
             return;
-        this._note.hide();
+        this._bubble.hide();
         this._busy = false;
         this._goHome();
+        this._showRemote();
     }
 
     async _press(...keyvals) {
