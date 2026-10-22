@@ -568,7 +568,7 @@ app.post("/api/command", async (c) => {
 
 // Your yes to an email Ask Butler wrote.
 app.post("/api/command/confirm", async (c) => {
-  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  if (!(await signedIn(c))) return c.json({ error: "bad token" }, 401);
   const { text } = await deviceForm(c);
   const id = text("confirm", 100) ?? "";
   const pending = pendingEmails.get(id);
