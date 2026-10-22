@@ -325,3 +325,10 @@ body.dragging-note { cursor: grabbing; user-select: none; }
 @media (prefers-reduced-motion: reduce) {
   .viewer, .viewer.leaving, .viewer-stage img { animation: none; }
 }
+
+/* The post's link under a saved screenshot. */
+.note .source {
+  display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; color: inherit; opacity: .75; text-decoration: none;
+}
+.note .source:hover { opacity: 1; text-decoration: underline; }
