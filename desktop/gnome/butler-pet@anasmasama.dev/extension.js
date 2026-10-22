@@ -53,15 +53,19 @@ const FEEDS = [
     /^https?:\/\/(www\.)?linkedin\.com\/feed\/?([?#].*)?$/,
     /^https?:\/\/(www\.)?youtube\.com\/?([?#].*)?$/,
     /^https?:\/\/(www\.)?threads\.(net|com)\/?([?#].*)?$/,
+    /^https?:\/\/(www\.|old\.)?reddit\.com\/?([?#].*)?$/,
+    /^https?:\/\/([a-z]+\.)?pinterest\.[a-z.]+\/?([?#].*)?$/,
+    /^https?:\/\/(www\.)?snapchat\.com\/(spotlight\/?)?([?#].*)?$/,
 ];
 const isFeed = url => FEEDS.some(feed => feed.test(url));
 
-// Spelled out so the pet never taps the post's Save/Favourite/Bookmark button by mistake.
-const SHARE_BUTTON = 'the Share button of the main post in view: the curved right-pointing arrow icon ' +
-    '(on TikTok the last button in the column beside the video, under the bookmark). ' +
-    'Not the Save, Favourite or Bookmark button, and not Like or Comment.';
-const COPY_LINK = 'the "Copy link" option in the share menu that just opened (a chain-link icon). ' +
-    'Not Save video, Download, Favourite or Add to Favorites.';
+// Spelled out so the pet never taps a post's Save, Favourite or Bookmark button by mistake, on any site.
+const SHARE_BUTTON = 'the Share button of the main post in view. It looks different on each site: a curved ' +
+    'arrow (TikTok, Facebook, YouTube), a paper plane (Instagram, Threads), an arrow out of a box (X), "Share" or ' +
+    '"Send" text, or the post\'s "..." menu if there is no share button (LinkedIn). Never the Save, Favourite, ' +
+    'Bookmark, Like, Comment, Repost or Download button.';
+const COPY_LINK = 'the option that copies the post\'s link in the menu that just opened: "Copy link", ' +
+    '"Copy link to post", "Copy", or a chain-link icon. Never Save, Download, Favourite, Bookmark or Repost.';
 
 const REMOTE_STEPS = 30; // most steps a screen task from the phone takes
 // Steps a remote task never takes on its own (Glance's list): they're yours to do.
@@ -749,21 +753,30 @@ export default class ButlerPetExtension extends Extension {
     async _linkFromShare(config, pageUrl) {
         try {
             const shot = await this._snapWindow();
-            if (!shot || !await this._tapOn(config, shot, SHARE_BUTTON))
+            if (!shot || !await this._tapOn(config, shot, SHARE_BUTTON)) {
+                console.warn('Butler: save this: no Share button found');
                 return null;
+            }
             await sleep(900);
             const menu = await this._snapWindow();
             // Emptied first, so only a link Copy link really put there counts.
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, '');
             if (await this._tapOn(config, menu, COPY_LINK)) {
-                await sleep(500);
-                const link = (await this._readClipboard()).trim();
-                if (/^https?:\/\//.test(link) && link !== pageUrl)
-                    return link;
+                // Some sites take a few seconds to put the link there, so it's checked a few times.
+                for (let i = 0; i < 8; i++) {
+                    await sleep(500);
+                    const link = (await this._readClipboard()).trim();
+                    if (/^https?:\/\//.test(link) && link !== pageUrl)
+                        return link;
+                }
+                console.warn('Butler: save this: Copy link left no new link on the clipboard');
+            } else {
+                console.warn('Butler: save this: no Copy link option found');
             }
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, pageUrl);
             return null;
         } catch (e) {
+            console.warn(`Butler: save this: finding the post's link failed: ${e.message}`);
             return null;
         } finally {
             await this._press(Clutter.KEY_Escape); // closes the share menu if it's still open
@@ -804,6 +817,10 @@ export default class ButlerPetExtension extends Extension {
             const fields = {device: 'laptop'};
             if (text)
                 fields.text = text;
+            // The link goes as its own field too, so the server keeps it with the screenshot.
+            const link = text?.trim();
+            if (/^https?:\/\/\S+$/.test(link ?? ''))
+                fields.url = link;
             await this._send(config, '/api/save', fields, shot);
             return /^https?:\/\//.test(text) ? 'Saved the link to Butler' : 'Saved to Butler';
         });
