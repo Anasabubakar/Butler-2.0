@@ -1,4 +1,5 @@
-<!-- The resting pet: a small semicircle peeking up from the bottom edge. -->
+<!-- Notification icon only (the launcher uses mipmap/ic_launcher). Still the old semicircle:
+     notifications need a one-colour silhouette, which the Butler 2.0 masters do not include yet. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp" android:height="48dp"
     android:viewportWidth="48" android:viewportHeight="48">
