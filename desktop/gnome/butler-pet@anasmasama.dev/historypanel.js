@@ -232,6 +232,7 @@ export class HistoryPanel {
         if (clip.kind === 'image') {
             content = new St.Bin({
                 style_class: 'butler-history-image',
+                x_align: Clutter.ActorAlign.START,
                 style: `background-image: url("file://${this._history.thumbPath(clip)}");`,
             });
         } else {
