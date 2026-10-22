@@ -589,7 +589,9 @@ app.post("/api/screen/step", async (c) => {
     const parsed = JSON.parse(got.text("done") ?? "[]");
     if (Array.isArray(parsed)) done = parsed.map((d) => String(d).slice(0, 200));
   } catch { /* none yet */ }
-  if (done.length >= MAX_STEPS) return c.json({ do: "stop", say: `I stopped after ${MAX_STEPS} steps. Take it from here.` });
+  // A screen task from the phone may take more steps (limit=30); 40 at most.
+  const limit = Math.min(Number(got.text("limit")) || MAX_STEPS, 40);
+  if (done.length >= limit) return c.json({ do: "stop", say: `I stopped after ${limit} steps. Take it from here.` });
   try {
     return c.json(await nextStep(got.picture, goal, done, got.text("kind") === "phone" ? "phone" : "laptop"));
   } catch (e) {
