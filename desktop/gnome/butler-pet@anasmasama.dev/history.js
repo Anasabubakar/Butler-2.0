@@ -104,7 +104,7 @@ export class ClipboardHistory {
     }
 
     addText(text, from) {
-        if (this.paused)
+        if (this.paused || !text.trim())
             return null;
         return this._add({id: GLib.uuid_string_random(), kind: 'text', text: text.slice(0, TEXT_MAX), from});
     }
