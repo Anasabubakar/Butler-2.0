@@ -84,6 +84,33 @@ export async function send(to: string[], message: NewMessage) {
   if (message.kind === "sync") await sql`delete from messages where kind = 'sync' and delivered_at is null and to_device = any(${to}::text[])`;
   if (message.kind === "ring") await sql`delete from messages where kind = 'ring' and delivered_at is null and to_device = any(${to}::text[])`;
   await sql`insert into messages ${sql(rows)}`;
+  for (const name of to) wake(name);
+}
+
+// Devices waiting for their next message (see waitForMessage).
+const waiting = new Map<string, Set<() => void>>();
+
+function wake(name: string) {
+  for (const resolve of waiting.get(name) ?? []) resolve();
+  waiting.delete(name);
+}
+
+/**
+ * Waits up to `ms` for a message to be sent to `name`, so a device can hold one request open
+ * instead of asking every few seconds: a command from the phone reaches the laptop at once.
+ */
+export function waitForMessage(name: string, ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      waiting.get(name)?.delete(done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener("abort", done);
+    if (!waiting.has(name)) waiting.set(name, new Set());
+    waiting.get(name)!.add(done);
+  });
 }
 
 /** Deletes messages from `from` that haven't been delivered yet, and says how many. */
