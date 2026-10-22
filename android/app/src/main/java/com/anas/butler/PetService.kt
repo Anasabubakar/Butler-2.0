@@ -145,6 +145,7 @@ class PetService : Service() {
                 R.string.pet_solve to { look("solve") },
                 R.string.pet_translate to { look("translate") },
                 R.string.pet_send_laptop to ::sendToLaptop,
+                R.string.pet_laptop to ::openLaptop,
                 R.string.pet_library to ::openLibrary,
                 R.string.pet_talk to { askButler(talk = true) },
                 R.string.pet_hide to { stopSelf() },
@@ -562,6 +563,13 @@ class PetService : Service() {
         }
     }
 
+    /** Tell my laptop: a command for the laptop, with your secret word in it. */
+    private fun openLaptop() {
+        panelShown = false
+        panel.visibility = View.GONE
+        startActivity(Intent(this, LaptopActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     // --- the inbox: reminders and things sent from your laptop -------------------------
 
     private suspend fun checkInbox() {
@@ -578,6 +586,12 @@ class PetService : Service() {
         when (message.optString("kind")) {
             "reminder" -> announce(getString(R.string.inbox_reminder), body, null)
             "ring" -> ring(from)
+            "status" -> { // how a job you gave the laptop is going
+                val status = JSONObject(body)
+                val text = status.optString("text")
+                addLaptopNews("${status.optString("title")}: $text")
+                announce(status.optString("title"), text, Intent(this, LaptopActivity::class.java))
+            }
             "sync" -> { // what you copied on the laptop, quietly
                 lastSynced = body // so it isn't sent straight back
                 copyToClipboard(body)
@@ -697,6 +711,16 @@ class PetService : Service() {
         private const val STOP_RING = "com.anas.butler.STOP_RING"
         private const val MAX_STEPS = 15
         private const val SYNC_MAX = 20_000 // characters; bigger copies stay on the phone
+
+        /** What the laptop said lately about the jobs you gave it, newest first. */
+        val laptopNews = mutableListOf<String>()
+
+        fun addLaptopNews(line: String) {
+            synchronized(laptopNews) {
+                laptopNews.add(0, line)
+                while (laptopNews.size > 6) laptopNews.removeAt(laptopNews.size - 1)
+            }
+        }
 
         /** The running pet, so the Ask sheet can hand it screen tasks. */
         var instance: PetService? = null
