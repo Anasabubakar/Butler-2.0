@@ -11,9 +11,10 @@ A small charcoal butler that peeks out from the bottom-right corner of your scre
 - **Ask me anything…**, the box at the top of the menu: click it, type what you want and press Enter, for example "remind me at 3 to call Mum", "add dentist Friday 10am to my calendar", "send what I copied to my phone", "email this to David" or "what does this error mean?". Butler sees the window you're on, so "this" works. Escape or a click outside closes it.
 - **Talk to Butler**: say it instead. The pet listens until you tap it (or for 20 seconds), using PipeWire's `pw-record`, which Ubuntu has already.
 - Doing things on screen: "search YouTube for jollof rice", "open the first video", "fill this form with my name". The pet takes a screenshot, Butler picks the next click, scroll or typing, the pet does it, and so on, up to 15 steps. Tap the pet to stop it at any time. It stops by itself before anything you should do yourself: paying, sending messages or email, posting, deleting, or typing passwords.
+- **Remote control** (off until you set it up): your phone can tell this laptop what to do. See "Control the laptop from your phone" below.
 - Messages: "WhatsApp David I'm running late" opens WhatsApp Web with the message typed in, and "send this to David on Telegram" opens Telegram's share page. You press Send. With Google connected, Butler finds David's number in your contacts; a screenshot you wanted sent goes on your clipboard to paste.
 
-Every 20 seconds the pet checks for reminders and anything your phone sent. They arrive as a desktop notification and a note from the pet: copied text goes straight onto your clipboard, links open when you tap the note, and files land in `~/Downloads/Butler`.
+The pet keeps a line open to Butler, so reminders and anything your phone sent arrive within a second or two. They arrive as a desktop notification and a note from the pet: copied text goes straight onto your clipboard, links open when you tap the note, and files land in `~/Downloads/Butler`.
 
 Share, Analyze, Solve and Ask Butler need a Gemini key on the server (`GEMINI_API_KEY` in `deploy/butler.env`). The key stays on the server: the pet sends the screenshot to Butler, and Butler asks Gemini.
 
@@ -41,6 +42,31 @@ Log out and back in (Wayland only loads new extensions at login), then run:
 ```sh
 gnome-extensions enable butler-pet@anasmasama.dev
 ```
+
+## Control the laptop from your phone
+
+1. Open **Remote control** from the pet's menu. Type a secret word (one word, 4 letters or more) and press **Save word**, then **Turn on**. Only a scrambled copy of the word is kept, in `~/.config/butler/remote.json`, so write it down somewhere safe.
+2. On the phone, tap the pet, then **Tell my laptop**. Type or say a command with your secret word anywhere in it, such as "mango finish the glance project, make the tests pass" or "open YouTube mango".
+3. Your phone gets a note when it starts, every 10 minutes while it's working, and when it's done or failed.
+
+What it can do:
+
+- **Claude Code** in a folder under `~/Desktop/Projects` ("in glance, fix the failing test"). It runs `claude -p` in the background, so you don't see a terminal; the phone gets what it's doing ("Editing remote.js") and its final summary. It may edit files but isn't allowed to run commands, so a job that needs them (running tests, installing packages) can fail or stop short, and says why. To allow more, add for example `"claudeArgs": ["--permission-mode", "bypassPermissions"]` to `pet.json`; do that only if you're comfortable with Claude Code running any command unattended.
+- **Open** a link or an app.
+- **Do things on screen**, the same as Ask Butler on the laptop, up to 30 steps. It stops before anything you should do yourself (sending, paying, deleting, passwords) and when the screen stops changing.
+
+While a job runs, a red banner sits at the bottom of the screen. Press **Esc** or click it to stop the job. On the phone, **Stop** does the same, and **Switch off** turns remote control off; only the laptop can turn it back on.
+
+Rules it keeps:
+
+- A command without the secret word is refused. Three of those in 15 minutes turn remote control off.
+- The laptop takes the word out of the command before it reaches the AI or the log. The server only passes the command along and forgets it once the laptop has it.
+- One job at a time. Claude Code jobs keep running when the screen locks; screen tasks and opening things need the laptop awake and unlocked.
+- Everything it was asked and did is in `~/.local/state/butler/remote-log.jsonl`, and the panel shows the latest.
+
+Settings in `pet.json`: `projects` (the folder Claude Code jobs start from, default `~/Desktop/Projects`), `claude` (the path to `claude`, if Butler can't find it), `claudeArgs`, and `claudeMinutes` (how long a job may run, default 120).
+
+Be honest with yourself about the secret word: it travels with your Butler token, so whoever gets one will often have seen the other (in the phone's text box, for example). It stops someone who has only the token; it isn't a second lock as strong as a separate password app. The lockout, the kill switch, the banner and the log are there for that reason.
 
 ## Update it
 
