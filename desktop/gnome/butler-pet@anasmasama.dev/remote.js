@@ -13,6 +13,7 @@ const LOG_FILE = GLib.build_filenamev([GLib.get_user_state_dir(), 'butler', 'rem
 const HASH_ROUNDS = 5000;
 const CLAUDE_MINUTES = 120;     // Claude Code is stopped after this long ("claudeMinutes" in pet.json)
 const REPORT_EVERY = 10 * 60;   // seconds between "still working" updates on your phone
+const LIVE_EVERY = 20 * 1000;   // at most this often, your phone hears what Claude Code is doing now
 
 function hashWord(word, salt) {
     let hash = `${salt}:${normalize(word)}`;
@@ -270,6 +271,7 @@ export class RemoteControl {
         const started = Date.now();
         const limit = (config.claudeMinutes ?? CLAUDE_MINUTES) * 60;
         let last = 'Starting up';
+        let lastLive = Date.now();
         let result = null;
         const errors = [];
         let overtime = false;
@@ -297,8 +299,13 @@ export class RemoteControl {
                 if (line === null)
                     break;
                 const got = readLine(line);
-                if (got?.action)
+                if (got?.action) {
                     last = got.action;
+                    if (Date.now() - lastLive > LIVE_EVERY) { // the line in your phone's pet bubble
+                        lastLive = Date.now();
+                        this._report(config, 'working', last);
+                    }
+                }
                 else if (got?.result)
                     result = got.result;
                 else if (got?.error)
