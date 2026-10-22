@@ -1,18 +1,20 @@
 package com.anas.butler
 
 import android.content.Context
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import android.content.res.ColorStateList
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
+import android.view.animation.LinearInterpolator
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 
 /**
  * The speech bubble over Little Butler's head. While it works: a spinner, one short line
- * of what it's doing, and Stop. When it's done: a tick (or a cross), the first line of the
+ * of what it's doing, and Stop. When it's done: a tick (or a warning), the first line of the
  * answer, and Copy, Share and close. Tap the line to read all of it.
  */
 class PetBubble(context: Context) : LinearLayout(context) {
@@ -31,46 +33,49 @@ class PetBubble(context: Context) : LinearLayout(context) {
 
     private val dp = resources.displayMetrics.density
     private val spinner = ProgressBar(context, null, android.R.attr.progressBarStyleSmall).apply {
-        indeterminateTintList = android.content.res.ColorStateList.valueOf(ACCENT)
+        indeterminateTintList = ColorStateList.valueOf(Ui.ACCENT)
     }
-    private val mark = TextView(context).apply {
-        textSize = 15f
-        typeface = Typeface.DEFAULT_BOLD
-        gravity = Gravity.CENTER
+    private val markIcon = ImageView(context)
+    private val mark = FrameLayout(context).apply {
+        addView(markIcon, FrameLayout.LayoutParams((14 * dp).toInt(), (14 * dp).toInt(), Gravity.CENTER))
     }
     private val line = TextView(context).apply {
-        setTextColor(WHITE)
+        setTextColor(Ui.TEXT)
         textSize = 14f
         isSingleLine = true
         ellipsize = TextUtils.TruncateAt.END
-        maxWidth = (230 * dp).toInt()
+        maxWidth = (210 * dp).toInt()
     }
     private val body = TextView(context).apply {
-        setTextColor(0xFFE4E4EA.toInt())
+        setTextColor(Ui.SUBTLE)
         textSize = 14f
+        setLineSpacing(0f, 1.15f)
         maxWidth = (290 * dp).toInt()
         setTextIsSelectable(true)
         visibility = View.GONE
     }
-    private val stop = chip(context.getString(R.string.bubble_stop), STOP_RED) { stopAction?.invoke() }
-    private val copy = chip(context.getString(R.string.bubble_copy)) { onCopy?.invoke(full) }
-    private val share = chip(context.getString(R.string.bubble_share)) { onShare?.invoke(full) }
-    private val close = chip("×") { onClose?.invoke() }
+    private val stop = Ui.iconButton(context, R.drawable.ic_stop, context.getString(R.string.bubble_stop), size = 28,
+        tint = Ui.DANGER) { stopAction?.invoke() }
+    private val copy = Ui.iconButton(context, R.drawable.ic_copy, context.getString(R.string.bubble_copy), size = 28) { onCopy?.invoke(full) }
+    private val share = Ui.iconButton(context, R.drawable.ic_share, context.getString(R.string.bubble_share), size = 28) { onShare?.invoke(full) }
+    private val close = Ui.iconButton(context, R.drawable.ic_close, context.getString(R.string.close), size = 28) { onClose?.invoke() }
 
     init {
         orientation = VERTICAL
-        background = GradientDrawable().apply {
-            setColor(0xF01B1B22.toInt())
-            cornerRadius = 20 * dp
-        }
+        background = Ui.rounded(Ui.BACKGROUND, 18 * dp, Ui.MUTED, dp.toInt())
+        elevation = 6 * dp
         setPadding((12 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt())
         val top = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(spinner, LayoutParams((18 * dp).toInt(), (18 * dp).toInt()).apply { marginEnd = (8 * dp).toInt() })
-            addView(mark, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { marginEnd = (8 * dp).toInt() })
+            addView(spinner, LayoutParams((16 * dp).toInt(), (16 * dp).toInt()).apply { marginEnd = (10 * dp).toInt() })
+            addView(mark, LayoutParams((22 * dp).toInt(), (22 * dp).toInt()).apply { marginEnd = (8 * dp).toInt() })
             addView(line)
-            for (button in listOf(stop, copy, share, close)) addView(button)
+            for (button in listOf(stop, copy, share, close)) {
+                (button.layoutParams as LayoutParams).marginStart = (6 * dp).toInt()
+                button.visibility = View.GONE
+                addView(button)
+            }
             setOnClickListener { toggleExpanded() }
         }
         addView(top)
@@ -90,22 +95,34 @@ class PetBubble(context: Context) : LinearLayout(context) {
         close.visibility = View.GONE
     }
 
-    /** Changes what it says it's doing, keeping Stop as it was. */
+    /** Changes what it says it's doing, keeping Stop as it was. The new line slides in. */
     fun progress(text: String) {
         if (!working) return working(text)
         full = text
-        line.text = firstLine(text)
         body.text = text
+        val next = firstLine(text)
+        if (line.text.toString() == next) return
+        line.animate().cancel()
+        line.animate().alpha(0f).translationY(-4 * dp).setDuration(90).withEndAction {
+            line.text = next
+            line.translationY = 4 * dp
+            line.animate().alpha(1f).translationY(0f).setDuration(160).withEndAction(null).start()
+        }.start()
     }
 
-    /** Finished: a tick or a cross, the answer, and Copy, Share and close. */
+    /** Finished: a tick or a warning that pops in, the answer, and Copy, Share and close. */
     fun result(text: String, ok: Boolean = true) {
         working = false
         stopAction = null
         show(text, spinning = false)
-        mark.text = if (ok) "✓" else "!"
-        mark.setTextColor(if (ok) OK_GREEN else STOP_RED)
+        markIcon.setImageResource(if (ok) R.drawable.ic_check else R.drawable.ic_alert)
+        markIcon.imageTintList = ColorStateList.valueOf(Ui.CARD)
+        mark.background = Ui.rounded(if (ok) Ui.OK else Ui.DANGER, 11 * dp)
         mark.visibility = View.VISIBLE
+        mark.scaleX = 0.4f
+        mark.scaleY = 0.4f
+        mark.animate().scaleX(1f).scaleY(1f).setDuration(260)
+            .setInterpolator(android.view.animation.OvershootInterpolator(3f)).start()
         stop.visibility = View.GONE
         val worthKeeping = text.length > 40
         copy.visibility = if (worthKeeping) View.VISIBLE else View.GONE
@@ -123,6 +140,9 @@ class PetBubble(context: Context) : LinearLayout(context) {
 
     private fun show(text: String, spinning: Boolean) {
         full = text
+        line.animate().cancel()
+        line.alpha = 1f
+        line.translationY = 0f
         line.text = firstLine(text)
         body.text = text
         spinner.visibility = if (spinning) View.VISIBLE else View.GONE
@@ -134,31 +154,17 @@ class PetBubble(context: Context) : LinearLayout(context) {
 
     private fun setExpanded(on: Boolean) {
         expanded = on
-        body.visibility = if (on) View.VISIBLE else View.GONE
-        line.alpha = if (on) 0.6f else 1f
-    }
-
-    private fun chip(label: String, color: Int = 0xFF2E2E3A.toInt(), onClick: () -> Unit) = TextView(context).apply {
-        text = label
-        setTextColor(WHITE)
-        textSize = 13f
-        gravity = Gravity.CENTER
-        background = GradientDrawable().apply {
-            setColor(color)
-            cornerRadius = 14 * dp
+        if (on && body.visibility != View.VISIBLE) {
+            body.alpha = 0f
+            body.visibility = View.VISIBLE
+            body.animate().alpha(1f).setDuration(180).setInterpolator(LinearInterpolator()).start()
+        } else if (!on) {
+            body.visibility = View.GONE
         }
-        setPadding((10 * dp).toInt(), (5 * dp).toInt(), (10 * dp).toInt(), (5 * dp).toInt())
-        layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { marginStart = (6 * dp).toInt() }
-        setOnClickListener { onClick() }
-        visibility = View.GONE
+        line.alpha = if (on) 0.7f else 1f
     }
 
     companion object {
-        private const val WHITE = 0xFFFFFFFF.toInt()
-        private const val ACCENT = 0xFFB9A4FF.toInt()
-        private const val OK_GREEN = 0xFF5BD68A.toInt()
-        private const val STOP_RED = 0xFFE5484D.toInt()
-
         /** The first non-empty line; the view cuts it short with "…" if it's long. */
         fun firstLine(text: String) = text.trim().lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
     }
