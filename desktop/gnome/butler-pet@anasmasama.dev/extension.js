@@ -53,6 +53,9 @@ const FEEDS = [
     /^https?:\/\/(www\.)?linkedin\.com\/feed\/?([?#].*)?$/,
     /^https?:\/\/(www\.)?youtube\.com\/?([?#].*)?$/,
     /^https?:\/\/(www\.)?threads\.(net|com)\/?([?#].*)?$/,
+    /^https?:\/\/(www\.|old\.)?reddit\.com\/?([?#].*)?$/,
+    /^https?:\/\/([a-z]+\.)?pinterest\.[a-z.]+\/?([?#].*)?$/,
+    /^https?:\/\/(www\.)?snapchat\.com\/(spotlight\/?)?([?#].*)?$/,
 ];
 const isFeed = url => FEEDS.some(feed => feed.test(url));
 
