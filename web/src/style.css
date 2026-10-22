@@ -1,14 +1,15 @@
 :root {
-  --bg: #faf8f5;
-  --surface: #ffffff;
-  --text: #1f1b2e;
-  --muted: #6b6578;
-  --line: #e8e3dc;
-  --accent: #f0a12c;
-  --accent-soft: #fdf0db;
-  --chip: #f2eee8;
-  --radius: 14px;
-  --shadow: 0 1px 2px rgb(31 27 46 / 6%), 0 4px 16px rgb(31 27 46 / 5%);
+  /* Butler 2.0 roles, read from the B2 tokens in b2-tokens.css. */
+  --bg: var(--b2-bg);
+  --surface: var(--b2-surface);
+  --text: var(--b2-text);
+  --muted: var(--b2-text-muted);
+  --line: var(--b2-border);
+  --accent: var(--b2-accent);
+  --accent-soft: color-mix(in srgb, var(--b2-vermilion) 12%, var(--b2-surface));
+  --chip: color-mix(in srgb, var(--b2-text) 6%, var(--b2-surface));
+  --radius: var(--b2-radius-control);
+  --shadow: 0 1px 2px rgb(17 17 17 / 6%), 0 4px 16px rgb(17 17 17 / 5%);
   font-family: var(--b2-font-sans);
   color: var(--text);
   background: var(--bg);
@@ -16,14 +17,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #15131c;
-    --surface: #1e1b27;
-    --text: #efebf5;
-    --muted: #a39cb2;
-    --line: #2e2a3a;
-    --accent: #ffb547;
-    --accent-soft: #3a2d17;
-    --chip: #282433;
+    /* The library sits on the board's shell colour in dark mode. */
+    --bg: var(--b2-material-shell);
     --shadow: 0 1px 2px rgb(0 0 0 / 30%);
   }
 }
