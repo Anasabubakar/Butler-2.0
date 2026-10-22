@@ -376,7 +376,7 @@ function holdEmail(email: google.Email): string {
 
 // Ask Butler: what you typed or said, plus optionally a screenshot of what you're looking at.
 app.post("/api/command", async (c) => {
-  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  if (!(await signedIn(c))) return c.json({ error: "bad token" }, 401);
   if (!geminiReady()) return c.json({ error: "no AI model: set GEMINI_API_KEY on the server" }, 503);
   const { form, text, deviceKind } = await deviceForm(c);
   const device = text("device", 100);
