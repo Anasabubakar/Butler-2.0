@@ -468,7 +468,7 @@ app.post("/api/command", async (c) => {
       const also = others.length ? `\n(Also found: ${others.map((o) => `${o.name} <${o.email}>`).join(", ")}.)` : "";
       return json({
         action: "confirm",
-        say: `Send this to ${to.name} <${to.email}>?\nSubject: ${subject}\n\n${body}${attachment ? "\n\n[screenshot attached]" : ""}${also}`,
+        say: `Ready to send. Check the recipient and attachment first.\nTo: ${to.name} <${to.email}>\nSubject: ${subject}\n\n${body}${attachment ? "\n\nAttachment: screenshot.jpg" : ""}${also}`,
         confirm,
       });
     }
