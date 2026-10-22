@@ -770,7 +770,7 @@ export default class ButlerPetExtension extends Extension {
                 text = await this._copySelection();
                 await this._press(Clutter.KEY_Escape);
                 if (isFeed(text)) {
-                    this._say('Finding the Share button…');
+                    this._bubble.progress('Finding the Share button…');
                     text = await this._linkFromShare(config, text) ?? text;
                 }
             } else {
@@ -850,7 +850,7 @@ export default class ButlerPetExtension extends Extension {
             const shot = await this._snapWindow().catch(() => null);
             const wav = await this._record();
             this._play('think');
-            this._say('On it…');
+            this._bubble.progress('On it…');
             return this._doCommand(config, {}, shot, [{field: 'audio', name: 'voice.wav', mime: 'audio/wav', bytes: wav}]);
         }, 'summon');
     }
@@ -897,7 +897,7 @@ export default class ButlerPetExtension extends Extension {
         const result = await this._send(config, '/api/command',
             {device: 'laptop', kind: 'laptop', tz: timeZone(), ...fields}, shot, files);
         if (result.heard)
-            this._say(`“${result.heard}”\n\nOn it…`);
+            this._bubble.progress(`“${result.heard}”\n\nOn it…`);
         if (result.message)
             return this._handoff(result.message, shot, result.say);
         if (result.goal)
