@@ -17,6 +17,8 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {ClipboardHistory} from './history.js';
 import {HistoryPanel} from './historypanel.js';
+import {RemoteControl} from './remote.js';
+import {RemotePanel} from './remotepanel.js';
 
 // The Little Butler's desktop size (design/little-butler/docs/BEHAVIOR.md).
 const PET_W = 88;
@@ -208,6 +210,7 @@ export default class ButlerPetExtension extends Extension {
             ['Translate this', () => this._look('translate')],
             ['Send to phone', () => this._sendToPhone()],
             ['Clipboard history', () => this._openHistory()],
+            ['Remote control', () => this._openRemote()],
             ['Ring my phone', () => this._ringPhone()],
             ['Talk to Butler', () => this._talk()],
         ]) {
@@ -231,6 +234,21 @@ export default class ButlerPetExtension extends Extension {
         this._history = new ClipboardHistory();
         this._historyPanel = new HistoryPanel(this._history, clip => this._pasteFromHistory(clip));
         this._grabHistoryKey();
+
+        // Remote control: commands from your phone, with your secret word. Off until you turn it on.
+        this._remote = new RemoteControl({
+            send: (config, path, fields) => this._send(config, path, fields),
+            operate: (config, goal, job, report) => this._operateRemote(config, goal, job, report),
+            notify: (title, text) => Main.notify(`Butler: ${title}`, text),
+            banner: text => this._setBanner(text),
+        });
+        this._remotePanel = new RemotePanel(this._remote);
+        this._banner = new St.Label({style_class: 'butler-banner', visible: false, reactive: true});
+        this._banner.connect('button-release-event', () => {
+            this._remote.stop();
+            return Clutter.EVENT_STOP;
+        });
+        Main.layoutManager.addTopChrome(this._banner);
 
         // Ask Butler: always at the top of the menu. Click it, type what you want, press Enter.
         this._ask = new St.Entry({hint_text: 'Ask me anything…', style_class: 'butler-ask', can_focus: true, x_expand: true});
@@ -290,14 +308,14 @@ export default class ButlerPetExtension extends Extension {
             Main.layoutManager.addTopChrome(actor);
 
         this._monitorsId = Main.layoutManager.connect('monitors-changed', () => this._place(false));
+        // The pet keeps running while the screen is locked, so a Claude Code job from your phone
+        // carries on; it just hides until you unlock.
+        this._sessionId = Main.sessionMode.connect('updated', () => this._lockChanged());
         this._rest();
 
-        // Checks for reminders and things sent from your phone.
+        // Checks for reminders and things sent from your phone, holding each check open.
         this._checking = false;
-        this._inboxId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, INBOX_EVERY, () => {
-            this._checkInbox();
-            return GLib.SOURCE_CONTINUE;
-        });
+        this._inboxLoop();
     }
 
     disable() {
@@ -305,9 +323,15 @@ export default class ButlerPetExtension extends Extension {
         this._drag?.grab.dismiss();
         this._drag = null;
         this._closeAsk();
-        if (this._inboxId)
-            GLib.source_remove(this._inboxId);
-        this._inboxId = 0;
+        this._remote?.stop();
+        this._setBanner(null);
+        this._remotePanel?.destroy();
+        this._remotePanel = this._remote = null;
+        if (this._banner) {
+            Main.layoutManager.removeChrome(this._banner);
+            this._banner.destroy();
+            this._banner = null;
+        }
         this._selection?.disconnect(this._selectionId);
         this._selection = null;
         if (this._copyId)
@@ -318,6 +342,7 @@ export default class ButlerPetExtension extends Extension {
         this._historyPanel = this._history = null;
         this._stopClip();
         Main.layoutManager.disconnect(this._monitorsId);
+        Main.sessionMode.disconnect(this._sessionId);
         this._answer?.(false);
         for (const actor of [this._menu, this._confirmBox, this._note, this._pet]) {
             Main.layoutManager.removeChrome(actor);
@@ -1050,6 +1075,158 @@ export default class ButlerPetExtension extends Extension {
         });
     }
 
+    _lockChanged() {
+        if (Main.sessionMode.isLocked) {
+            this._historyPanel.close();
+            this._remotePanel.close();
+            this._closeAsk();
+            this._menu.hide();
+            this._awake = false;
+            for (const actor of [this._pet, this._note, this._banner])
+                actor.hide();
+            return;
+        }
+        this._pet.show();
+        this._banner.visible = Boolean(this._remote?.job);
+        if (this._busy)
+            this._note.show();
+        else
+            this._rest();
+    }
+
+    // --- remote control -------------------------------------------------------------------
+
+    _openRemote() {
+        this._menu.hide();
+        this._goHome();
+        this._remotePanel.open();
+    }
+
+    /** The bar across the top while Butler is in control; null hides it. Esc stops the job while it shows. */
+    _setBanner(text) {
+        if (!this._banner)
+            return;
+        if (text) {
+            this._banner.text = `${text.length > 90 ? `${text.slice(0, 90)}…` : text}   ·   Esc or click here to stop`;
+            const monitor = Main.layoutManager.primaryMonitor;
+            const [, width] = this._banner.get_preferred_width(-1);
+            const [, height] = this._banner.get_preferred_height(width);
+            // At the bottom, so it doesn't sit on top of notifications.
+            this._banner.set_position(monitor.x + Math.round((monitor.width - width) / 2), monitor.y + monitor.height - height - 24);
+            this._banner.show();
+            this._grabEscape();
+        } else {
+            this._banner.hide();
+            this._releaseEscape();
+        }
+    }
+
+    _grabEscape() {
+        if (this._escapeAction)
+            return;
+        this._escapeAction = global.display.grab_accelerator('Escape', Meta.KeyBindingFlags.NONE);
+        if (this._escapeAction === Meta.KeyBindingAction.NONE) {
+            this._escapeAction = 0;
+            return;
+        }
+        this._escapeBinding = Meta.external_binding_name_for_action(this._escapeAction);
+        Main.wm.allowKeybinding(this._escapeBinding, Shell.ActionMode.ALL);
+        this._escapeId = global.display.connect('accelerator-activated', (_display, action) => {
+            if (action === this._escapeAction && !this._pressingKeys)
+                this._remote?.stop();
+        });
+    }
+
+    _releaseEscape() {
+        if (!this._escapeAction)
+            return;
+        global.display.disconnect(this._escapeId);
+        Main.wm.allowKeybinding(this._escapeBinding, Shell.ActionMode.NONE);
+        global.display.ungrab_accelerator(this._escapeAction);
+        this._escapeAction = 0;
+    }
+
+    /**
+     * A screen task from your phone: like _operate, but over the whole screen, with more
+     * steps, a check that each step changed something, and `report` for progress now and then.
+     * Returns {ok, say}.
+     */
+    async _operateRemote(config, goal, job, report) {
+        if (Main.sessionMode.isLocked)
+            return {ok: false, say: 'The laptop is locked, so I can\'t work on the screen. Unlock it and try again.'};
+        const done = [];
+        let lastReport = Date.now();
+        let before = null;
+        let still = 0;
+        this._operating = job;
+        Main.overview.hide();
+        try {
+            for (let i = 1; i <= REMOTE_STEPS; i++) {
+                if (job.stop)
+                    return {ok: false, say: 'Stopped.'};
+                const shot = await this._snapScreen();
+                // Glance's check: did the last step change anything on screen?
+                if (before && done.length && !screenChanged(before, shot.jpeg)) {
+                    done[done.length - 1] += ' (the screen did not change)';
+                    if (++still >= 3)
+                        return {ok: false, say: `I'm stuck: the last ${still} steps changed nothing. Last: ${done.at(-1)}`};
+                } else {
+                    still = 0;
+                }
+                before = shot.jpeg;
+                const step = await this._send(config, '/api/screen/step',
+                    {goal, done: JSON.stringify(done), kind: 'laptop', limit: String(REMOTE_STEPS)}, shot);
+                if (step.do === 'done')
+                    return {ok: true, say: step.say || 'Done.'};
+                if (step.do === 'stop')
+                    return {ok: false, say: step.say || "I couldn't finish that."};
+                if (RISKY.test(`${step.say} ${step.text ?? ''}`) && step.do !== 'scroll' && step.do !== 'wait')
+                    return {ok: false, say: `I stopped before "${step.say}". That's one for you to do yourself.`};
+                if (job.stop)
+                    return {ok: false, say: 'Stopped.'};
+                if (Date.now() - lastReport > 60 * 1000) {
+                    lastReport = Date.now();
+                    report(`Step ${i}: ${step.say || step.do}`);
+                }
+                this._pressingKeys = true;
+                try {
+                    await this._perform(step, shot.rect);
+                } finally {
+                    this._pressingKeys = false;
+                }
+                done.push(`${step.do}${step.text ? ` "${step.text}"` : ''}${step.key ? ` ${step.key}` : ''}: ${step.say}`);
+                await sleep(step.do === 'wait' ? 2000 : 1000);
+            }
+            return {ok: false, say: `I stopped after ${REMOTE_STEPS} steps without finishing. Last: ${done.at(-1)}`};
+        } finally {
+            this._operating = null;
+        }
+    }
+
+    /** A screenshot of the whole screen (all of it, not one window), sized like _snapWindow's. */
+    async _snapScreen() {
+        const stream = Gio.MemoryOutputStream.new_resizable();
+        await new Promise((resolve, reject) => {
+            new Shell.Screenshot().screenshot(false, stream, (shot, result) => {
+                try {
+                    shot.screenshot_finish(result);
+                    stream.close(null);
+                    resolve();
+                } catch (e) {
+                    reject(new Error("couldn't take a screenshot"));
+                }
+            });
+        });
+        let pixbuf = GdkPixbuf.Pixbuf.new_from_stream(
+            Gio.MemoryInputStream.new_from_bytes(stream.steal_as_bytes()), null);
+        if (pixbuf.get_width() > 1600) {
+            const height = Math.round(pixbuf.get_height() * 1600 / pixbuf.get_width());
+            pixbuf = pixbuf.scale_simple(1600, height, GdkPixbuf.InterpType.BILINEAR);
+        }
+        const [, jpeg] = pixbuf.save_to_bufferv('jpeg', ['quality'], ['85']);
+        return {jpeg: new GLib.Bytes(jpeg), rect: {x: 0, y: 0, width: global.stage.width, height: global.stage.height}};
+    }
+
     // --- clipboard history ---------------------------------------------------------------
 
     _openHistory() {
@@ -1262,6 +1439,15 @@ export default class ButlerPetExtension extends Extension {
         case 'ring':
             this._ringHere(from);
             return;
+        case 'task':
+            // Not awaited: a long job mustn't hold up the inbox, or a Stop couldn't get through.
+            this._remote?.handle(config, message);
+            return;
+        case 'stop':
+            if (this._operating)
+                this._operating.stop = true;
+            this._remote?.stop(message.body === 'off');
+            return;
         case 'sync':
             this._lastSynced = message.body ?? ''; // so it isn't sent straight back
             this._history?.addText(this._lastSynced, 'phone');
@@ -1287,7 +1473,7 @@ export default class ButlerPetExtension extends Extension {
     /** A desktop notification, plus the pet saying it if it isn't busy. Tapping the note runs `onTap`. */
     async _announce(title, text, onTap = null) {
         Main.notify(`Butler: ${title}`, text);
-        if (this._busy || !this._pet)
+        if (this._busy || !this._pet || Main.sessionMode.isLocked)
             return;
         this._busy = true;
         this._menu.hide();
