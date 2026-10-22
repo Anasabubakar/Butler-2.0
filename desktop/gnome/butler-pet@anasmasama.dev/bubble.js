@@ -56,6 +56,8 @@ export class Bubble {
 
         this._body = new St.Label({style_class: 'butler-bubble-body', reactive: true});
         this._body.clutter_text.line_wrap = true;
+        this._body.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
+        this._body.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
         this._body.connect('button-release-event', () => {
             this._tapped();
             return Clutter.EVENT_STOP;
