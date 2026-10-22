@@ -332,6 +332,12 @@ app.post("/api/laptop/plan", async (c) => {
   }
 });
 
+// The latest job update from each laptop, so the website can show what it's doing (B2 · 13).
+const laptopStatus = new Map<string, { state: laptop.State; title: string; text: string; at: string }>();
+
+app.get("/api/laptop/status", requireSession, (c) =>
+  c.json([...laptopStatus].map(([device, s]) => ({ device, ...s }))));
+
 // How a laptop job is going: passed on to your phones as a notification.
 app.post("/api/laptop/status", async (c) => {
   if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
@@ -343,6 +349,7 @@ app.post("/api/laptop/status", async (c) => {
   }
   const to = await inbox.resolveTarget(text("target", 100) ?? "phone", device);
   const body = JSON.stringify({ state, title: laptop.statusTitle(state), text: text("text", 3000) ?? "" });
+  laptopStatus.set(device, { state, title: laptop.statusTitle(state), text: text("text", 3000) ?? "", at: new Date().toISOString() });
   await inbox.send(to, { from_device: device, kind: "status", body });
   return c.json({ sent_to: to });
 });
