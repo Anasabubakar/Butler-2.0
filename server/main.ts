@@ -289,7 +289,7 @@ app.post("/api/send", async (c) => {
 
 // A command for the laptop, as you typed it (secret word included). Forgotten once delivered.
 app.post("/api/laptop/task", async (c) => {
-  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  if (!(await signedIn(c))) return c.json({ error: "bad token" }, 401);
   const { text } = await deviceForm(c);
   const device = text("device", 100);
   const command = text("text", 2000);
