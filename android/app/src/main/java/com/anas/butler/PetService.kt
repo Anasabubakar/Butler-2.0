@@ -12,8 +12,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
+import android.content.res.ColorStateList
 import android.graphics.PixelFormat
-import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -24,8 +24,10 @@ import android.provider.MediaStore
 import android.provider.Settings
 import android.view.ContextThemeWrapper
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
@@ -97,7 +99,8 @@ class PetService : Service() {
             onDragBy = { dx, dy ->
                 if (panelShown && !busy) {
                     panelShown = false
-                    panel.visibility = View.GONE
+                    menu.visibility = View.GONE
+                    panelIfEmpty()
                 }
                 val screen = resources.displayMetrics
                 petX = (petX - dx).coerceIn(0f, (screen.widthPixels - petLayout.width).toFloat())
@@ -109,7 +112,8 @@ class PetService : Service() {
             onDragEnd = { dropped() }
         }
         val prefs = getSharedPreferences("pet", MODE_PRIVATE)
-        petLayout = overlay((72 * dp).toInt(), (90 * dp).toInt()).apply {
+        // Taller than the sprite, which sits at the bottom: the top is room for its "…" and badges.
+        petLayout = overlay((72 * dp).toInt(), (106 * dp).toInt()).apply {
             x = prefs.getInt("x", (16 * dp).toInt())
             y = prefs.getInt("y", 0)
         }
@@ -117,72 +121,82 @@ class PetService : Service() {
         petY = petLayout.y.toFloat()
         windows.addView(pet, petLayout)
 
+        val wide = (MENU_WIDTH_DP * dp).toInt()
         menu = LinearLayout(ui).apply {
             orientation = LinearLayout.VERTICAL
-            background = GradientDrawable().apply {
-                setColor(0xFFFFFFFF.toInt())
-                setStroke(dp.toInt(), 0xFFE6E3F0.toInt())
-                cornerRadius = 22 * dp
-            }
-            setPadding((12 * dp).toInt(), (12 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt())
+            background = Ui.rounded(Ui.BACKGROUND, 20 * dp, Ui.MUTED, dp.toInt())
+            elevation = 8 * dp
+            setPadding((12 * dp).toInt(), (10 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt())
+            // Title and close: X puts the menu away and leaves just the pet.
+            addView(LinearLayout(ui).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(TextView(ui).apply {
+                    setText(R.string.pet_menu_name)
+                    setTextColor(Ui.TEXT)
+                    textSize = 15f
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                addView(Ui.iconButton(ui, R.drawable.ic_close, getString(R.string.close), size = 30, tint = Ui.SUBTLE,
+                    background = 0x00000000) { closeMenu() })
+            }, LinearLayout.LayoutParams(wide, LinearLayout.LayoutParams.WRAP_CONTENT))
             // The command bar. Tapping it opens the typing sheet with the keyboard up
             // (a box inside the floating pet can't take typing itself); the mic opens it listening.
             addView(LinearLayout(ui).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                background = rounded(0xFF6C4CF5.toInt(), 24 * dp)
-                setPadding((16 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
+                background = Ui.rounded(Ui.CARD, 14 * dp, Ui.BORDER, dp.toInt())
+                setPadding((12 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
                 setOnClickListener { askButler(talk = false) }
+                addView(icon(ui, R.drawable.ic_sparkle, Ui.ACCENT, 18), LinearLayout.LayoutParams((18 * dp).toInt(), (18 * dp).toInt()).apply {
+                    marginEnd = (10 * dp).toInt()
+                })
                 addView(TextView(ui).apply {
                     setText(R.string.pet_ask_box)
-                    setTextColor(0xFFFFFFFF.toInt())
-                    textSize = 16f
+                    setTextColor(Ui.SUBTLE)
+                    textSize = 15f
                 }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-                addView(TextView(ui).apply {
-                    text = "🎙"
-                    textSize = 18f
-                    gravity = Gravity.CENTER
-                    contentDescription = getString(R.string.pet_talk)
-                    background = rounded(0x33FFFFFF, 20 * dp)
-                    setOnClickListener { askButler(talk = true) }
-                }, LinearLayout.LayoutParams((40 * dp).toInt(), (40 * dp).toInt()))
-            }, LinearLayout.LayoutParams((MENU_WIDTH_DP * dp).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT))
+                addView(Ui.iconButton(ui, R.drawable.ic_mic, getString(R.string.pet_talk), size = 36, tint = Ui.CARD,
+                    background = Ui.TEXT) { askButler(talk = true) })
+            }, LinearLayout.LayoutParams(wide, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (8 * dp).toInt() })
             addView(TextView(ui).apply {
                 setText(R.string.pet_menu_title)
-                setTextColor(0xFF8A8F99.toInt())
+                setTextColor(Ui.SUBTLE)
                 textSize = 12f
-                setPadding((6 * dp).toInt(), (10 * dp).toInt(), 0, (4 * dp).toInt())
+                setPadding((4 * dp).toInt(), (12 * dp).toInt(), 0, (4 * dp).toInt())
             })
             // Quick actions, two to a row.
-            val actions = listOf<Triple<String, Int, () -> Unit>>(
-                Triple("📌", R.string.pet_save, ::saveThis),
-                Triple("📋", R.string.pet_copy, ::copyThis),
-                Triple("🔍", R.string.pet_analyze, { look("analyze") }),
-                Triple("🧠", R.string.pet_solve, { look("solve") }),
-                Triple("🌍", R.string.pet_translate, { look("translate") }),
-                Triple("📤", R.string.pet_send_laptop, ::sendToLaptop),
-                Triple("💻", R.string.pet_laptop, ::openLaptop),
-                Triple("📚", R.string.pet_library, ::openLibrary),
+            val actions = listOf<Triple<Int, Int, () -> Unit>>(
+                Triple(R.drawable.ic_bookmark, R.string.pet_save, ::saveThis),
+                Triple(R.drawable.ic_copy, R.string.pet_copy, ::copyThis),
+                Triple(R.drawable.ic_search, R.string.pet_analyze, { look("analyze") }),
+                Triple(R.drawable.ic_lightbulb, R.string.pet_solve, { look("solve") }),
+                Triple(R.drawable.ic_translate, R.string.pet_translate, { look("translate") }),
+                Triple(R.drawable.ic_send, R.string.pet_send_laptop, ::sendToLaptop),
+                Triple(R.drawable.ic_laptop, R.string.pet_laptop, ::openLaptop),
+                Triple(R.drawable.ic_library, R.string.pet_library, ::openLibrary),
             )
             for (pair in actions.chunked(2)) {
                 addView(LinearLayout(ui).apply {
                     orientation = LinearLayout.HORIZONTAL
-                    for ((icon, label, action) in pair) {
-                        addView(tile(ui, "$icon  ${getString(label)}", action),
+                    for ((iconRes, label, action) in pair) {
+                        addView(tile(ui, iconRes, getString(label), action),
                             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                                 setMargins((3 * dp).toInt(), (3 * dp).toInt(), (3 * dp).toInt(), (3 * dp).toInt())
                             })
                     }
-                }, LinearLayout.LayoutParams((MENU_WIDTH_DP * dp).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT))
+                }, LinearLayout.LayoutParams(wide, LinearLayout.LayoutParams.WRAP_CONTENT))
             }
             // Clipboard sync (off until you turn it on) and Hide, smaller, at the bottom.
             addView(LinearLayout(ui).apply {
                 orientation = LinearLayout.HORIZONTAL
-                setPadding(0, (4 * dp).toInt(), 0, 0)
-                addView(small(ui, syncLabel()) { toggleSync() }.also { syncButton = it },
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, (6 * dp).toInt(), 0, 0)
+                addView(small(ui, R.drawable.ic_sync, syncLabel()) { toggleSync() }.also { syncButton = it.getChildAt(1) as TextView },
                     LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-                addView(small(ui, getString(R.string.pet_hide)) { stopSelf() })
-            }, LinearLayout.LayoutParams((MENU_WIDTH_DP * dp).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT))
+                addView(small(ui, R.drawable.ic_hide, getString(R.string.pet_hide)) { stopSelf() })
+            }, LinearLayout.LayoutParams(wide, LinearLayout.LayoutParams.WRAP_CONTENT))
+            visibility = View.GONE
         }
         bubble = PetBubble(ui).apply {
             visibility = View.GONE
@@ -243,30 +257,56 @@ class PetService : Service() {
         PixelFormat.TRANSLUCENT,
     ).apply { gravity = Gravity.BOTTOM or Gravity.END }
 
-    private fun rounded(color: Int, radius: Float) = GradientDrawable().apply {
-        setColor(color)
-        cornerRadius = radius
+    private fun icon(ui: Context, res: Int, tint: Int, sizeDp: Int) = ImageView(ui).apply {
+        setImageResource(res)
+        imageTintList = ColorStateList.valueOf(tint)
+        val px = (sizeDp * resources.displayMetrics.density).toInt()
+        layoutParams = LinearLayout.LayoutParams(px, px)
     }
 
-    /** One of the menu's quick actions. */
-    private fun tile(ui: Context, label: String, action: () -> Unit) = TextView(ui).apply {
+    /** One of the menu's quick actions: an icon over a label, on a dark card that dims when pressed. */
+    private fun tile(ui: Context, iconRes: Int, label: String, action: () -> Unit) = LinearLayout(ui).apply {
         val dp = resources.displayMetrics.density
-        text = label
-        setTextColor(0xFF22232A.toInt())
-        textSize = 14f
-        isSingleLine = true
-        background = rounded(0xFFF3F1FA.toInt(), 14 * dp)
-        setPadding((12 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt(), (12 * dp).toInt())
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        background = Ui.rounded(Ui.CARD, 12 * dp, Ui.MUTED, dp.toInt())
+        setPadding((10 * dp).toInt(), (11 * dp).toInt(), (8 * dp).toInt(), (11 * dp).toInt())
+        addView(icon(ui, iconRes, Ui.ACCENT, 18))
+        addView(TextView(ui).apply {
+            text = label
+            setTextColor(Ui.TEXT)
+            textSize = 13.5f
+            isSingleLine = true
+            setPadding((8 * dp).toInt(), 0, 0, 0)
+        })
+        pressable(this)
         setOnClickListener { action() }
     }
 
-    private fun small(ui: Context, label: String, action: () -> Unit) = TextView(ui).apply {
+    private fun small(ui: Context, iconRes: Int, label: String, action: () -> Unit) = LinearLayout(ui).apply {
         val dp = resources.displayMetrics.density
-        text = label
-        setTextColor(0xFF6B7080.toInt())
-        textSize = 13f
-        setPadding((8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (6 * dp).toInt())
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding((6 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (4 * dp).toInt())
+        addView(icon(ui, iconRes, Ui.SUBTLE, 16))
+        addView(TextView(ui).apply {
+            text = label
+            setTextColor(Ui.SUBTLE)
+            textSize = 12.5f
+            setPadding((6 * dp).toInt(), 0, 0, 0)
+        })
+        pressable(this)
         setOnClickListener { action() }
+    }
+
+    /** Shrinks a touch while pressed, like a shadcn button. */
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun pressable(view: View) = view.setOnTouchListener { v, event ->
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> v.animate().scaleX(0.96f).scaleY(0.96f).setDuration(80).start()
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> v.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+        }
+        false
     }
 
     /** On the bottom edge it peeks; anywhere else it stands. */
@@ -305,18 +345,18 @@ class PetService : Service() {
             return
         }
         if (busy) return
-        panelShown = !panelShown
-        menu.visibility = if (panelShown) View.VISIBLE else View.GONE
+        if (panelShown) return closeMenu()
+        panelShown = true
         // A laptop job's bubble stays up over the menu; anything else makes way.
         if (!laptopWorking) bubble.visibility = View.GONE
-        panel.visibility = if (panelShown || bubble.visibility == View.VISIBLE) View.VISIBLE else View.GONE
-        if (panelShown) placePanel()
-        pet.setState(if (panelShown) "summon" else if (restingFace() == "peek") "hide" else "idle")
+        panel.visibility = View.VISIBLE
+        Ui.appear(menu)
+        placePanel()
+        pet.setState("summon")
     }
 
     private fun openLibrary() {
         closeMenu()
-        pet.setState(if (restingFace() == "peek") "hide" else "idle")
         startActivity(Intent(this, LibraryActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
@@ -370,23 +410,31 @@ class PetService : Service() {
     // --- the bubble over the pet's head ------------------------------------------------
 
     private fun showBubble() {
-        bubble.visibility = View.VISIBLE
         panel.visibility = View.VISIBLE
+        Ui.appear(bubble)
         placePanel()
     }
 
     private fun hideBubble() {
-        bubble.visibility = View.GONE
-        if (!panelShown) {
-            panel.visibility = View.GONE
-            if (!busy && !operating) pet.setState(restingFace())
-        } else placePanel()
+        Ui.disappear(bubble) { panelIfEmpty() }
+        if (!panelShown && !busy && !operating && !laptopWorking) restPet()
     }
 
+    /** X, or anything that takes you elsewhere: the menu goes, the pet stays. */
     private fun closeMenu() {
         panelShown = false
-        menu.visibility = View.GONE
-        if (bubble.visibility != View.VISIBLE) panel.visibility = View.GONE
+        Ui.disappear(menu) { panelIfEmpty() }
+        if (!busy && !laptopWorking) restPet()
+    }
+
+    /** The floating window goes once nothing in it is showing; else it fits what's left. */
+    private fun panelIfEmpty() {
+        if (menu.visibility != View.VISIBLE && bubble.visibility != View.VISIBLE) panel.visibility = View.GONE
+        else placePanel()
+    }
+
+    private fun restPet() {
+        pet.effect(ButlerSpriteView.Effect.NONE)
         pet.setState(restingFace())
     }
 
@@ -406,6 +454,7 @@ class PetService : Service() {
     private fun tell(text: String, ok: Boolean) {
         bubbleTurn++
         pet.setState(if (ok) "success" else "error")
+        pet.effect(if (ok) ButlerSpriteView.Effect.DONE else ButlerSpriteView.Effect.FAILED)
         bubble.result(text, ok)
         showBubble()
         lingerThenHide(text)
@@ -432,6 +481,7 @@ class PetService : Service() {
         panelShown = false
         menu.visibility = View.GONE
         pet.setState(face)
+        pet.effect(ButlerSpriteView.Effect.WORKING)
         bubbleTurn++
         bubble.working(working, if (stoppable) ({
             stopOperating = true
@@ -674,6 +724,7 @@ class PetService : Service() {
         if (running) {
             if (busy) return
             pet.setState("work")
+            pet.effect(ButlerSpriteView.Effect.WORKING)
             bubbleTurn++
             val line = getString(R.string.bubble_laptop, text)
             if (bubble.working && bubble.visibility == View.VISIBLE) bubble.progress(line) else bubble.working(line, ::stopLaptop)

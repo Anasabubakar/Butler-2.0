@@ -80,7 +80,8 @@ class AskActivity : AppCompatActivity() {
             return
         }
         setContentView(R.layout.activity_ask)
-        window.setGravity(Gravity.BOTTOM)
+        // At the top, so the keyboard never covers the box you're typing in.
+        window.setGravity(Gravity.TOP)
         input = findViewById(R.id.ask_text)
         answer = findViewById(R.id.ask_answer)
         go = findViewById(R.id.ask_go)
@@ -89,6 +90,7 @@ class AskActivity : AppCompatActivity() {
         examples = findViewById(R.id.ask_examples)
         news = findViewById(R.id.ask_news)
         go.setOnClickListener { ask() }
+        findViewById<View>(R.id.ask_close).setOnClickListener { finish() }
         val where = findViewById<MaterialButtonToggleGroup>(R.id.ask_where)
         where.addOnButtonCheckedListener { _, id, checked -> if (checked) setLaptop(id == R.id.ask_laptop) }
         if (intent.getBooleanExtra(EXTRA_LAPTOP, false)) where.check(R.id.ask_laptop) else setLaptop(false)
@@ -110,7 +112,10 @@ class AskActivity : AppCompatActivity() {
         } else {
             // Ready to type straight away: box focused, keyboard up.
             input.requestFocus()
-            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+            // Keep adjustResize from the theme; setting only the state flag would drop it.
+            window.setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE,
+            )
         }
     }
 
@@ -135,7 +140,7 @@ class AskActivity : AppCompatActivity() {
     private fun setLaptop(on: Boolean) {
         laptop = on
         input.setHint(if (on) R.string.laptop_hint else R.string.ask_hint)
-        go.setText(if (on) R.string.laptop_go else R.string.ask_go)
+        go.contentDescription = getString(if (on) R.string.laptop_go else R.string.ask_go)
         // The secret word shouldn't end up in the keyboard's suggestions.
         input.imeOptions = EditorInfo.IME_ACTION_SEND or (if (on) EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING else 0)
         input.inputType = EditorInfo.TYPE_CLASS_TEXT or EditorInfo.TYPE_TEXT_FLAG_CAP_SENTENCES or

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The command box in the Tell Butler sheet: a soft purple pill. -->
+<!-- The command box in the Tell Butler sheet: a dark pill with a thin border. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#1F6C4CF5" />
-    <stroke android:width="1dp" android:color="#596C4CF5" />
+    <solid android:color="#18181B" />
+    <stroke android:width="1dp" android:color="#3F3F46" />
     <corners android:radius="24dp" />
 </shape>

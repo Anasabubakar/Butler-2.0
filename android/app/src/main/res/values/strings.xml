@@ -20,6 +20,8 @@
     <string name="pet_channel">Little Butler</string>
     <string name="pet_notification">Little Butler is in the corner</string>
     <string name="pet_menu_title">Or tap one</string>
+    <string name="pet_menu_name">Little Butler</string>
+    <string name="close">Close</string>
     <string name="pet_save">Save this</string>
     <string name="pet_copy">Copy this</string>
     <string name="pet_analyze">Analyze this</string>
@@ -102,8 +104,8 @@
     <string name="laptop_stopping">Asked the laptop to stop.</string>
     <string name="laptop_switched_off">Asked the laptop to switch remote control off. Turn it back on at the laptop.</string>
     <string name="laptop_off_confirm">Switch remote control off? Only you, at the laptop, can turn it back on.</string>
-    <string name="ask_on_phone">📱 This phone</string>
-    <string name="ask_on_laptop">💻 My laptop</string>
+    <string name="ask_on_phone">This phone</string>
+    <string name="ask_on_laptop">My laptop</string>
     <string-array name="ask_examples">
         <item>What does this mean?</item>
         <item>Remind me at 5 to call Mum</item>

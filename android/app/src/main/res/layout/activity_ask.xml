@@ -6,12 +6,30 @@
     android:orientation="vertical"
     android:padding="20dp">
 
-    <TextView
-        android:layout_width="wrap_content"
+    <!-- Title, and an X that closes the sheet. -->
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/ask_title"
-        android:textAppearance="?attr/textAppearanceTitleLarge"
-        android:textStyle="bold" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ask_title"
+            android:textAppearance="?attr/textAppearanceTitleLarge"
+            android:textStyle="bold" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/ask_close"
+            style="@style/Widget.Material3.Button.IconButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="@string/close"
+            app:icon="@drawable/ic_close"
+            app:iconTint="?attr/colorOnSurfaceVariant" />
+    </LinearLayout>
 
     <!-- Who does it: this phone, or the laptop. -->
     <com.google.android.material.button.MaterialButtonToggleGroup
@@ -26,6 +44,8 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/ask_phone"
             style="?attr/materialButtonOutlinedStyle"
+            app:icon="@drawable/ic_phone"
+            app:iconGravity="textStart"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -34,6 +54,8 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/ask_laptop"
             style="?attr/materialButtonOutlinedStyle"
+            app:icon="@drawable/ic_laptop"
+            app:iconGravity="textStart"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -66,27 +88,28 @@
             android:layout_weight="1"
             android:background="@null"
             android:hint="@string/ask_hint"
+            android:textColor="?attr/colorOnSurface"
             android:imeOptions="actionSend"
             android:importantForAutofill="no"
             android:inputType="textCapSentences"
             android:minHeight="52dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/ask_talk"
-            style="?attr/borderlessButtonStyle"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:contentDescription="@string/ask_talk"
-            android:minWidth="0dp"
-            android:padding="0dp"
-            android:text="🎙"
-            android:textSize="20sp" />
-
-        <Button
-            android:id="@+id/ask_go"
+            style="@style/Widget.Material3.Button.IconButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/ask_go" />
+            android:contentDescription="@string/ask_talk"
+            app:icon="@drawable/ic_mic"
+            app:iconTint="?attr/colorOnSurfaceVariant" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/ask_go"
+            style="@style/Widget.Material3.Button.IconButton.Filled"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="@string/ask_go"
+            app:icon="@drawable/ic_arrow_up" />
     </LinearLayout>
 
     <!-- Examples: tap one to fill the box. -->
