@@ -29,6 +29,7 @@ import * as video from "./lib/video.ts";
 import * as spending from "./lib/spending.ts";
 import * as streaks from "./lib/streaks.ts";
 import * as laptop from "./lib/laptop.ts";
+import * as prefs from "./lib/prefs.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -403,7 +404,7 @@ app.post("/api/command", async (c) => {
   if (timeZone !== "UTC" && timeZone === text("tz", 100)) await settings.set("time_zone", timeZone); // for the morning brief
   let p;
   try {
-    p = await plan(typed, { device, timeZone, devices: await inbox.devices() }, picture, voice);
+    p = await plan(typed, { device, timeZone, devices: await inbox.devices(), teasing: (await prefs.load()).teasing }, picture, voice);
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
