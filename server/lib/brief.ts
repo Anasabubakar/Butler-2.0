@@ -30,15 +30,15 @@ export function compose(p: Parts, now: Date, timeZone: string): string {
   const day = new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "long", day: "numeric", month: "long" }).format(now);
   const hour = Number(localIso(now, timeZone).slice(11, 13));
   const hello = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-  const lines = [`${hello}! It's ${day}.`];
-  if (p.events === null) lines.push("", "Connect Google on the website to see your calendar here.");
+  const lines = [`${hello}, sir. Your day, in order: ${day}.`];
+  if (p.events === null) lines.push("", "Connect Google under Devices on the website to see your calendar here.");
   else if (!p.events.length) lines.push("", "Nothing on your calendar today.");
   else lines.push("", "Today:", ...p.events.map((e) => `• ${e.allDay ? "All day" : clock(e.start, timeZone)} ${e.title}`));
   if (p.reminders.length) {
     lines.push("", "Reminders:", ...p.reminders.map((r) => `• ${clock(r.due, timeZone)} ${r.body}`));
   }
   if (p.savedLastDay) lines.push("", `You saved ${p.savedLastDay} thing${p.savedLastDay === 1 ? "" : "s"} in the last day.`);
-  if (p.streak && p.streak >= 2) lines.push(`🔥 ${p.streak}-day saving streak. Save something today to keep it going.`);
+  if (p.streak && p.streak >= 2) lines.push(`${p.streak}-day saving streak. Save something today to keep it going.`);
   if (p.resurface) {
     const when = new Intl.DateTimeFormat("en-GB", { timeZone, day: "numeric", month: "short" }).format(p.resurface.savedOn);
     lines.push("", `From your library (saved ${when}): ${p.resurface.title}`);
