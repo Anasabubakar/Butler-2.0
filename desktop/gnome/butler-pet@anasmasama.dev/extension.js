@@ -760,10 +760,13 @@ export default class ButlerPetExtension extends Extension {
             // Emptied first, so only a link Copy link really put there counts.
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, '');
             if (await this._tapOn(config, menu, COPY_LINK)) {
-                await sleep(500);
-                const link = (await this._readClipboard()).trim();
-                if (/^https?:\/\//.test(link) && link !== pageUrl)
-                    return link;
+                // Some sites take a few seconds to put the link there, so it's checked a few times.
+                for (let i = 0; i < 8; i++) {
+                    await sleep(500);
+                    const link = (await this._readClipboard()).trim();
+                    if (/^https?:\/\//.test(link) && link !== pageUrl)
+                        return link;
+                }
             }
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, pageUrl);
             return null;
