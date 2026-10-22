@@ -862,6 +862,7 @@ export default class ButlerPetExtension extends Extension {
         const at = (x, y) => [rect.x + x / 1000 * rect.width, rect.y + y / 1000 * rect.height];
         const now = () => GLib.get_monotonic_time();
         // The pet and its note mustn't catch the clicks.
+        const noteShown = this._note.visible;
         this._pet.reactive = false;
         this._note.hide();
         try {
@@ -934,7 +935,7 @@ export default class ButlerPetExtension extends Extension {
         } finally {
             if (this._pet) {
                 this._pet.reactive = true;
-                this._note.show();
+                this._note.visible = noteShown;
             }
         }
     }
