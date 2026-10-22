@@ -1,19 +1,39 @@
 // Gemini, for anything that has to see a picture: finding a button on a
 // screenshot, explaining or solving what's on screen, and organizing screenshots.
+// When Gemini can't answer (out of quota, down), Butler tries your other Gemini keys,
+// then any backup providers you've set up: OpenRouter, Groq or OpenAI.
 import { z } from "npm:zod@4.3.6";
 
 const base = () => Deno.env.get("GEMINI_URL") ?? "https://generativelanguage.googleapis.com/v1beta";
 
-export const geminiReady = () => Boolean(Deno.env.get("GEMINI_API_KEY"));
+/** Your Gemini keys. GEMINI_API_KEY can hold several, separated by commas. */
+export const geminiKeys = () => (Deno.env.get("GEMINI_API_KEY") ?? "").split(",").map((k) => k.trim()).filter(Boolean);
+
+/** Backups that speak OpenAI's chat API. They can see pictures, but not videos or voice clips. */
+const BACKUPS: Record<string, { key: string; url: string; model: string }> = {
+  openrouter: { key: "OPENROUTER_API_KEY", url: "https://openrouter.ai/api/v1", model: "google/gemini-2.5-flash" },
+  groq: { key: "GROQ_API_KEY", url: "https://api.groq.com/openai/v1", model: "meta-llama/llama-4-scout-17b-16e-instruct" },
+  openai: { key: "OPENAI_API_KEY", url: "https://api.openai.com/v1", model: "gpt-4.1-mini" },
+};
+
+/** The providers with a key, in the order they're tried (BUTLER_AI_ORDER, or Gemini first). */
+export function aiProviders(): string[] {
+  const order = (Deno.env.get("BUTLER_AI_ORDER") ?? "gemini,openrouter,groq,openai").split(",").map((p) => p.trim().toLowerCase());
+  return [...new Set(order)].filter((p) => p === "gemini" ? geminiKeys().length > 0 : Boolean(BACKUPS[p] && Deno.env.get(BACKUPS[p].key)));
+}
+
+/** Whether any provider is set up. */
+export const geminiReady = () => aiProviders().length > 0;
 
 // Fastest first, for when Google won't list the models this key can use.
 const FALLBACK = ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-2.5-flash"];
 const LIST_FOR_MS = 6 * 60 * 60 * 1000;
-let listed: { base: string; at: number; names: string[] } | null = null;
+const listed = new Map<string, { at: number; names: string[] }>(); // per URL and key
 
 /** The models this key can call generateContent on, or null if Google won't say. */
 async function available(key: string): Promise<string[] | null> {
-  if (listed && listed.base === base() && Date.now() - listed.at < LIST_FOR_MS) return listed.names;
+  const known = listed.get(`${base()} ${key}`);
+  if (known && Date.now() - known.at < LIST_FOR_MS) return known.names;
   const names: string[] = [];
   let page = "";
   try {
@@ -33,7 +53,7 @@ async function available(key: string): Promise<string[] | null> {
   } catch {
     return null;
   }
-  listed = { base: base(), at: Date.now(), names };
+  listed.set(`${base()} ${key}`, { at: Date.now(), names });
   return names;
 }
 
@@ -50,7 +70,7 @@ export function fastest(names: string[]): string[] {
 }
 
 /** The models to try, in order: your choice if set, then the fastest this key can use. */
-export async function geminiModels(key = Deno.env.get("GEMINI_API_KEY") ?? ""): Promise<string[]> {
+export async function geminiModels(key = geminiKeys()[0] ?? ""): Promise<string[]> {
   const chosen = Deno.env.get("BUTLER_GEMINI_MODEL");
   const names = await available(key);
   const ranked = names ? fastest(names) : FALLBACK;
