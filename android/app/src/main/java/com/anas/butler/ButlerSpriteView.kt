@@ -74,7 +74,7 @@ class ButlerSpriteView @JvmOverloads constructor(
         const val HOP_MS = 520f
         const val SHAKE_MS = 700f
         const val BADGE_MS = 1800f
-        const val ACCENT = 0xFFA78BFA.toInt()
+        const val ACCENT = Ui.ACCENT
         const val OK = 0xFF4ADE80.toInt()
         const val DANGER = 0xFFF87171.toInt()
     }

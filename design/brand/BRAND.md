@@ -45,6 +45,7 @@ Rules (from B2 · 01 and B2 · 05):
 - Clear space: 25% of the mascot's head width on every side.
 - Minimum sizes: primary 160 px wide; app tile 48 px with full detail; test a simplified export below 32 px.
 - App icons: keep a full square source and let each system apply its mask. On Android, test circle, squircle and rounded square, with the face inside the safe zone.
+- Android uses the adaptive icon `mipmap/ic_launcher` (ink background, mascot face foreground, silhouette for themed icons). Notifications use `drawable/ic_butler`, a one-colour silhouette of the same mascot. All three are made from the app icon master's paths.
 - Exports: SVG for vector use, PNG at 1x/2x/3x. Check transparency on light and dark.
 - The tie knot in the masters is `#F73D24` (app icon) and `#F6401C` (primary). Leave those as they are; they're part of the artwork. The UI accent is the token `--b2-vermilion` `#E4462D`.
 
@@ -84,7 +85,9 @@ These are materials for the library board, not brand colours. Observed in the li
 
 Live desktop measurements: notes about 220 px wide, headings 22 px bold Caveat, pins 20 px, tape about 92 × 26 px. Adapt them on small screens.
 
-Keep on the board: textured brown cork; pink and green paper; translucent tape and red pins; small tilts; paper shadows and curled corners; handwritten headings; saved screenshot and media thumbnails; summary, tags, source and time; collection and tag filters; open and move notes; Similar, Share, Remind and Delete; and a visible wastebin that works with the existing delete and Undo. Give keyboard and touch alternatives to drag and drop. **Never flatten it into a grid of white rounded cards.**
+The library rotates six papers per collection: yellow, pink, coral, green, orange and sand (`--n0` to `--n5` in `web/src/style.css`). Anas chose these on 22 October 2026: any paper colour except blue and purple.
+
+Keep on the board: textured brown cork; the paper colours above; translucent tape and red pins; small tilts; paper shadows and curled corners; handwritten headings; saved screenshot and media thumbnails; summary, tags, source and time; collection and tag filters; open and move notes; Similar, Share, Remind and Delete; and a visible wastebin that works with the existing delete and Undo. Give keyboard and touch alternatives to drag and drop. **Never flatten it into a grid of white rounded cards.**
 
 ## Type
 

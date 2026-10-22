@@ -20,7 +20,7 @@ object Ui {
     const val BORDER = 0xFF3F3F46.toInt()     // zinc-700
     const val TEXT = 0xFFFAFAFA.toInt()       // zinc-50
     const val SUBTLE = 0xFFA1A1AA.toInt()     // zinc-400
-    const val ACCENT = 0xFFA78BFA.toInt()     // violet-400
+    const val ACCENT = 0xFFE4462D.toInt()     // Butler 2.0 vermilion (--b2-vermilion)
     const val OK = 0xFF4ADE80.toInt()         // green-400
     const val DANGER = 0xFFF87171.toInt()     // red-400
 
