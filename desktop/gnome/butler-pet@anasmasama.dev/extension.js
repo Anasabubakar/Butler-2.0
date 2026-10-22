@@ -1407,7 +1407,7 @@ export default class ButlerPetExtension extends Extension {
         if (this._pet && !this._busy) {
             this._unpeek();
             this._play('summon');
-            this._say('I\'m here! Tap me to stop.');
+            this._bubble.working('I\'m here! Tap me to stop.', () => this._stopRinging());
         }
         const until = Date.now() + 60000;
         while (this._ringing && this._pet && Date.now() < until) {
@@ -1427,8 +1427,9 @@ export default class ButlerPetExtension extends Extension {
         this._ringer?.force_exit();
         this._ringer = null;
         if (this._pet && !this._busy) {
-            this._note.hide();
+            this._bubble.hide();
             this._goHome();
+            this._showRemote();
         }
     }
 
