@@ -534,7 +534,7 @@ app.post("/api/command", async (c) => {
       });
     }
     case "unfocus":
-      return json({ action: "answer", say: (await stopFocus()) ? "Focus timer stopped." : "There's no focus timer running." });
+      return json({ action: "answer", say: (await stopFocus()) ? "Focus timer stopped." : "No focus timer is running." });
     case "ring":
       return json({ action: "answer", say: await ring(p.target || "phone", device) });
     case "recap":
