@@ -28,14 +28,70 @@
   background-color: #fff1e4;
 }
 
-.butler-note {
+/* The bubble over the pet's head, matching the phone pet's. */
+.butler-bubble {
   color: #ffffff;
-  background-color: #1b1b22;
-  border-radius: 14px;
-  padding: 12px 16px;
+  background-color: rgba(27, 27, 34, 0.94);
+  border-radius: 20px;
+  padding: 8px 8px 8px 12px;
   font-size: 11pt;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+
+.butler-bubble-top {
+  spacing: 6px;
+}
+
+.butler-bubble-line {
+  color: #ffffff;
   font-weight: 600;
-  max-width: 300px;
+  max-width: 230px;
+  padding: 4px 2px;
+}
+
+.butler-bubble-mark {
+  font-size: 12pt;
+  font-weight: 800;
+}
+
+.butler-bubble-ok {
+  color: #5bd68a;
+}
+
+.butler-bubble-bad {
+  color: #e5484d;
+}
+
+.butler-bubble-chip {
+  color: #ffffff;
+  background-color: #2e2e3a;
+  border-radius: 14px;
+  padding: 4px 10px;
+  font-size: 10pt;
+  font-weight: 600;
+}
+
+.butler-bubble-chip:hover {
+  background-color: #3c3c4a;
+}
+
+.butler-bubble-stop {
+  background-color: #e5484d;
+}
+
+.butler-bubble-stop:hover {
+  background-color: #f0595e;
+}
+
+.butler-bubble-scroll {
+  max-height: 320px;
+  margin-top: 6px;
+}
+
+.butler-bubble-body {
+  color: #e4e4ea;
+  max-width: 290px;
+  padding-right: 4px;
 }
 
 .butler-ask {
