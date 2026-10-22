@@ -482,7 +482,7 @@ app.post("/api/command", async (c) => {
         device, kind: "text", url: null, body: p.text || said, note: null, mime: null, platform: null,
       });
       organizeItem(id, await rawFor((await db.getItem(id))!));
-      return json({ action: "save", say: p.reply || "Saved to Butler." });
+      return json({ action: "save", say: p.reply || "Saved, sir." });
     }
     case "screen":
       return json({ action: "screen", say: p.reply, goal: p.text || said });
