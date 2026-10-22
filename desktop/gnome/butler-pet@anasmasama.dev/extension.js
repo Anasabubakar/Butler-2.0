@@ -755,12 +755,12 @@ export default class ButlerPetExtension extends Extension {
             const menu = await this._snapWindow();
             // Emptied first, so only a link Copy link really put there counts.
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, '');
-            if (!await this._tapOn(config, menu, COPY_LINK))
-                return null;
-            await sleep(500);
-            const link = (await this._readClipboard()).trim();
-            if (/^https?:\/\//.test(link) && link !== pageUrl)
-                return link;
+            if (await this._tapOn(config, menu, COPY_LINK)) {
+                await sleep(500);
+                const link = (await this._readClipboard()).trim();
+                if (/^https?:\/\//.test(link) && link !== pageUrl)
+                    return link;
+            }
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, pageUrl);
             return null;
         } catch (e) {
