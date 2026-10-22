@@ -27,8 +27,10 @@ function readText() {
 }
 
 function readContent(mime) {
+    // The bytes are only ours during the callback, so they're copied before it returns.
     return new Promise(resolve => St.Clipboard.get_default()
-        .get_content(St.ClipboardType.CLIPBOARD, mime, (_clipboard, bytes) => resolve(bytes ?? null)));
+        .get_content(St.ClipboardType.CLIPBOARD, mime, (_clipboard, bytes) =>
+            resolve(bytes?.get_size() ? new GLib.Bytes(bytes.get_data()) : null)));
 }
 
 export class ClipboardHistory {
