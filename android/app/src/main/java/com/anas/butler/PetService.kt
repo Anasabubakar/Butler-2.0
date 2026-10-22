@@ -533,10 +533,16 @@ class PetService : Service() {
     private suspend fun linkFromShare(shot: Shot): String? {
         var menuOpen = false
         return try {
-            if (!tapOn(shot, "the Share button of the main post in view")) return null
+            // The button's label first; the screenshot guess only if the app doesn't label it.
+            val shared = hands().pressLabelled(HandsService.SHARE) || tapOn(shot,
+                "the Share button of the main post in view (usually a curved arrow), not the Save, Bookmark or Favourites button")
+            if (!shared) return null
             menuOpen = true
             delay(900)
-            if (!tapOn(snap(), "the \"Copy link\" option")) return null
+            // Empty first, so an old link on the clipboard is never saved as this post's.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) getSystemService(ClipboardManager::class.java).clearPrimaryClip()
+            val copied = hands().pressLabelled(HandsService.COPY_LINK) || tapOn(snap(), "the \"Copy link\" option in the share menu")
+            if (!copied) return null
             menuOpen = false
             delay(500)
             ClipReadActivity.read(this)?.let { URL.find(it)?.value }
