@@ -3,8 +3,8 @@
 
     <!-- Small dark sheet over whatever app you're in, in the same zinc colours as the pet's menu. -->
     <style name="Theme.Butler.Sheet" parent="Theme.Material3.Dark.Dialog">
-        <item name="colorPrimary">#A78BFA</item>
-        <item name="colorOnPrimary">#18181B</item>
+        <item name="colorPrimary">#E4462D</item>
+        <item name="colorOnPrimary">#111111</item>
         <item name="colorSecondaryContainer">#27272A</item>
         <item name="colorOnSecondaryContainer">#FAFAFA</item>
         <item name="colorSurface">#09090B</item>
