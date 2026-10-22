@@ -1523,8 +1523,11 @@ export default class ButlerPetExtension extends Extension {
         }
     }
 
-    /** A desktop notification, plus the pet saying it if it isn't busy. Tapping the note runs `onTap`. */
-    async _announce(title, text, onTap = null) {
+    /**
+     * A desktop notification, plus the pet saying it in its bubble if it isn't busy. Clicking
+     * the bubble runs `onTap`. With `ok`, it's how a job ended: a tick, or a "!" if it didn't work.
+     */
+    async _announce(title, text, onTap = null, ok = null) {
         Main.notify(`Butler: ${title}`, text);
         if (this._busy || !this._pet || Main.sessionMode.isLocked)
             return;
@@ -1532,26 +1535,19 @@ export default class ButlerPetExtension extends Extension {
         this._menu.hide();
         this._unpeek();
         this._play('summon');
-        this._say(`${title}: ${text}`);
-        const tapped = await new Promise(resolve => {
-            const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 15000, () => {
-                this._noteTapped = null;
-                resolve(false);
-                return GLib.SOURCE_REMOVE;
-            });
-            this._noteTapped = () => {
-                GLib.source_remove(id);
-                this._noteTapped = null;
-                resolve(true);
-            };
-        });
+        if (ok === null)
+            this._say(`${title}: ${text}`);
+        else
+            this._bubble.result(text, ok);
+        const how = await this._hold(15000, Boolean(onTap));
         if (!this._pet)
             return;
-        if (tapped)
-            onTap?.();
-        this._note.hide();
+        if (how === 'tapped')
+            onTap();
+        this._bubble.hide();
         this._busy = false;
         this._goHome();
+        this._showRemote();
     }
 
     /** Downloads a file sent here into ~/Downloads/Butler and returns its path. */
