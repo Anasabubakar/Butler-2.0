@@ -443,7 +443,7 @@ app.post("/api/command", async (c) => {
     }
     case "email": {
       if (!google.googleConfigured() || !(await google.account())) {
-        return json({ action: "answer", say: "Connect your Google account on the Butler website first, then ask again." });
+        return json({ action: "answer", say: "I need your Google account for that. Connect it under Devices on the Butler website, then ask again." });
       }
       const who = (p.person ?? "").trim();
       if (!who) return json({ action: "answer", say: "Who should I email?" });
