@@ -94,20 +94,66 @@ export interface AskOptions {
   lowDetail?: boolean;
 }
 
+type Attachment = Picture | VideoLink;
+
+/** Checks the model's reply against `schema`. Some models wrap JSON in ``` fences. */
+function check<T>(who: string, text: string, schema: z.ZodType<T>): T {
+  let json: unknown = null;
+  try {
+    json = JSON.parse(text.trim().replace(/^```(?:json)?\s*|\s*```$/g, ""));
+  } catch { /* checked below */ }
+  const parsed = schema.safeParse(json);
+  if (!parsed.success) throw new Error(`${who} gave an unusable answer: ${text.slice(0, 200)}`);
+  return parsed.data;
+}
+
 /**
  * Asks Gemini about a picture (or several attachments, such as a screenshot and a voice
- * clip) and returns its JSON answer, checked against `schema`.
+ * clip) and returns its JSON answer, checked against `schema`. If one key or provider
+ * fails, the next is tried; the error lists what each said.
  */
 export async function askGemini<T>(
   prompt: string,
-  picture: Picture | VideoLink | (Picture | VideoLink)[] | null,
+  picture: Attachment | Attachment[] | null,
   schema: z.ZodType<T>,
   options: AskOptions = {},
 ): Promise<T> {
-  const key = Deno.env.get("GEMINI_API_KEY");
-  if (!key) throw new Error("GEMINI_API_KEY is not set");
+  const attachments = [picture ?? []].flat();
+  const onlyImages = attachments.every((a) => !("uri" in a) && a.mediaType.startsWith("image/"));
+  const providers = aiProviders();
+  if (!providers.length) throw new Error("no AI provider is set: add GEMINI_API_KEY (or a backup) on the server");
+  const errors: string[] = [];
+  for (const provider of providers) {
+    if (provider === "gemini") {
+      for (const [i, key] of geminiKeys().entries()) {
+        try {
+          return await askOneGemini(key, prompt, attachments, schema, options);
+        } catch (e) {
+          errors.push(`Gemini key ${i + 1}: ${(e as Error).message}`);
+        }
+      }
+    } else if (!onlyImages) {
+      errors.push(`${provider}: skipped, it can't take videos or voice clips`);
+    } else {
+      try {
+        return await askBackup(provider, prompt, attachments as Picture[], schema, options);
+      } catch (e) {
+        errors.push(`${provider}: ${(e as Error).message}`);
+      }
+    }
+  }
+  throw new Error(errors.join(" | "));
+}
+
+async function askOneGemini<T>(
+  key: string,
+  prompt: string,
+  attachments: Attachment[],
+  schema: z.ZodType<T>,
+  options: AskOptions,
+): Promise<T> {
   const parts: unknown[] = [];
-  for (const p of [picture ?? []].flat()) {
+  for (const p of attachments) {
     parts.push("uri" in p ? { file_data: { file_uri: p.uri } } : { inline_data: { mime_type: p.mediaType, data: p.data } });
   }
   parts.push({ text: prompt });
@@ -132,20 +178,45 @@ export async function askGemini<T>(
       });
       if (res.ok) {
         const data = await res.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
-        const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-        let json: unknown = null;
-        try {
-          json = JSON.parse(text);
-        } catch { /* checked below */ }
-        const parsed = schema.safeParse(json);
-        if (!parsed.success) throw new Error(`Gemini gave an unusable answer: ${text.slice(0, 200)}`);
-        return parsed.data;
+        return check("Gemini", data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "", schema);
       }
       const body = await res.text();
-      lastError = `Gemini ${model} answered ${res.status}: ${body.slice(0, 300)}`;
+      lastError = `${model} answered ${res.status}: ${body.slice(0, 300)}`;
       if (/API key/i.test(body)) throw new Error(lastError); // a bad key fails on every model
       if (res.status !== 400) break; // 403, 404, 429, 5xx: try the next model
     }
   }
   throw new Error(lastError);
+}
+
+/** One of the backups. URL and model can be changed with e.g. GROQ_URL and BUTLER_GROQ_MODEL. */
+async function askBackup<T>(
+  provider: string,
+  prompt: string,
+  pictures: Picture[],
+  schema: z.ZodType<T>,
+  options: AskOptions,
+): Promise<T> {
+  const backup = BACKUPS[provider];
+  const name = provider.toUpperCase();
+  const url = Deno.env.get(`${name}_URL`) ?? backup.url;
+  const model = Deno.env.get(`BUTLER_${name}_MODEL`) ?? backup.model;
+  const content = [
+    { type: "text", text: prompt },
+    ...pictures.map((p) => ({ type: "image_url", image_url: { url: `data:${p.mediaType};base64,${p.data}` } })),
+  ];
+  const res = await fetch(`${url}/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${Deno.env.get(backup.key)}` },
+    body: JSON.stringify({
+      model,
+      temperature: 0,
+      response_format: { type: "json_object" },
+      messages: [{ role: "system", content: "Answer with one JSON object only." }, { role: "user", content }],
+    }),
+    signal: AbortSignal.timeout(options.timeoutMs ?? 45_000),
+  });
+  if (!res.ok) throw new Error(`${model} answered ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const data = await res.json() as { choices?: { message?: { content?: string } }[] };
+  return check(model, data.choices?.[0]?.message?.content ?? "", schema);
 }
