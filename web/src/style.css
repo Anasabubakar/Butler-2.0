@@ -109,12 +109,13 @@ button { cursor: pointer; }
   --cork-light: rgb(255 240 210 / 18%);
   --ink: #2b2620;
   --hand: var(--b2-font-hand);
-  --n0: #fff3a1; --n1: #ffc9de; --n2: #bfe6ff; --n3: #cdeeb2; --n4: #ffd8a8; --n5: #ddd1ff;
+  /* Note papers: yellow, pink, coral, green, orange, sand. No blue or purple (Butler 2.0 rule). */
+  --n0: #fff3a1; --n1: #ffc9de; --n2: #ffb9a6; --n3: #cdeeb2; --n4: #ffd8a8; --n5: #ecdcbc;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --cork: #5d4630; --cork-dot: rgb(0 0 0 / 30%); --cork-light: rgb(255 220 170 / 6%);
-    --n0: #e9d870; --n1: #e9a6c0; --n2: #9ccbea; --n3: #add58f; --n4: #e9b67c; --n5: #bcadea;
+    --n0: #e9d870; --n1: #e9a6c0; --n2: #e39a86; --n3: #add58f; --n4: #e9b67c; --n5: #cdb88f;
   }
 }
 
