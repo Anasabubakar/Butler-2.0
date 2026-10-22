@@ -28,6 +28,7 @@ import * as share from "./lib/share.ts";
 import * as video from "./lib/video.ts";
 import * as spending from "./lib/spending.ts";
 import * as streaks from "./lib/streaks.ts";
+import * as laptop from "./lib/laptop.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -275,6 +276,69 @@ app.post("/api/send", async (c) => {
   const url = text("url", 4000);
   if (kind !== "file" && kind !== "ring" && !body && !url) return c.json({ error: "nothing to send" }, 400);
   await inbox.send(to, { from_device: device, kind, body, url, item_id });
+  return c.json({ sent_to: to });
+});
+
+// --- controlling the laptop from the phone ---------------------------------------------
+// The server only passes things along: the laptop checks your secret word, and has its own
+// switch for remote control that only you, at the laptop, can turn back on.
+
+// A command for the laptop, as you typed it (secret word included). Forgotten once delivered.
+app.post("/api/laptop/task", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const { text } = await deviceForm(c);
+  const device = text("device", 100);
+  const command = text("text", 2000);
+  if (!device || !command) return c.json({ error: "device and text are required" }, 400);
+  const to = await inbox.resolveTarget(text("target", 100) ?? "laptop", device);
+  if (!to.length) return c.json({ error: "no laptop has checked in with Butler yet" }, 404);
+  await inbox.send(to, { from_device: device, kind: "task", body: command });
+  return c.json({ sent_to: to });
+});
+
+// Stops what the laptop is doing. off=1 also switches remote control off on the laptop.
+app.post("/api/laptop/stop", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const { text } = await deviceForm(c);
+  const device = text("device", 100);
+  if (!device) return c.json({ error: "device is required" }, 400);
+  const to = await inbox.resolveTarget(text("target", 100) ?? "laptop", device);
+  if (!to.length) return c.json({ error: "no laptop has checked in with Butler yet" }, 404);
+  await inbox.send(to, { from_device: device, kind: "stop", body: text("off") === "1" ? "off" : null });
+  return c.json({ sent_to: to });
+});
+
+// The laptop asks what kind of job a command is, once it has taken your secret word out.
+app.post("/api/laptop/plan", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  if (!geminiReady()) return c.json({ error: "no AI model: set GEMINI_API_KEY on the server" }, 503);
+  const { text } = await deviceForm(c);
+  const command = text("text", 2000);
+  if (!command) return c.json({ error: "text is required" }, 400);
+  let folders: string[] = [];
+  try {
+    const parsed = JSON.parse(text("folders", 20_000) ?? "[]");
+    if (Array.isArray(parsed)) folders = parsed.map((f) => String(f).slice(0, 200)).slice(0, 300);
+  } catch { /* no folders */ }
+  try {
+    return c.json(await laptop.planJob(command, folders));
+  } catch (e) {
+    return c.json({ error: String(e).slice(0, 300) }, 502);
+  }
+});
+
+// How a laptop job is going: passed on to your phones as a notification.
+app.post("/api/laptop/status", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const { text } = await deviceForm(c);
+  const device = text("device", 100);
+  const state = text("state", 20) as laptop.State | null;
+  if (!device || !state || !laptop.STATES.includes(state)) {
+    return c.json({ error: `device and state (${laptop.STATES.join(", ")}) are required` }, 400);
+  }
+  const to = await inbox.resolveTarget(text("target", 100) ?? "phone", device);
+  const body = JSON.stringify({ state, title: laptop.statusTitle(state), text: text("text", 3000) ?? "" });
+  await inbox.send(to, { from_device: device, kind: "status", body });
   return c.json({ sent_to: to });
 });
 
