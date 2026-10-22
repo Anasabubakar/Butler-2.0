@@ -556,15 +556,10 @@ function note(item: Item): HTMLElement {
   const pinned = hashOf(item.id) % 3 === 0; // most get tape, some get a pin
   let el: HTMLElement;
 
-  const del = h("button", {
-    class: "icon",
-    "aria-label": "Delete",
-    title: "Throw away",
-    onclick: (e) => {
-      e.stopPropagation();
-      crumpleIntoBin(el, binEl).then(() => throwAway(item));
-    },
-  }, "×");
+  const action = (name: string, text: string, run: (e: MouseEvent) => void) => h("button", {
+    class: "icon", "aria-label": text, title: text,
+    onclick: (e) => { e.stopPropagation(); run(e as MouseEvent); },
+  }, icon(name));
 
   const paper = h("div", { class: "paper" },
     pic ? h("div", { class: "media" }, pic) : null,
@@ -584,28 +579,15 @@ function note(item: Item): HTMLElement {
       ? h("div", { class: "tags" }, ...item.tags.map((t) =>
           h("button", { class: "tag", onclick: (e) => { e.stopPropagation(); setFilter({ facet: "tag", value: t }); } }, `#${t}`)))
       : null,
+    // 05: source type and time, then 06: Similar / Share / Remind / Delete (B2 · 15).
     h("div", { class: "meta" },
-      item.platform ? h("span", { class: "badge" }, label(item.platform)) : h("span", { class: "badge" }, label(item.kind)),
-      h("span", { class: "muted" }, ago(item.created_at)),
-      h("button", {
-        class: "icon",
-        "aria-label": "Find similar",
-        title: "Find similar",
-        onclick: (e) => { e.stopPropagation(); showSimilar(item); },
-      }, "≈"),
-      h("button", {
-        class: "icon",
-        "aria-label": "Share a link to this note",
-        title: "Share a link to this note",
-        onclick: (e) => { e.stopPropagation(); shareNote(item); },
-      }, "🔗"),
-      h("button", {
-        class: "icon",
-        "aria-label": "Remind me later",
-        title: "Remind me later",
-        onclick: (e) => { e.stopPropagation(); snooze(item, e.currentTarget as HTMLElement); },
-      }, "⏰"),
-      del,
+      h("span", {}, `${label(item.platform ?? item.kind)} · ${ago(item.created_at)}`),
+      h("span", { class: "actions" },
+        action("similar", "Find similar", () => showSimilar(item)),
+        action("share", "Share a link to this note", () => shareNote(item)),
+        action("remind", "Remind me later", (e) => snooze(item, e.currentTarget as HTMLElement)),
+        action("trash", "Delete", () => crumpleIntoBin(el, binEl).then(() => throwAway(item))),
+      ),
     ),
   );
   const fastener = pinned
