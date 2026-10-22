@@ -83,14 +83,10 @@
   background-color: #f0595e;
 }
 
-.butler-bubble-scroll {
-  max-height: 320px;
-  margin-top: 6px;
-}
-
 .butler-bubble-body {
   color: #e4e4ea;
-  max-width: 290px;
+  width: 290px;
+  margin-top: 6px;
   padding-right: 4px;
 }
 
