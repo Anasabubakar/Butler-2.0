@@ -7,9 +7,16 @@ import St from 'gi://St';
 
 import * as Animation from 'resource:///org/gnome/shell/ui/animation.js';
 
+const LONGEST = 1200;
+
 /** The first non-empty line; the label cuts it short with "…" if it's long. */
 export function firstLine(text) {
     return String(text ?? '').trim().split('\n').find(line => line.trim())?.trim() ?? '';
+}
+
+/** Up to about a screenful; Copy still gets all of it. */
+function shortened(text) {
+    return text.length > LONGEST ? `${text.slice(0, LONGEST)}…` : text;
 }
 
 function chip(label, styleClass, onClick) {
@@ -54,7 +61,7 @@ export class Bubble {
             top.add_child(button);
         this.actor.add_child(top);
 
-        this._body = new St.Label({style_class: 'butler-bubble-body', reactive: true});
+        this._body = new St.Label({style_class: 'butler-bubble-body', reactive: true, x_align: Clutter.ActorAlign.START});
         this._body.clutter_text.line_wrap = true;
         this._body.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
         this._body.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
@@ -62,15 +69,8 @@ export class Bubble {
             this._tapped();
             return Clutter.EVENT_STOP;
         });
-        this._scroll = new St.ScrollView({
-            style_class: 'butler-bubble-scroll',
-            hscrollbar_policy: St.PolicyType.NEVER,
-            vscrollbar_policy: St.PolicyType.AUTOMATIC,
-            visible: false,
-            child: new St.BoxLayout({vertical: true}),
-        });
-        this._scroll.child.add_child(this._body);
-        this.actor.add_child(this._scroll);
+        this._body.visible = false;
+        this.actor.add_child(this._body);
     }
 
     destroy() {
@@ -114,7 +114,7 @@ export class Bubble {
             return this.working(text);
         this._full = text;
         this._line.text = firstLine(text);
-        this._body.text = text;
+        this._setBody(text);
         this._changed();
     }
 
@@ -153,7 +153,7 @@ export class Bubble {
     _show(text, spinning) {
         this._full = text;
         this._line.text = firstLine(text);
-        this._body.text = text;
+        this._setBody(text);
         if (spinning)
             this._spinner.play();
         else
@@ -170,9 +170,21 @@ export class Bubble {
         this._changed();
     }
 
+    /**
+     * Sets the full text. Its height is worked out at the width it's shown at: the bubble
+     * would otherwise ask at its own (wider) width and cut the last lines off.
+     */
+    _setBody(text) {
+        this._body.text = shortened(text);
+        this._body.height = -1;
+        const [, width] = this._body.get_preferred_width(-1);
+        const [, height] = this._body.get_preferred_height(width);
+        this._body.height = height;
+    }
+
     _setExpanded(on) {
         this._expanded = on;
-        this._scroll.visible = on;
+        this._body.visible = on;
         this._line.opacity = on ? 150 : 255;
     }
 
