@@ -544,8 +544,12 @@ class PetService : Service() {
             val copied = hands().pressLabelled(HandsService.COPY_LINK) || tapOn(snap(), "the \"Copy link\" option in the share menu")
             if (!copied) return null
             menuOpen = false
-            delay(500)
-            ClipReadActivity.read(this)?.let { URL.find(it)?.value }
+            // Apps copy a moment after the tap (some fetch a short link first), so look a few times.
+            for (wait in listOf(600L, 900L, 1200L, 1500L)) {
+                delay(wait)
+                ClipReadActivity.read(this)?.let { URL.find(it)?.value }?.let { return it }
+            }
+            null
         } catch (e: Exception) {
             null
         } finally {
