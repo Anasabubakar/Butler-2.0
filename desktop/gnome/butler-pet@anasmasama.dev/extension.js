@@ -1227,9 +1227,11 @@ export default class ButlerPetExtension extends Extension {
             return;
         case 'sync':
             this._lastSynced = message.body ?? ''; // so it isn't sent straight back
+            this._history?.addText(this._lastSynced, 'phone');
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, this._lastSynced);
             return;
         case 'clip':
+            this._history?.addText(message.body ?? '', 'phone');
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, message.body ?? '');
             return this._announce(`Copied${from}`, `${(message.body ?? '').slice(0, 200)}\n\n(Ready to paste.)`);
         case 'link':
