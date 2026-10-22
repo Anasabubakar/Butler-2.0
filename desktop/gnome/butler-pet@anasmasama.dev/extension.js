@@ -753,8 +753,10 @@ export default class ButlerPetExtension extends Extension {
     async _linkFromShare(config, pageUrl) {
         try {
             const shot = await this._snapWindow();
-            if (!shot || !await this._tapOn(config, shot, SHARE_BUTTON))
+            if (!shot || !await this._tapOn(config, shot, SHARE_BUTTON)) {
+                console.warn('Butler: save this: no Share button found');
                 return null;
+            }
             await sleep(900);
             const menu = await this._snapWindow();
             // Emptied first, so only a link Copy link really put there counts.
@@ -767,10 +769,14 @@ export default class ButlerPetExtension extends Extension {
                     if (/^https?:\/\//.test(link) && link !== pageUrl)
                         return link;
                 }
+                console.warn('Butler: save this: Copy link left no new link on the clipboard');
+            } else {
+                console.warn('Butler: save this: no Copy link option found');
             }
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, pageUrl);
             return null;
         } catch (e) {
+            console.warn(`Butler: save this: finding the post's link failed: ${e.message}`);
             return null;
         } finally {
             await this._press(Clutter.KEY_Escape); // closes the share menu if it's still open
