@@ -15,12 +15,10 @@
   background: var(--bg);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* The library sits on the board's shell colour in dark mode. */
-    --bg: var(--b2-material-shell);
-    --shadow: 0 1px 2px rgb(0 0 0 / 30%);
-  }
+/* The library sits on the board's shell colour in dark mode. */
+:root[data-theme="dark"] {
+  --bg: var(--b2-material-shell);
+  --shadow: 0 1px 2px rgb(0 0 0 / 30%);
 }
 
 * { box-sizing: border-box; }
@@ -45,7 +43,7 @@ button { cursor: pointer; }
 }
 .signin h1 { line-height: 0; }
 .logo img { display: block; width: 200px; height: auto; margin: 0 auto; }
-@media (prefers-color-scheme: dark) { .logo img { width: 72px; } } /* app tile */
+:root[data-theme="dark"] .logo img { width: 72px; } /* app tile */
 .logo.small { display: block; width: 32px; height: 32px; margin: 0; }
 
 /* header */
@@ -112,11 +110,9 @@ button { cursor: pointer; }
   /* Note papers: yellow, pink, coral, green, orange, sand. No blue or purple (Butler 2.0 rule). */
   --n0: #fff3a1; --n1: #ffc9de; --n2: #ffb9a6; --n3: #cdeeb2; --n4: #ffd8a8; --n5: #ecdcbc;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --cork: #5d4630; --cork-dot: rgb(0 0 0 / 30%); --cork-light: rgb(255 220 170 / 6%);
-    --n0: #e9d870; --n1: #e9a6c0; --n2: #e39a86; --n3: #add58f; --n4: #e9b67c; --n5: #cdb88f;
-  }
+:root[data-theme="dark"] {
+  --cork: #5d4630; --cork-dot: rgb(0 0 0 / 30%); --cork-light: rgb(255 220 170 / 6%);
+  --n0: #e9d870; --n1: #e9a6c0; --n2: #e39a86; --n3: #add58f; --n4: #e9b67c; --n5: #cdb88f;
 }
 
 .boards { min-height: 60vh; }
@@ -216,7 +212,7 @@ button { cursor: pointer; }
 }
 .tape i:first-child { clip-path: polygon(0 8%, 4% 0, 100% 0, 98% 30%, 100% 55%, 97% 80%, 100% 100%, 3% 100%, 0 90%); }
 .tape i:last-child { clip-path: polygon(0 0, 97% 0, 100% 12%, 96% 100%, 0 100%, 3% 75%, 0 52%, 2% 28%); }
-@media (prefers-color-scheme: dark) { .tape i { background: rgb(255 255 255 / 32%); } }
+:root[data-theme="dark"] .tape i { background: rgb(255 255 255 / 32%); }
 
 /* a push pin */
 .pin {
@@ -280,7 +276,7 @@ body.dragging-note { cursor: grabbing; user-select: none; }
 .toast.undo { display: flex; align-items: center; gap: 14px; }
 .toast.undo button { background: none; border: 0; color: var(--b2-vermilion); font-weight: 700; padding: 2px 4px; }
 /* In dark mode the toast is white, and vermilion on white is too faint for small text. */
-@media (prefers-color-scheme: dark) { .toast.undo button { color: var(--b2-action-red); } }
+:root[data-theme="dark"] .toast.undo button { color: var(--b2-action-red); }
 
 @media (max-width: 760px) {
   .board { border-radius: 12px; box-shadow: inset 0 0 0 6px rgb(120 80 40 / 35%), inset 0 0 30px rgb(0 0 0 / 25%); }
