@@ -535,7 +535,7 @@ class PetService : Service() {
         return try {
             // The button's label first; the screenshot guess only if the app doesn't label it.
             val shared = hands().pressLabelled(HandsService.SHARE) || tapOn(shot,
-                "the Share button of the main post in view (usually a curved arrow), not the Save, Bookmark or Favourites button")
+                SHARE_LOOK)
             if (!shared) return null
             menuOpen = true
             delay(900)
@@ -948,7 +948,16 @@ class PetService : Service() {
             Regex("^https?://(www\\.)?linkedin\\.com/feed/?([?#].*)?$"),
             Regex("^https?://(www\\.|m\\.)?youtube\\.com/?([?#].*)?$"),
             Regex("^https?://(www\\.)?threads\\.(net|com)/?([?#].*)?$"),
+            Regex("^https?://(www\\.|old\\.)?reddit\\.com/?([?#].*)?$"),
+            Regex("^https?://([a-z]+\\.)?pinterest\\.[a-z.]+/?([?#].*)?$"),
+            Regex("^https?://(www\\.)?snapchat\\.com/(spotlight/?)?([?#].*)?$"),
         )
+
+        /** What the Share button looks like, for apps that don't label it. */
+        private const val SHARE_LOOK = "the Share button of the main post in view. It looks different in each app: " +
+            "a curved arrow (TikTok, YouTube, Facebook), a paper plane (Instagram, Threads), " +
+            "an arrow out of a box (X, Pinterest), or the word Share. " +
+            "Never the Save, Bookmark, Favourite, Like, Comment or Send-message button"
 
         fun isFeed(url: String) = FEEDS.any { it.matches(url) }
 
