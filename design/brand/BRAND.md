@@ -84,7 +84,9 @@ These are materials for the library board, not brand colours. Observed in the li
 
 Live desktop measurements: notes about 220 px wide, headings 22 px bold Caveat, pins 20 px, tape about 92 × 26 px. Adapt them on small screens.
 
-Keep on the board: textured brown cork; pink and green paper; translucent tape and red pins; small tilts; paper shadows and curled corners; handwritten headings; saved screenshot and media thumbnails; summary, tags, source and time; collection and tag filters; open and move notes; Similar, Share, Remind and Delete; and a visible wastebin that works with the existing delete and Undo. Give keyboard and touch alternatives to drag and drop. **Never flatten it into a grid of white rounded cards.**
+The library rotates six papers per collection: yellow, pink, coral, green, orange and sand (`--n0` to `--n5` in `web/src/style.css`). Anas chose these on 22 October 2026: any paper colour except blue and purple.
+
+Keep on the board: textured brown cork; the paper colours above; translucent tape and red pins; small tilts; paper shadows and curled corners; handwritten headings; saved screenshot and media thumbnails; summary, tags, source and time; collection and tag filters; open and move notes; Similar, Share, Remind and Delete; and a visible wastebin that works with the existing delete and Undo. Give keyboard and touch alternatives to drag and drop. **Never flatten it into a grid of white rounded cards.**
 
 ## Type
 
