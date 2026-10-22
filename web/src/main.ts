@@ -395,7 +395,13 @@ function makeBoard(items: Item[], movable: boolean): HTMLElement {
         if (!headingEl.querySelector(".tidy")) renderGrid();
       },
       onTrash: () => throwAway(item),
-      onOpen: () => {
+      onOpen: (_note, tapped) => {
+        // A saved picture opens right here; a screenshot that came with a link opens the
+        // link, unless you tapped the picture itself.
+        if (item.kind === "image" && item.file_path && (!item.url || tapped.closest(".media"))) {
+          viewPicture(item);
+          return;
+        }
         const target = openTarget(item);
         if (target) window.open(target, "_blank", "noopener,noreferrer");
       },
@@ -573,6 +579,36 @@ function openTarget(item: Item): string | null {
   if (item.url) return item.url;
   if (item.file_path) return `/files/${item.id}`;
   return null;
+}
+
+/** Shows a saved picture over the board, as big as fits. Esc, ×, or a tap outside it closes it. */
+function viewPicture(item: Item) {
+  const src = `/files/${item.id}`;
+  const close = () => {
+    document.removeEventListener("keydown", onKey);
+    view.classList.add("leaving");
+    setTimeout(() => view.remove(), matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 130);
+  };
+  const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+  const img = h("img", { src, alt: item.title ?? "", draggable: "false" });
+  // Tap the picture to see it at full size (and scroll around), tap again to fit it back.
+  img.addEventListener("click", (e) => { e.stopPropagation(); view.classList.toggle("zoomed"); });
+  const view = h("div", { class: "viewer", role: "dialog", "aria-modal": "true", "aria-label": item.title ?? "Picture" },
+    h("div", { class: "viewer-bar" },
+      h("span", { class: "viewer-title" }, item.title ?? ""),
+      item.url ? h("a", { href: item.url, target: "_blank", rel: "noopener noreferrer", title: "Open the post" }, "Open post") : null,
+      h("a", { href: src, download: "", title: "Download" }, "Download"),
+      h("button", { class: "viewer-close", "aria-label": "Close", title: "Close (Esc)" }, "×"),
+    ),
+    h("div", { class: "viewer-stage" }, img),
+  );
+  view.addEventListener("click", (e) => {
+    const t = e.target as Element;
+    if (t === view || t.classList.contains("viewer-stage") || t.closest(".viewer-close")) close();
+  });
+  document.addEventListener("keydown", onKey);
+  document.body.append(view);
+  view.querySelector<HTMLButtonElement>(".viewer-close")?.focus();
 }
 
 function media(item: Item): HTMLElement | null {

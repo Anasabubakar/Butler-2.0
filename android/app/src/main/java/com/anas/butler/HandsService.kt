@@ -132,6 +132,31 @@ class HandsService : AccessibilityService() {
         return if (text.startsWith("http://") || text.startsWith("https://")) text else "https://$text"
     }
 
+    /**
+     * Presses the button on screen whose label (what TalkBack would read) matches [want], the
+     * way a finger would. Apps label their buttons, so this hits Share, not the Save or
+     * Favourites button next to it, which a guess from the screenshot sometimes did.
+     * False if no such button is showing.
+     */
+    fun pressLabelled(want: Regex): Boolean {
+        val roots = windows.mapNotNull { it.root }.ifEmpty { listOfNotNull(rootInActiveWindow) }
+        val node = roots.firstNotNullOfOrNull { findLabelled(it, want) } ?: return false
+        var target: AccessibilityNodeInfo? = node
+        while (target != null && !target.isClickable) target = target.parent
+        return target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+    }
+
+    private fun findLabelled(node: AccessibilityNodeInfo, want: Regex): AccessibilityNodeInfo? {
+        if (!node.isVisibleToUser || node.packageName == packageName) return null // not the pet's own buttons
+        val label = (node.contentDescription ?: node.text)?.toString()?.trim().orEmpty()
+        if (label.length <= 40 && want.containsMatchIn(label) && !NOT_SHARE.containsMatchIn(label)) return node
+        for (i in 0 until node.childCount) {
+            val found = node.getChild(i)?.let { findLabelled(it, want) }
+            if (found != null) return found
+        }
+        return null
+    }
+
     /** The selected text in the app you're looking at, or null if nothing is selected. */
     fun selectedText(): String? {
         val node = findSelection(rootInActiveWindow ?: return null) ?: return null
@@ -154,6 +179,15 @@ class HandsService : AccessibilityService() {
     companion object {
         private val COPY = Regex("\\bcopy\\b", RegexOption.IGNORE_CASE)
         private val COPIED = Regex("\\bcopied\\b", RegexOption.IGNORE_CASE)
+
+        /** The Share button on a post: TikTok, Instagram, YouTube, X, Facebook and most others. */
+        val SHARE = Regex("^(share|send post|share (video|post|reel|this))\\b", RegexOption.IGNORE_CASE)
+
+        /** The Copy link option in an app's share menu. */
+        val COPY_LINK = Regex("^copy( link|\\s*$)", RegexOption.IGNORE_CASE)
+
+        /** Buttons that sit beside Share and must never be pressed by mistake. */
+        private val NOT_SHARE = Regex("save|favou?rite|bookmark|collect|like|repost|download", RegexOption.IGNORE_CASE)
 
         /** Set while you've turned the helper on in Accessibility settings. */
         @Volatile
