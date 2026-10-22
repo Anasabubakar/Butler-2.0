@@ -106,8 +106,7 @@ function renderSignIn(message = "") {
   });
   const status = h("p", { class: "muted" }, message);
   const form = h("form", { class: "signin" },
-    h("div", { class: "logo" }, butlerMark()),
-    h("h1", {}, "Butler"),
+    h("h1", {}, butlerLogo()),
     h("p", { class: "muted" }, "Everything you've saved, in one place."),
     password,
     h("button", { type: "submit" }, "Open library"),
@@ -128,14 +127,20 @@ function renderSignIn(message = "") {
   password.focus();
 }
 
-function butlerMark(): SVGSVGElement {
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", "0 0 48 48");
-  svg.innerHTML =
-    '<path d="M8 40a16 16 0 0 1 32 0z" fill="var(--accent)"/>' +
-    '<circle cx="19" cy="32" r="2" fill="var(--bg)"/><circle cx="29" cy="32" r="2" fill="var(--bg)"/>';
-  return svg;
+// The Butler 2.0 logo masters live in web/public/brand. Use the files as they are:
+// dark mark on light surfaces, the ink app tile on dark ones (never invert the art).
+
+/** Mascot and "Butler 2.0" lettering; swaps to the app tile in dark mode. */
+function butlerLogo(): HTMLPictureElement {
+  return h("picture", { class: "logo" },
+    h("source", { srcset: "/brand/butler-app-icon.svg", media: "(prefers-color-scheme: dark)" }),
+    h("img", { src: "/brand/butler-primary.svg", alt: "Butler 2.0" }),
+  );
+}
+
+/** The app tile alone, for small spots like the header. */
+function butlerTile(label: string): HTMLImageElement {
+  return h("img", { class: "logo small", src: "/brand/butler-app-icon.svg", alt: label });
 }
 
 // --- data --------------------------------------------------------------------
@@ -233,7 +238,7 @@ function renderLibrary() {
   app.replaceChildren(
     h("header", { class: "top" },
       h("a", { class: "brand", href: "#", onclick: (e) => { e.preventDefault(); setFilter(null); } },
-        h("span", { class: "logo small" }, butlerMark()), "Butler"),
+        butlerTile("Butler 2.0 library")),
       search,
       googleButton,
       ringButton,
