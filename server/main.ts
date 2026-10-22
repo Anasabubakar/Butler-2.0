@@ -11,7 +11,7 @@ import * as db from "./lib/db.ts";
 import { fetchMeta } from "./lib/meta.ts";
 import { organize, type RawItem } from "./lib/organize.ts";
 import { cleanUrl, extractUrl, kindFor, platformFor } from "./lib/rules.ts";
-import { geminiModels, geminiReady } from "./lib/gemini.ts";
+import { aiProviders, geminiKeys, geminiModels, geminiReady } from "./lib/gemini.ts";
 import { LOOK_MODES, type LookMode, locate, look, MAX_STEPS, nextStep } from "./lib/screen.ts";
 import * as inbox from "./lib/inbox.ts";
 import { calendarUrl, localIso, parseWhen, plan, safeZone } from "./lib/command.ts";
@@ -74,7 +74,7 @@ async function organizeItem(id: string, raw: RawItem) {
 /** A saved YouTube video gets its key points written down. It's extra, so failing is fine. */
 async function watchVideo(id: string, raw: RawItem) {
   const link = video.videoLink(raw.url);
-  if (!link || !geminiReady() || env("BUTLER_VIDEO_NOTES") === "off") return;
+  if (!link || !geminiKeys().length || env("BUTLER_VIDEO_NOTES") === "off") return;
   try {
     await db.updateItem(id, { details: await video.watch(link, raw.pageTitle ?? null) });
     await meaning.embedItem(id); // so searching by meaning finds what was said in it
@@ -1021,7 +1021,8 @@ if (import.meta.main) {
   setInterval(() => recapIfDue().catch((e) => console.error("recap:", e)), 5 * 60_000);
   setInterval(() => watchPrices().catch((e) => console.error("prices:", e)), 30 * 60_000);
   setInterval(() => rescueLinks().catch((e) => console.error("links:", e)), 10 * 60_000);
-  if (geminiReady()) geminiModels().then((m) => console.log("Gemini models, in order:", m.join(", ")));
+  if (geminiReady()) console.log("AI providers, in order:", aiProviders().join(", "));
+  if (geminiKeys().length) geminiModels().then((m) => console.log("Gemini models, in order:", m.join(", ")));
   Deno.serve({ port: PORT, hostname: env("HOST", "0.0.0.0") }, app.fetch);
 }
 
