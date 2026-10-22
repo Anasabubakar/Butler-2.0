@@ -817,6 +817,10 @@ export default class ButlerPetExtension extends Extension {
             const fields = {device: 'laptop'};
             if (text)
                 fields.text = text;
+            // The link goes as its own field too, so the server keeps it with the screenshot.
+            const link = text?.trim();
+            if (/^https?:\/\/\S+$/.test(link ?? ''))
+                fields.url = link;
             await this._send(config, '/api/save', fields, shot);
             return /^https?:\/\//.test(text) ? 'Saved the link to Butler' : 'Saved to Butler';
         });
