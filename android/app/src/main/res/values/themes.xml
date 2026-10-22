@@ -1,12 +1,30 @@
 <resources>
     <style name="Theme.Butler" parent="Theme.Material3.DayNight.NoActionBar" />
 
-    <!-- Small sheet at the bottom of the screen over whatever app you shared from. -->
-    <style name="Theme.Butler.Sheet" parent="Theme.Material3.DayNight.Dialog">
+    <!-- Small dark sheet over whatever app you're in, in the same zinc colours as the pet's menu. -->
+    <style name="Theme.Butler.Sheet" parent="Theme.Material3.Dark.Dialog">
+        <item name="colorPrimary">#A78BFA</item>
+        <item name="colorOnPrimary">#18181B</item>
+        <item name="colorSecondaryContainer">#27272A</item>
+        <item name="colorOnSecondaryContainer">#FAFAFA</item>
+        <item name="colorSurface">#09090B</item>
+        <item name="colorOnSurface">#FAFAFA</item>
+        <item name="colorOnSurfaceVariant">#A1A1AA</item>
+        <item name="colorOutline">#3F3F46</item>
+        <item name="android:textColorPrimary">#FAFAFA</item>
+        <item name="android:textColorSecondary">#A1A1AA</item>
+        <item name="android:textColorHint">#71717A</item>
+        <item name="android:windowBackground">@drawable/sheet_background</item>
+        <item name="android:windowAnimationStyle">@style/Butler.SheetAnimation</item>
         <item name="android:windowCloseOnTouchOutside">true</item>
         <item name="android:windowMinWidthMajor">100%</item>
         <item name="android:windowMinWidthMinor">100%</item>
         <item name="android:windowSoftInputMode">adjustResize</item>
         <item name="windowNoTitle">true</item>
+    </style>
+
+    <style name="Butler.SheetAnimation" parent="@android:style/Animation.Dialog">
+        <item name="android:windowEnterAnimation">@anim/sheet_in</item>
+        <item name="android:windowExitAnimation">@anim/sheet_out</item>
     </style>
 </resources>
