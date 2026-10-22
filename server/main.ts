@@ -420,7 +420,7 @@ app.post("/api/command", async (c) => {
       await inbox.send(everywhere.length ? everywhere : [device], {
         from_device: device, kind: "reminder", body: p.text || said, due_at: due.toISOString(),
       });
-      return json({ action: "remind", say: p.reply || "Reminder set." });
+      return json({ action: "remind", say: p.reply || "Reminder set, sir." });
     }
     case "calendar": {
       const start = parseWhen(p.when);
