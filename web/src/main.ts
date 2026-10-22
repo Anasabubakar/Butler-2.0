@@ -1,24 +1,16 @@
 import "./fonts";
 import "./b2-tokens.css";
+import "./b2-components.css";
 import "./style.css";
+import "./pages.css";
+import "./landing.css";
+import { renderAsk } from "./ask";
 import { binMarkup, crumpleIntoBin, fasten, glide, hashOf, layout, makeDraggable, type Spot, unfasten } from "./board";
-
-class SignedOut extends Error {}
-
-/** Calls the Butler server on the same site; the session cookie rides along. */
-async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(path, {
-    ...init,
-    headers: init.body ? { "content-type": "application/json", ...init.headers } : init.headers,
-  });
-  if (res.status === 401 && path !== "/api/login") {
-    renderSignIn();
-    throw new SignedOut();
-  }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
-  return data as T;
-}
+import { renderDevices } from "./devices";
+import { renderLanding, renderSignIn } from "./landing";
+import { applyMotion, applyTheme, renderSettings } from "./settings";
+import { topBar } from "./shell";
+import { ago, api, h, icon, SignedOut, toast, whenSignedOut } from "./ui";
 
 interface Item {
   id: string;
@@ -66,82 +58,11 @@ const state = {
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
-// --- tiny DOM helper: text always goes through textContent, never innerHTML ---
-function h<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  props: Partial<Record<string, string | boolean | EventListener>> = {},
-  ...children: Array<Node | string | null | undefined | false>
-): HTMLElementTagNameMap[K] {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(props)) {
-    if (v === undefined || v === false) continue;
-    if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2), v);
-    else if (k === "class") el.className = String(v);
-    else el.setAttribute(k, v === true ? "" : String(v));
-  }
-  for (const c of children) if (c) el.append(c);
-  return el;
-}
-
 const NAMES: Record<string, string> = {
   tiktok: "TikTok", youtube: "YouTube", linkedin: "LinkedIn", github: "GitHub", x: "X",
   web: "Web", none: "Notes & files", unsorted: "Unsorted",
 };
 const label = (s: string) => NAMES[s] ?? s.charAt(0).toUpperCase() + s.slice(1);
-
-function ago(iso: string): string {
-  const s = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  if (s < 86400 * 7) return `${Math.floor(s / 86400)}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-}
-
-// --- sign in ---------------------------------------------------------------
-
-function renderSignIn(message = "") {
-  const password = h("input", {
-    type: "password", placeholder: "Password", required: true, autocomplete: "current-password", "aria-label": "Password",
-  });
-  const status = h("p", { class: "muted" }, message);
-  const form = h("form", { class: "signin" },
-    h("h1", {}, butlerLogo()),
-    h("p", { class: "muted" }, "Everything you've saved, in one place."),
-    password,
-    h("button", { type: "submit" }, "Open library"),
-    status,
-  );
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    status.textContent = "";
-    try {
-      await api("/api/login", { method: "POST", body: JSON.stringify({ password: password.value }) });
-      renderLibrary();
-    } catch (err) {
-      status.textContent = (err as Error).message;
-      password.select();
-    }
-  });
-  app.replaceChildren(form);
-  password.focus();
-}
-
-// The Butler 2.0 logo masters live in web/public/brand. Use the files as they are:
-// dark mark on light surfaces, the ink app tile on dark ones (never invert the art).
-
-/** Mascot and "Butler 2.0" lettering; swaps to the app tile in dark mode. */
-function butlerLogo(): HTMLPictureElement {
-  return h("picture", { class: "logo" },
-    h("source", { srcset: "/brand/butler-app-icon.svg", media: "(prefers-color-scheme: dark)" }),
-    h("img", { src: "/brand/butler-primary.svg", alt: "Butler 2.0" }),
-  );
-}
-
-/** The app tile alone, for small spots like the header. */
-function butlerTile(label: string): HTMLImageElement {
-  return h("img", { class: "logo small", src: "/brand/butler-app-icon.svg", alt: label });
-}
 
 // --- data --------------------------------------------------------------------
 
@@ -165,7 +86,7 @@ async function loadItems(reset: boolean) {
     state.items.push(...rows);
     state.done = rows.length < PAGE;
   } catch (err) {
-    if (!(err instanceof SignedOut)) showError((err as Error).message);
+    if (!(err instanceof SignedOut)) toast((err as Error).message);
   } finally {
     state.loading = false;
   }
@@ -204,86 +125,20 @@ function renderLibrary() {
     debounce = window.setTimeout(() => { state.q = search.value.trim(); refresh(); }, 250);
   });
 
-  const signOut = h("button", {
-    class: "ghost",
-    onclick: async () => { await api("/api/logout", { method: "POST" }).catch(() => {}); renderSignIn(); },
-  }, "Sign out");
-
-  const googleButton = h("button", { class: "ghost", hidden: true });
-  renderGoogle(googleButton);
-
-  // Lost your phone? It rings loudly, even on silent, the next time it checks in.
-  const ringButton = h("button", {
-    class: "ghost ring", title: "Make your phone ring loudly, even on silent",
-    onclick: async () => {
-      ringButton.disabled = true;
-      try {
-        showError((await api<{ say: string }>("/api/ring", { method: "POST", body: JSON.stringify({ target: "phone" }) })).say);
-      } catch (e) {
-        if (!(e instanceof SignedOut)) showError(`Couldn't ring your phone: ${(e as Error).message}`);
-      } finally {
-        ringButton.disabled = false;
-      }
-    },
-  }, "Ring my phone");
-
   sidebarEl = h("nav", { class: "sidebar", "aria-label": "Collections" });
   headingEl = h("h2", { class: "heading" });
   gridEl = h("section", { class: "boards" });
-  binEl?.remove();
-  binEl = h("div", { class: "bin", title: "Drag a note here to throw it away", "aria-label": "Bin" });
+  // The wastebin is a spatial target; every note also has a labelled delete button (B2 · 15).
+  binEl = h("div", { class: "bin", title: "Drag a note here to throw it away", role: "img", "aria-label": "Wastebin" });
   binEl.innerHTML = binMarkup();
-  document.body.append(binEl);
+  binEl.append(h("span", { class: "bin__label" }, "Wastebin"));
 
   app.replaceChildren(
-    h("header", { class: "top" },
-      h("a", { class: "brand", href: "#", onclick: (e) => { e.preventDefault(); setFilter(null); } },
-        butlerTile("Butler 2.0 library")),
-      search,
-      googleButton,
-      ringButton,
-      signOut,
-    ),
+    topBar("library", search),
     h("main", { class: "layout" }, sidebarEl, h("div", { class: "content" }, headingEl, gridEl)),
+    binEl,
   );
   refresh(true);
-}
-
-// --- Google: lets Ask Butler add calendar events and send email as you ---------------
-
-interface GoogleStatus {
-  configured: boolean;
-  connected: boolean;
-  email: string | null;
-  backup: { at: string; ok: boolean; note: string } | null;
-}
-
-async function renderGoogle(button: HTMLButtonElement) {
-  const result = new URLSearchParams(location.search).get("google");
-  if (result) {
-    history.replaceState(null, "", location.pathname);
-    if (result === "failed") alert("Connecting Google didn't work. Try again.");
-  }
-  const status = await api<GoogleStatus>("/api/google/status").catch(() => null);
-  if (!status?.configured) return; // the server has no Google client set up
-  button.hidden = false;
-  button.textContent = status.connected ? `Google: ${status.email ?? "connected"}` : "Connect Google";
-  const backup = status.backup
-    ? `\nBackup ${new Date(status.backup.at).toLocaleString()}: ${status.backup.ok ? "" : "failed, "}${status.backup.note}`
-    : "";
-  button.title = (status.connected
-    ? "Butler can add calendar events, send email you approve, and back up to your Drive. Click to disconnect."
-    : "Let Ask Butler add calendar events and send email you approve") + backup;
-  if (status.connected && status.backup && !status.backup.ok) button.textContent += " ⚠";
-  button.onclick = async () => {
-    if (!status.connected) {
-      location.href = "/api/google/connect";
-      return;
-    }
-    if (!confirm("Disconnect Google? Ask Butler won't be able to add events or send email.")) return;
-    await api("/api/google/disconnect", { method: "POST" }).catch(() => {});
-    renderGoogle(button);
-  };
 }
 
 async function refresh(withFacets = false) {
@@ -398,7 +253,7 @@ function makeBoard(items: Item[], movable: boolean): HTMLElement {
       onPlace: (_note, spot) => {
         Object.assign(item, { board_x: spot.x, board_y: spot.y, board_tilt: spot.tilt });
         api(`/api/items/${item.id}/place`, { method: "PUT", body: JSON.stringify(spot) })
-          .catch((err) => { if (!(err instanceof SignedOut)) showError((err as Error).message); });
+          .catch((err) => { if (!(err instanceof SignedOut)) toast((err as Error).message); });
         if (!headingEl.querySelector(".tidy")) renderGrid();
       },
       onTrash: () => throwAway(item),
@@ -427,7 +282,7 @@ async function tidyUp() {
   try {
     await api("/api/board/tidy", { method: "POST" });
   } catch (err) {
-    if (!(err instanceof SignedOut)) showError((err as Error).message);
+    if (!(err instanceof SignedOut)) toast((err as Error).message);
     notes.forEach(fasten);
     return;
   }
@@ -445,7 +300,7 @@ async function shareNote(item: Item) {
   try {
     url = (await api<{ url: string }>(`/api/items/${item.id}/share`, { method: "POST" })).url;
   } catch (e) {
-    if (!(e instanceof SignedOut)) showError(`Couldn't make a link: ${(e as Error).message}`);
+    if (!(e instanceof SignedOut)) toast(`Couldn't make a link: ${(e as Error).message}`);
     return;
   }
   item.share_token = url.split("/").pop() ?? "shared";
@@ -464,20 +319,20 @@ async function shareNote(item: Item) {
       how = url; // no clipboard here: show the link itself
     }
   }
-  const toast = h("div", { class: "toast undo", role: "status" },
-    `${how} Anyone with it can see this note.`,
+  const bar = h("div", { class: "b2-toast", role: "status" },
+    h("span", {}, `${how} Anyone with it can see this note.`),
     h("button", {
       onclick: async () => {
-        toast.remove();
+        bar.remove();
         await api(`/api/items/${item.id}/share`, { method: "DELETE" }).catch(() => {});
         item.share_token = null;
         document.querySelector(`.note[data-id="${item.id}"]`)?.classList.remove("shared");
-        showError("Stopped sharing. The link no longer works.");
+        toast("Stopped sharing. The link no longer works.");
       },
     }, "Stop sharing"),
   );
-  document.body.append(toast);
-  setTimeout(() => toast.remove(), 8000);
+  document.body.append(bar);
+  setTimeout(() => bar.remove(), 8000);
 }
 
 // --- snooze: bring a note back later as a reminder -------------------------------------
@@ -516,9 +371,9 @@ function snooze(item: Item, button: HTMLElement) {
           close();
           try {
             await api(`/api/items/${item.id}/remind`, { method: "POST", body: JSON.stringify({ at: time.toISOString() }) });
-            showError(`I'll bring “${item.title ?? "this"}” back ${when.format(time)} on all your devices.`);
+            toast(`I'll bring “${item.title ?? "this"}” back ${when.format(time)} on all your devices.`);
           } catch (e) {
-            if (!(e instanceof SignedOut)) showError(`Couldn't set that: ${(e as Error).message}`);
+            if (!(e instanceof SignedOut)) toast(`Couldn't set that: ${(e as Error).message}`);
           }
         },
       }, h("span", {}, label), h("small", {}, when.format(time)))),
@@ -542,14 +397,14 @@ function throwAway(item: Item) {
   const forget = () => {
     clearTimeout(timer);
     removeEventListener("pagehide", forget);
-    toast.remove();
+    bar.remove();
     if (undone) return;
     fetch(`/api/items/${item.id}`, { method: "DELETE", keepalive: true })
       .then(() => loadFacets().then(renderSidebar))
-      .catch(() => showError("Couldn't delete that. Try again."));
+      .catch(() => toast("That didn't delete. Try again."));
   };
-  const toast = h("div", { class: "toast undo", role: "status" },
-    `“${item.title ?? "Note"}” is in the bin.`,
+  const bar = h("div", { class: "b2-toast", role: "status" },
+    h("span", {}, `“${item.title ?? "Note"}” is in the wastebin.`),
     h("button", {
       onclick: () => {
         undone = true;
@@ -559,7 +414,7 @@ function throwAway(item: Item) {
       },
     }, "Undo"),
   );
-  document.body.append(toast);
+  document.body.append(bar);
   const timer = setTimeout(forget, 5000);
   addEventListener("pagehide", forget);
 }
@@ -567,7 +422,7 @@ function throwAway(item: Item) {
 /** Shows the items closest in meaning to `item`. */
 async function showSimilar(item: Item) {
   headingEl.replaceChildren(
-    h("button", { class: "ghost back", onclick: () => renderGrid() }, "← Back"),
+    h("button", { class: "b2-button b2-button--ghost back", onclick: () => renderGrid() }, icon("back"), "Back"),
     ` Like “${item.title ?? "this"}”`,
   );
   gridEl.replaceChildren(h("p", { class: "muted" }, "Looking…"));
@@ -577,7 +432,7 @@ async function showSimilar(item: Item) {
     gridEl.replaceChildren(found.length ? makeBoard(found, false) : h("p", { class: "muted" }, "Nothing close to this yet."));
     relayout();
   } catch (err) {
-    if (!(err instanceof SignedOut)) showError((err as Error).message);
+    if (!(err instanceof SignedOut)) toast((err as Error).message);
   }
 }
 
@@ -766,12 +621,27 @@ function note(item: Item): HTMLElement {
   return el;
 }
 
-function showError(message: string) {
-  const toast = h("div", { class: "toast", role: "alert" }, message);
-  document.body.append(toast);
-  setTimeout(() => toast.remove(), 5000);
+// --- pages and boot ------------------------------------------------------------------
+
+/** Shows the page the address asks for: #/ (library), #/ask, #/devices or #/settings. */
+function route() {
+  document.querySelector(".snooze")?.remove();
+  const where = location.hash.replace(/^#\/?/, "").split("?")[0];
+  if (where === "ask") return renderAsk(app);
+  if (where === "devices") return renderDevices(app);
+  if (where === "settings") return renderSettings(app);
+  document.title = "Butler 2.0 · Library";
+  renderLibrary();
 }
 
-// --- boot ----------------------------------------------------------------------
+function signIn(message = "") {
+  renderSignIn(() => route(), () => renderLanding(() => signIn()), message);
+}
 
-api("/api/me").then(renderLibrary, () => {});
+applyTheme();
+applyMotion();
+whenSignedOut(() => signIn("Your session ended. Sign in again to carry on."));
+addEventListener("hashchange", () => api("/api/me").then(route, () => {}));
+// Coming back from connecting Google lands on Devices, where the result shows.
+if (new URLSearchParams(location.search).has("google")) location.hash = "#/devices";
+fetch("/api/me").then((res) => (res.ok ? route() : renderLanding(() => signIn())), () => renderLanding(() => signIn()));
