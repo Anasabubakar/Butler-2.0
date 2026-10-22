@@ -56,12 +56,13 @@ const FEEDS = [
 ];
 const isFeed = url => FEEDS.some(feed => feed.test(url));
 
-// Spelled out so the pet never taps the post's Save/Favourite/Bookmark button by mistake.
-const SHARE_BUTTON = 'the Share button of the main post in view: the curved right-pointing arrow icon ' +
-    '(on TikTok the last button in the column beside the video, under the bookmark). ' +
-    'Not the Save, Favourite or Bookmark button, and not Like or Comment.';
-const COPY_LINK = 'the "Copy link" option in the share menu that just opened (a chain-link icon). ' +
-    'Not Save video, Download, Favourite or Add to Favorites.';
+// Spelled out so the pet never taps a post's Save, Favourite or Bookmark button by mistake, on any site.
+const SHARE_BUTTON = 'the Share button of the main post in view. It looks different on each site: a curved ' +
+    'arrow (TikTok, Facebook, YouTube), a paper plane (Instagram, Threads), an arrow out of a box (X), "Share" or ' +
+    '"Send" text, or the post\'s "..." menu if there is no share button (LinkedIn). Never the Save, Favourite, ' +
+    'Bookmark, Like, Comment, Repost or Download button.';
+const COPY_LINK = 'the option that copies the post\'s link in the menu that just opened: "Copy link", ' +
+    '"Copy link to post", "Copy", or a chain-link icon. Never Save, Download, Favourite, Bookmark or Repost.';
 
 const REMOTE_STEPS = 30; // most steps a screen task from the phone takes
 // Steps a remote task never takes on its own (Glance's list): they're yours to do.
