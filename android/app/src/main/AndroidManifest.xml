@@ -75,6 +75,15 @@
             android:taskAffinity=""
             android:theme="@style/Theme.Butler.Sheet" />
 
+        <!-- Tell my laptop: a command for the laptop, with your secret word in it. -->
+        <activity
+            android:name=".LaptopActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Butler.Sheet"
+            android:windowSoftInputMode="adjustResize" />
+
         <service
             android:name=".PetService"
             android:exported="false"
