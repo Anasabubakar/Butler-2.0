@@ -44,6 +44,6 @@ test("the planner gets the command and the folders, and its job is checked", asy
 });
 
 test("each state has a title for the phone's notification", () => {
-  assert.equal(statusTitle("done"), "Laptop: done");
-  assert.equal(statusTitle("locked"), "Laptop: remote control locked");
+  assert.equal(statusTitle("done"), "My laptop • Complete");
+  assert.equal(statusTitle("locked"), "My laptop • Remote control is locked");
 });
