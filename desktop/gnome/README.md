@@ -47,7 +47,7 @@ gnome-extensions enable butler-pet@anasmasama.dev
 
 1. Open **Remote control** from the pet's menu. Type a secret word (one word, 4 letters or more) and press **Save word**, then **Turn on**. Only a scrambled copy of the word is kept, in `~/.config/butler/remote.json`, so write it down somewhere safe.
 2. On the phone, tap the pet, then **Tell my laptop**. Type or say a command with your secret word anywhere in it, such as "mango finish the glance project, make the tests pass" or "open YouTube mango".
-3. Your phone gets a note when it starts, every 10 minutes while it's working, and when it's done or failed.
+3. The phone pet's bubble shows what the laptop is doing (updated every 20 seconds or so, while Claude Code works), with **Stop**, and the result when it's done or failed.
 
 What it can do:
 
