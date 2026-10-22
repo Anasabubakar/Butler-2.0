@@ -585,6 +585,8 @@ export default class ButlerPetExtension extends Extension {
 
     /** Stops a job on the screen; the bubble says so until it has. */
     _stopOperating() {
+        if (!this._operating)
+            return;
         this._operating.stop = true;
         this._bubble.progress('Stopping…');
     }
@@ -908,7 +910,7 @@ export default class ButlerPetExtension extends Extension {
             this._say(result.say);
             if (!await this._confirm())
                 return 'Okay, not sent.';
-            this._say('Sending…');
+            this._bubble.working('Sending…');
             return (await this._send(config, '/api/command/confirm', {confirm: result.confirm})).say;
         }
         if (result.send) {
@@ -927,6 +929,7 @@ export default class ButlerPetExtension extends Extension {
     async _operate(config, goal) {
         const done = [];
         this._operating = {stop: false};
+        this._bubble.working('Looking at the window…', () => this._stopOperating());
         try {
             for (let i = 1; i <= 15; i++) {
                 if (this._operating.stop)
@@ -942,7 +945,7 @@ export default class ButlerPetExtension extends Extension {
                     return step.say || "I couldn't finish that.";
                 if (this._operating.stop)
                     return 'Stopped.';
-                this._say(`Step ${i}: ${step.say || step.do}\n\n(Tap me to stop.)`);
+                this._bubble.progress(`Step ${i}: ${step.say || step.do}`);
                 await this._perform(step, shot.rect);
                 done.push(`${step.do}${step.text ? ` "${step.text}"` : ''}${step.key ? ` ${step.key}` : ''}: ${step.say}`);
                 await sleep(step.do === 'wait' ? 1500 : 800);
