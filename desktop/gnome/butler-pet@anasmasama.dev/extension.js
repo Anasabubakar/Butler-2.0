@@ -242,6 +242,7 @@ export default class ButlerPetExtension extends Extension {
             operate: (config, goal, job, report) => this._operateRemote(config, goal, job, report),
             notify: (title, text) => Main.notify(`Butler: ${title}`, text),
             banner: text => this._setBanner(text),
+            status: (state, text) => this._remoteStatus(state, text),
         });
         this._remotePanel = new RemotePanel(this._remote);
         this._banner = new St.Label({style_class: 'butler-banner', visible: false, reactive: true});
@@ -1152,6 +1153,33 @@ export default class ButlerPetExtension extends Extension {
         this._menu.hide();
         this._goHome();
         this._remotePanel.open();
+    }
+
+    /** What a job from your phone is doing, shown in the bubble here too, like on the phone. */
+    _remoteStatus(state, text) {
+        if (state === 'started' || state === 'working') {
+            this._remoteLine = state === 'started' ? `From your phone: ${text}` : text;
+            this._showRemote();
+            return;
+        }
+        const wasRunning = Boolean(this._remoteLine);
+        this._remoteLine = null;
+        if (wasRunning && !this._busy && this._bubble?.working)
+            this._bubble.hide();
+        if (state === 'locked')
+            return; // it has already said so in a notification
+        const title = {done: 'Done', failed: "Couldn't finish", stopped: 'Stopped'}[state] ?? 'Remote control';
+        this._announce(title, text, null, state === 'done');
+    }
+
+    /** Puts the phone's job back in the bubble, unless the pet is busy with something of yours. */
+    _showRemote() {
+        if (!this._remoteLine || this._busy || !this._bubble || Main.sessionMode.isLocked)
+            return;
+        if (this._bubble.working)
+            this._bubble.progress(this._remoteLine);
+        else
+            this._bubble.working(this._remoteLine, () => this._remote?.stop());
     }
 
     /** The bar across the top while Butler is in control; null hides it. Esc stops the job while it shows. */
