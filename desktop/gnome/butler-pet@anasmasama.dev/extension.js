@@ -881,6 +881,7 @@ export default class ButlerPetExtension extends Extension {
                 this._noteTapped = this._stopRecording = null;
                 resolve();
             };
+            this._bubble.working('Listening… tap me when you\'re done', () => this._stopRecording?.(), 'Done');
         });
         proc.send_signal(2); // like Ctrl+C, so the recorder finishes the file properly
         await new Promise(resolve => proc.wait_async(null, () => resolve()));
