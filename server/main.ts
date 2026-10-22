@@ -647,6 +647,10 @@ app.post("/api/ring", async (c) => {
 app.use("/api/me", requireSession);
 app.get("/api/me", (c) => c.json({ ok: true }));
 
+// Your devices and when each last checked in, for the Devices page.
+app.use("/api/devices", requireSession);
+app.get("/api/devices", async (c) => c.json(await inbox.devices()));
+
 app.use("/api/items/*", requireSession);
 app.use("/api/items", requireSession);
 app.use("/api/facets", requireSession);
