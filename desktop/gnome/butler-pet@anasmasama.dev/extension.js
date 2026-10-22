@@ -960,10 +960,10 @@ export default class ButlerPetExtension extends Extension {
     async _perform(step, rect) {
         const at = (x, y) => [rect.x + x / 1000 * rect.width, rect.y + y / 1000 * rect.height];
         const now = () => GLib.get_monotonic_time();
-        // The pet and its note mustn't catch the clicks.
-        const noteShown = this._note.visible;
+        // The pet and its bubble mustn't catch the clicks.
+        const bubbleShown = this._bubble.visible;
         this._pet.reactive = false;
-        this._note.hide();
+        this._bubble.actor.hide();
         try {
             switch (step.do) {
             case 'click':
@@ -1034,7 +1034,7 @@ export default class ButlerPetExtension extends Extension {
         } finally {
             if (this._pet) {
                 this._pet.reactive = true;
-                this._note.visible = noteShown;
+                this._bubble.actor.visible = bubbleShown;
             }
         }
     }
