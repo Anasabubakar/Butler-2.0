@@ -226,7 +226,14 @@ app.post("/api/inbox", async (c) => {
   const device = text("device", 100);
   if (!device || !deviceKind) return c.json({ error: "device and kind (laptop or phone) are required" }, 400);
   await inbox.checkIn(device, deviceKind);
-  return c.json(await inbox.takeDue(device));
+  // wait=25 holds the request open until something arrives (or 25 seconds pass).
+  const wait = Math.min(Number(text("wait", 3)) || 0, 25);
+  let due = await inbox.takeDue(device);
+  if (!due.length && wait > 0) {
+    await inbox.waitForMessage(device, wait * 1000, c.req.raw.signal);
+    due = await inbox.takeDue(device);
+  }
+  return c.json(due);
 });
 
 // Sends copied text, a link, a note or a screenshot to another device.
