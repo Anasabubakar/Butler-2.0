@@ -523,7 +523,7 @@ app.post("/api/command", async (c) => {
       await stopFocus();
       await inbox.send(to, {
         from_device: FOCUS, kind: "reminder", due_at: new Date(Date.now() + minutes * 60_000).toISOString(),
-        body: `Focus time's up${on}: ${span} done. Stand up, stretch, drink water. 🎉`,
+        body: `Focus time's up${on}: ${span} done. Stand up, stretch, drink some water.`,
       });
       const end = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit" })
         .format(new Date(Date.now() + minutes * 60_000));
