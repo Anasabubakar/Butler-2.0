@@ -210,6 +210,10 @@ app.post("/api/screen/look", async (c) => {
 
 const deviceToken = (c: Context) => sameSecret(c.req.header("x-butler-token") ?? "", TOKEN);
 
+/** A device with the token, or you, signed in on the website. */
+const signedIn = async (c: Context) =>
+  deviceToken(c) || await validSession(getCookie(c, SESSION_COOKIE), SESSION_SECRET);
+
 async function deviceForm(c: Context) {
   const form = await c.req.formData().catch(() => null);
   const text = (k: string, max = 5000) => {
