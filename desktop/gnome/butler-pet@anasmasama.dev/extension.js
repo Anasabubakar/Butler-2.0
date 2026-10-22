@@ -310,6 +310,8 @@ export default class ButlerPetExtension extends Extension {
             return true;
         };
         this._bubble.onResize = () => this._placeBubble();
+        // Placed again once it's laid out, from the size it really is.
+        this._bubble.actor.connect('notify::allocation', () => this._placeBubble(true));
 
         for (const actor of [this._menu, this._confirmBox, this._bubble.actor, this._pet])
             Main.layoutManager.addTopChrome(actor);
@@ -483,16 +485,21 @@ export default class ButlerPetExtension extends Extension {
     }
 
     /** The bubble sits on top of the pet's head and grows upwards, so it never covers the pet. */
-    _placeBubble() {
+    _placeBubble(laidOut = false) {
         const monitor = Main.layoutManager.primaryMonitor;
         if (!monitor || !this._bubble?.visible)
             return;
         const {x, y} = this._target(monitor);
-        const [, width] = this._bubble.actor.get_preferred_width(-1);
-        const [, height] = this._bubble.actor.get_preferred_height(width);
+        const actor = this._bubble.actor;
+        let [width, height] = [actor.width, actor.height];
+        if (!laidOut) {
+            [, width] = actor.get_preferred_width(-1);
+            [, height] = actor.get_preferred_height(width);
+        }
         const left = Math.min(Math.max(x + PET_W / 2 - width / 2, monitor.x + 8), monitor.x + monitor.width - width - 8);
         const top = Math.max(y - height - 6, monitor.y + 8);
-        this._bubble.actor.set_position(Math.round(left), Math.round(top));
+        if (actor.x !== Math.round(left) || actor.y !== Math.round(top))
+            actor.set_position(Math.round(left), Math.round(top));
     }
 
     /** Settles down where it is: peeking on the bottom edge, or standing anywhere else. */
