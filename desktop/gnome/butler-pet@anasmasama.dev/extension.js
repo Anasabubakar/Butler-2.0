@@ -759,7 +759,10 @@ export default class ButlerPetExtension extends Extension {
                 return null;
             await sleep(500);
             const link = (await this._readClipboard()).trim();
-            return /^https?:\/\//.test(link) && link !== pageUrl ? link : null;
+            if (/^https?:\/\//.test(link) && link !== pageUrl)
+                return link;
+            St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, pageUrl);
+            return null;
         } catch (e) {
             return null;
         } finally {
