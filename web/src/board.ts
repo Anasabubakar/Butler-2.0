@@ -10,8 +10,8 @@ export interface BoardHooks {
   onPlace(note: HTMLElement, spot: Spot): void;
   /** A note went in the bin. */
   onTrash(note: HTMLElement): void;
-  /** A note was tapped without moving it. */
-  onOpen(note: HTMLElement): void;
+  /** A note was tapped without moving it; `tapped` is the part of it under your finger. */
+  onOpen(note: HTMLElement, tapped: Element): void;
 }
 
 const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -247,7 +247,7 @@ export function makeDraggable(note: HTMLElement, board: HTMLElement, bin: HTMLEl
     const wasTap = !dragging && !moved && !cancelled;
     if (dragging) finish(e.clientX, e.clientY);
     pressed = null;
-    if (wasTap && !(e.target as Element).closest("button, input, video, a")) hooks.onOpen(note);
+    if (wasTap && !(e.target as Element).closest("button, input, video, a")) hooks.onOpen(note, e.target as Element);
   };
   note.addEventListener("pointerup", (e) => release(e, false));
   note.addEventListener("pointercancel", (e) => release(e, true));
