@@ -563,7 +563,7 @@ app.post("/api/command", async (c) => {
       });
     }
     default:
-      return json({ action: "answer", say: p.reply || "I'm not sure how to help with that yet." });
+      return json({ action: "answer", say: p.reply || "I can't do that yet. Try saying it another way?" });
   }
 });
 
