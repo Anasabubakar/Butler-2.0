@@ -56,6 +56,13 @@ const FEEDS = [
 ];
 const isFeed = url => FEEDS.some(feed => feed.test(url));
 
+// Spelled out so the pet never taps the post's Save/Favourite/Bookmark button by mistake.
+const SHARE_BUTTON = 'the Share button of the main post in view: the curved right-pointing arrow icon ' +
+    '(on TikTok the last button in the column beside the video, under the bookmark). ' +
+    'Not the Save, Favourite or Bookmark button, and not Like or Comment.';
+const COPY_LINK = 'the "Copy link" option in the share menu that just opened (a chain-link icon). ' +
+    'Not Save video, Download, Favourite or Add to Favorites.';
+
 const REMOTE_STEPS = 30; // most steps a screen task from the phone takes
 // Steps a remote task never takes on its own (Glance's list): they're yours to do.
 const RISKY = /\b(delete|erase|discard|send|submit|publish|tweet|pay|purchase|buy|place order|checkout|check out|transfer|withdraw|uninstall|format|empty (?:the )?trash|sign out|log ?out|unsubscribe|reply all|password)\b/i;
@@ -742,15 +749,20 @@ export default class ButlerPetExtension extends Extension {
     async _linkFromShare(config, pageUrl) {
         try {
             const shot = await this._snapWindow();
-            if (!shot || !await this._tapOn(config, shot, 'the Share button of the main post in view'))
+            if (!shot || !await this._tapOn(config, shot, SHARE_BUTTON))
                 return null;
             await sleep(900);
             const menu = await this._snapWindow();
-            if (!await this._tapOn(config, menu, 'the "Copy link" option'))
-                return null;
-            await sleep(300);
-            const link = (await this._readClipboard()).trim();
-            return /^https?:\/\//.test(link) && link !== pageUrl ? link : null;
+            // Emptied first, so only a link Copy link really put there counts.
+            St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, '');
+            if (await this._tapOn(config, menu, COPY_LINK)) {
+                await sleep(500);
+                const link = (await this._readClipboard()).trim();
+                if (/^https?:\/\//.test(link) && link !== pageUrl)
+                    return link;
+            }
+            St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, pageUrl);
+            return null;
         } catch (e) {
             return null;
         } finally {
