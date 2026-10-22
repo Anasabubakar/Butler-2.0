@@ -431,14 +431,14 @@ app.post("/api/command", async (c) => {
       if (google.googleConfigured() && await google.account()) {
         try {
           await google.addEvent(title, start, end, timeZone);
-          return json({ action: "calendar", say: p.reply || "Added to your calendar." });
+          return json({ action: "calendar", say: p.reply || "It's on your calendar." });
         } catch (e) {
           return c.json({ error: String(e).slice(0, 300) }, 502);
         }
       }
       // Google isn't connected: open the event filled in, and you tap Save.
       return json({
-        action: "calendar", say: "Here's the event. Tap Save to add it.", open: calendarUrl(title, start, end),
+        action: "calendar", say: "Here's the event. Check it, then tap Save to add it.", open: calendarUrl(title, start, end),
       });
     }
     case "email": {
