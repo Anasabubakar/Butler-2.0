@@ -56,9 +56,14 @@ class ButlerClient(private val config: Config) {
         return List(sent.length()) { sent.getString(it) }
     }
 
-    /** Checks in and takes whatever is waiting for this phone. */
-    suspend fun inbox(): JSONArray =
-        JSONArray(post("/api/inbox", mapOf("device" to config.deviceName, "kind" to "phone"), null))
+    /** Checks in and takes whatever is waiting for this phone. With `wait`, the server holds on up to 25 seconds for something. */
+    suspend fun inbox(wait: Boolean = false): JSONArray = JSONArray(
+        post("/api/inbox", buildMap {
+            put("device", config.deviceName)
+            put("kind", "phone")
+            if (wait) put("wait", "25")
+        }, null),
+    )
 
     /** A file another device sent here: its bytes and its name. */
     suspend fun download(itemId: String): Pair<ByteArray, String> = withContext(Dispatchers.IO) {
