@@ -15,6 +15,9 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+import {ClipboardHistory} from './history.js';
+import {HistoryPanel} from './historypanel.js';
+
 // The Little Butler's desktop size (design/little-butler/docs/BEHAVIOR.md).
 const PET_W = 88;
 const PET_H = 110;
@@ -31,6 +34,10 @@ const SYNC_FLAG = GLib.build_filenamev([GLib.get_user_config_dir(), 'butler', 'c
 const SYNC_MAX = 20000; // characters; bigger copies stay on the laptop
 const RING_SOUND = '/usr/share/sounds/freedesktop/stereo/phone-incoming-call.oga';
 const syncLabel = on => `Clipboard sync: ${on ? 'on' : 'off'}`;
+// Opens the clipboard history; "historyKey" in pet.json changes it.
+const HISTORY_KEY = '<Super><Shift>v';
+// Terminals paste with Ctrl+Shift+V.
+const TERMINALS = ['terminal', 'ptyxis', 'kitty', 'alacritty', 'wezterm', 'tilix', 'konsole', 'terminator', 'foot', 'ghostty'];
 const BROWSERS = ['firefox', 'google-chrome', 'chromium', 'brave-browser', 'microsoft-edge', 'vivaldi', 'opera'];
 
 // Feed pages, where the address bar shows the feed rather than the post you're looking at.
@@ -174,6 +181,7 @@ export default class ButlerPetExtension extends Extension {
             ['Solve this', () => this._look('solve')],
             ['Translate this', () => this._look('translate')],
             ['Send to phone', () => this._sendToPhone()],
+            ['Clipboard history', () => this._openHistory()],
             ['Ring my phone', () => this._ringPhone()],
             ['Talk to Butler', () => this._talk()],
         ]) {
@@ -192,6 +200,11 @@ export default class ButlerPetExtension extends Extension {
             if (type === Meta.SelectionType.SELECTION_CLIPBOARD)
                 this._clipboardChanged();
         });
+
+        // Clipboard history: every Ctrl+C, kept on this laptop. Super+Shift+V or the menu opens it.
+        this._history = new ClipboardHistory();
+        this._historyPanel = new HistoryPanel(this._history, clip => this._pasteFromHistory(clip));
+        this._grabHistoryKey();
 
         // Ask Butler: always at the top of the menu. Click it, type what you want, press Enter.
         this._ask = new St.Entry({hint_text: 'Ask me anything…', style_class: 'butler-ask', can_focus: true, x_expand: true});
@@ -271,9 +284,12 @@ export default class ButlerPetExtension extends Extension {
         this._inboxId = 0;
         this._selection?.disconnect(this._selectionId);
         this._selection = null;
-        if (this._syncId)
-            GLib.source_remove(this._syncId);
-        this._syncId = 0;
+        if (this._copyId)
+            GLib.source_remove(this._copyId);
+        this._copyId = 0;
+        this._releaseHistoryKey();
+        this._historyPanel?.destroy();
+        this._historyPanel = this._history = null;
         this._stopClip();
         Main.layoutManager.disconnect(this._monitorsId);
         this._answer?.(false);
@@ -988,20 +1004,71 @@ export default class ButlerPetExtension extends Extension {
             : 'Clipboard sync is off.');
     }
 
-    /** Something new was copied: send it to the phone, once things settle. */
+    /** Something new was copied: keep it in the history and send it to the phone, once things settle. */
     _clipboardChanged() {
-        if (!this._syncOn || this._busy) // the pet's own copying while it works isn't yours
+        if (this._busy) // the pet's own copying while it works isn't yours
             return;
         const types = this._selection.get_mimetypes(Meta.SelectionType.SELECTION_CLIPBOARD);
         if (types.includes('x-kde-passwordManagerHint'))
             return;
-        if (this._syncId)
-            GLib.source_remove(this._syncId);
-        this._syncId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 800, () => {
-            this._syncId = 0;
-            this._syncClipboard();
+        if (this._copyId)
+            GLib.source_remove(this._copyId);
+        this._copyId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+            this._copyId = 0;
+            this._history?.capture(this._selection.get_mimetypes(Meta.SelectionType.SELECTION_CLIPBOARD))
+                .catch(e => console.warn(`Butler: clipboard history: ${e.message}`));
+            if (this._syncOn)
+                this._syncClipboard();
             return GLib.SOURCE_REMOVE;
         });
+    }
+
+    // --- clipboard history ---------------------------------------------------------------
+
+    _openHistory() {
+        this._menu.hide();
+        this._goHome();
+        this._historyPanel.open();
+    }
+
+    _grabHistoryKey() {
+        const accelerator = loadConfig()?.historyKey ?? HISTORY_KEY;
+        this._historyAction = global.display.grab_accelerator(accelerator, Meta.KeyBindingFlags.NONE);
+        if (this._historyAction === Meta.KeyBindingAction.NONE) {
+            console.warn(`Butler: ${accelerator} is taken, so the clipboard history only opens from the pet's menu`);
+            return;
+        }
+        this._historyBinding = Meta.external_binding_name_for_action(this._historyAction);
+        Main.wm.allowKeybinding(this._historyBinding, Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW);
+        this._acceleratorId = global.display.connect('accelerator-activated', (_display, action) => {
+            if (action === this._historyAction)
+                this._historyPanel.toggle();
+        });
+    }
+
+    _releaseHistoryKey() {
+        if (this._acceleratorId)
+            global.display.disconnect(this._acceleratorId);
+        this._acceleratorId = 0;
+        if (this._historyBinding) {
+            Main.wm.allowKeybinding(this._historyBinding, Shell.ActionMode.NONE);
+            global.display.ungrab_accelerator(this._historyAction);
+        }
+        this._historyBinding = null;
+    }
+
+    /** Puts a copy from the history back on the clipboard and pastes it into the window you were in. */
+    async _pasteFromHistory(clip) {
+        if (!this._history.copyBack(clip)) {
+            this._say("That picture's file is gone, so I can't paste it.");
+            return;
+        }
+        await sleep(150); // the panel lets go of the keyboard and your window gets it back
+        const wmClass = global.display.focus_window?.get_wm_class()?.toLowerCase() ?? '';
+        if (TERMINALS.some(name => wmClass.includes(name)))
+            await this._press(Clutter.KEY_Control_L, Clutter.KEY_Shift_L, Clutter.KEY_v);
+        else
+            await this._press(Clutter.KEY_Control_L, Clutter.KEY_v);
     }
 
     async _syncClipboard() {
