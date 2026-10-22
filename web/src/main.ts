@@ -564,9 +564,10 @@ function note(item: Item): HTMLElement {
   const paper = h("div", { class: "paper" },
     pic ? h("div", { class: "media" }, pic) : null,
     h("h4", {}, title),
-    item.status === "pending" ? h("p", { class: "muted pending" }, "Organizing…") : null,
-    item.status === "failed" ? h("p", { class: "muted" }, "Couldn't organize this one.") : null,
-    item.summary ? h("p", { class: "summary" }, item.summary) : null,
+    item.status === "pending" ? h("p", { class: "muted pending" }, "Organising…") : null,
+    item.status === "failed" ? h("p", { class: "muted" }, "Couldn't organise this one. It's still saved.") : null,
+    // AI summaries are labelled as Butler's, so they're never mistaken for your own words (B2 · 15).
+    item.summary ? h("p", { class: "summary", title: "Summary written by Butler" }, h("span", { class: "ai-label" }, "Summary · "), item.summary) : null,
     item.note ? h("p", { class: "note-text" }, item.note) : null,
     sourceLink(item),
     priceTag(item),
