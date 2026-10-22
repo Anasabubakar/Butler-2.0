@@ -85,15 +85,21 @@ export class Bubble {
         return this._working;
     }
 
+    /** All of what it says now. */
+    get text() {
+        return this._full;
+    }
+
     get visible() {
         return Boolean(this.actor?.visible);
     }
 
-    /** Working on something: spinner, a short line, and Stop if it can be stopped. */
-    working(text, onStop = null) {
+    /** Working on something: spinner, a short line, and Stop (or `stopLabel`) if it can be stopped. */
+    working(text, onStop = null, stopLabel = 'Stop') {
         this._working = true;
         this._stopAction = onStop;
         this._show(text, true);
+        this._stop.label = stopLabel;
         this._stop.visible = Boolean(onStop);
         this._copy.visible = false;
         this._close.visible = false;
