@@ -651,6 +651,18 @@ app.get("/api/me", (c) => c.json({ ok: true }));
 app.use("/api/devices", requireSession);
 app.get("/api/devices", async (c) => c.json(await inbox.devices()));
 
+// Preferences every device shares. Devices read them with the token; you change them on the website.
+app.get("/api/prefs", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "sign in" }, 401);
+  return c.json(await prefs.load());
+});
+app.put("/api/prefs", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "sign in" }, 401);
+  const body = await c.req.json().catch(() => null);
+  if (!body || typeof body !== "object") return c.json({ error: "send a JSON object" }, 400);
+  return c.json(await prefs.save(body as Record<string, unknown>));
+});
+
 app.use("/api/items/*", requireSession);
 app.use("/api/items", requireSession);
 app.use("/api/facets", requireSession);
