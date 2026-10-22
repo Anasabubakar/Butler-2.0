@@ -92,16 +92,17 @@
   --b2-on-action: var(--b2-white);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Dark keeps ink and charcoal; the accent stays vermilion. */
-    --b2-bg: var(--b2-ink);
-    --b2-surface: var(--b2-dark-surface);
-    --b2-text: var(--b2-white);
-    --b2-text-muted: #a8a49e;   /* muted on #191919: about 7:1 */
-    --b2-border: #2e2c29;
-  }
+/* Dark keeps ink and charcoal; the accent stays vermilion. The page sets data-theme from
+   Settings → Theme (light, dark or the system's choice) before it draws anything. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --b2-bg: var(--b2-ink);
+  --b2-surface: var(--b2-dark-surface);
+  --b2-text: var(--b2-white);
+  --b2-text-muted: #a8a49e;   /* muted on #191919: about 7:1 */
+  --b2-border: #2e2c29;
 }
+:root[data-theme="light"] { color-scheme: light; }
 
 /* Reduced motion (system setting, or Settings → Reduced motion): instant changes or fades of
    100 ms at most, and no idle loops. */
