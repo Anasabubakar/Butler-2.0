@@ -605,10 +605,10 @@ app.post("/api/screen/step", async (c) => {
 });
 
 app.post("/api/login", async (c) => {
-  if (!loginThrottle.allow(clientIp(c))) return c.json({ error: "Too many tries. Wait a minute." }, 429);
+  if (!loginThrottle.allow(clientIp(c))) return c.json({ error: "Too many tries. Wait a minute, then try again." }, 429);
   const { password } = await c.req.json<{ password?: string }>().catch(() => ({ password: undefined }));
   if (!password || !PASSWORD_HASH || !(await verifyPassword(password, PASSWORD_HASH))) {
-    return c.json({ error: "Wrong password" }, 401);
+    return c.json({ error: "That password didn't work. Check it and try again." }, 401);
   }
   setCookie(c, SESSION_COOKIE, await newSession(SESSION_SECRET), {
     httpOnly: true, secure: COOKIE_SECURE, sameSite: "Lax", path: "/", maxAge: SESSION_DAYS * 86_400,
