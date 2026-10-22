@@ -19,18 +19,17 @@ import android.os.Build
 import android.os.Environment
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.provider.Settings
 import android.view.ContextThemeWrapper
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
-import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -39,7 +38,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -47,7 +45,8 @@ import java.util.UUID
 
 /**
  * Little Butler on your phone: peeks from the bottom-right corner over every app.
- * Tap it for Save this, Copy this, Analyze this, Solve this, Send to laptop and Ask Butler.
+ * Tap it for Save this, Copy this, Analyze this, Solve this, Send to laptop and Ask Butler;
+ * hold it to type a command straight away. A bubble over its head says what it's doing.
  * It also checks for reminders and things sent from your laptop.
  */
 class PetService : Service() {
@@ -63,15 +62,19 @@ class PetService : Service() {
     private var petX = 0f // where the pet is while it's dragged: from the right and bottom edges
     private var petY = 0f
     private lateinit var menu: LinearLayout
-    private lateinit var note: TextView
+    private lateinit var bubble: PetBubble
+    private var bubbleTurn = 0 // goes up whenever the bubble says something new
     private var panelShown = false
     private var busy = false
-    private lateinit var syncButton: Button
+    private lateinit var syncButton: TextView
     private var lastSynced: String? = null
     private var syncing = false
-    private var noteTapped: CompletableDeferred<Unit>? = null
     private var operating = false
     private var stopOperating = false
+    // A job you gave the laptop is running. The laptop reports at least every 10 minutes,
+    // so after 15 minutes of silence the pet stops waiting on it.
+    private var laptopUntil = 0L
+    private val laptopWorking get() = SystemClock.elapsedRealtime() < laptopUntil
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -89,6 +92,7 @@ class PetService : Service() {
 
         pet = ButlerSpriteView(ui).apply {
             onTap = { toggle() }
+            onHold = { askButler(talk = false) } // hold: straight to typing a command
             // Drag it anywhere; it stays where you drop it, and remembers the spot.
             onDragBy = { dx, dy ->
                 if (panelShown && !busy) {
@@ -115,71 +119,87 @@ class PetService : Service() {
 
         menu = LinearLayout(ui).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(0xFFFFFFFF.toInt(), 16 * dp)
-            setPadding((8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt())
+            background = GradientDrawable().apply {
+                setColor(0xFFFFFFFF.toInt())
+                setStroke(dp.toInt(), 0xFFE6E3F0.toInt())
+                cornerRadius = 22 * dp
+            }
+            setPadding((12 * dp).toInt(), (12 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt())
+            // The command bar. Tapping it opens the typing sheet with the keyboard up
+            // (a box inside the floating pet can't take typing itself); the mic opens it listening.
+            addView(LinearLayout(ui).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                background = rounded(0xFF6C4CF5.toInt(), 24 * dp)
+                setPadding((16 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
+                setOnClickListener { askButler(talk = false) }
+                addView(TextView(ui).apply {
+                    setText(R.string.pet_ask_box)
+                    setTextColor(0xFFFFFFFF.toInt())
+                    textSize = 16f
+                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                addView(TextView(ui).apply {
+                    text = "🎙"
+                    textSize = 18f
+                    gravity = Gravity.CENTER
+                    contentDescription = getString(R.string.pet_talk)
+                    background = rounded(0x33FFFFFF, 20 * dp)
+                    setOnClickListener { askButler(talk = true) }
+                }, LinearLayout.LayoutParams((40 * dp).toInt(), (40 * dp).toInt()))
+            }, LinearLayout.LayoutParams((MENU_WIDTH_DP * dp).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT))
             addView(TextView(ui).apply {
                 setText(R.string.pet_menu_title)
-                setTextColor(0xFF555B66.toInt())
-                setPadding((8 * dp).toInt(), (4 * dp).toInt(), (8 * dp).toInt(), (4 * dp).toInt())
-            })
-            // Looks like a text box; tapping it opens the Ask sheet with the keyboard up.
-            // (A box inside the floating pet can't take typing itself.)
-            addView(TextView(ui).apply {
-                setText(R.string.pet_ask_box)
                 setTextColor(0xFF8A8F99.toInt())
-                textSize = 16f
-                background = GradientDrawable().apply {
-                    setColor(0xFFF4F4F6.toInt())
-                    setStroke(dp.toInt(), 0xFFD9DBE0.toInt())
-                    cornerRadius = 10 * dp
-                }
-                setPadding((12 * dp).toInt(), (10 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt())
-                setOnClickListener { askButler(talk = false) }
-            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                setMargins((4 * dp).toInt(), (4 * dp).toInt(), (4 * dp).toInt(), (6 * dp).toInt())
+                textSize = 12f
+                setPadding((6 * dp).toInt(), (10 * dp).toInt(), 0, (4 * dp).toInt())
             })
-            for ((label, action) in listOf<Pair<Int, () -> Unit>>(
-                R.string.pet_save to ::saveThis,
-                R.string.pet_copy to ::copyThis,
-                R.string.pet_analyze to { look("analyze") },
-                R.string.pet_solve to { look("solve") },
-                R.string.pet_translate to { look("translate") },
-                R.string.pet_send_laptop to ::sendToLaptop,
-                R.string.pet_laptop to ::openLaptop,
-                R.string.pet_library to ::openLibrary,
-                R.string.pet_talk to { askButler(talk = true) },
-                R.string.pet_hide to { stopSelf() },
-            )) {
-                addView(Button(ui).apply {
-                    setText(label)
-                    isAllCaps = false
-                    setOnClickListener { action() }
-                })
+            // Quick actions, two to a row.
+            val actions = listOf<Triple<String, Int, () -> Unit>>(
+                Triple("📌", R.string.pet_save, ::saveThis),
+                Triple("📋", R.string.pet_copy, ::copyThis),
+                Triple("🔍", R.string.pet_analyze, { look("analyze") }),
+                Triple("🧠", R.string.pet_solve, { look("solve") }),
+                Triple("🌍", R.string.pet_translate, { look("translate") }),
+                Triple("📤", R.string.pet_send_laptop, ::sendToLaptop),
+                Triple("💻", R.string.pet_laptop, ::openLaptop),
+                Triple("📚", R.string.pet_library, ::openLibrary),
+            )
+            for (pair in actions.chunked(2)) {
+                addView(LinearLayout(ui).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    for ((icon, label, action) in pair) {
+                        addView(tile(ui, "$icon  ${getString(label)}", action),
+                            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                                setMargins((3 * dp).toInt(), (3 * dp).toInt(), (3 * dp).toInt(), (3 * dp).toInt())
+                            })
+                    }
+                }, LinearLayout.LayoutParams((MENU_WIDTH_DP * dp).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT))
             }
-            // Clipboard sync: what you copy here goes to the laptop's clipboard too. Off until you turn it on.
-            addView(Button(ui).apply {
-                syncButton = this
-                text = syncLabel()
-                isAllCaps = false
-                setOnClickListener { toggleSync() }
-            })
+            // Clipboard sync (off until you turn it on) and Hide, smaller, at the bottom.
+            addView(LinearLayout(ui).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, (4 * dp).toInt(), 0, 0)
+                addView(small(ui, syncLabel()) { toggleSync() }.also { syncButton = it },
+                    LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                addView(small(ui, getString(R.string.pet_hide)) { stopSelf() })
+            }, LinearLayout.LayoutParams((MENU_WIDTH_DP * dp).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT))
         }
-        note = TextView(ui).apply {
-            background = rounded(0xFF1B1B22.toInt(), 14 * dp)
-            setTextColor(0xFFFFFFFF.toInt())
-            textSize = 15f
-            maxWidth = (300 * dp).toInt()
-            setPadding((14 * dp).toInt(), (10 * dp).toInt(), (14 * dp).toInt(), (10 * dp).toInt())
+        bubble = PetBubble(ui).apply {
             visibility = View.GONE
-            setOnClickListener {
+            onClose = {
                 if (Ringer.ringing) stopRinging()
-                noteTapped?.complete(Unit)
+                bubbleTurn++
+                hideBubble()
             }
+            onCopy = { copyToClipboard(it); progressNote(getString(R.string.pet_copied)) }
+            onShare = { shareText(it) }
         }
         panel = LinearLayout(ui).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.END
-            addView(note)
+            addView(bubble, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = (6 * dp).toInt()
+            })
             addView(menu)
             visibility = View.GONE
         }
@@ -188,11 +208,12 @@ class PetService : Service() {
         placePanel()
         pet.setState(restingFace())
 
-        // Reminders and things sent from your laptop.
+        // Reminders and things sent from your laptop. While the laptop is on a job of yours,
+        // the pet keeps a line open so its updates show up within a second or two.
         scope.launch {
             while (isActive) {
-                checkInbox()
-                delay(INBOX_EVERY_MS)
+                val waited = checkInbox(wait = laptopWorking)
+                if (!laptopWorking || !waited) delay(INBOX_EVERY_MS)
             }
         }
     }
@@ -225,6 +246,27 @@ class PetService : Service() {
     private fun rounded(color: Int, radius: Float) = GradientDrawable().apply {
         setColor(color)
         cornerRadius = radius
+    }
+
+    /** One of the menu's quick actions. */
+    private fun tile(ui: Context, label: String, action: () -> Unit) = TextView(ui).apply {
+        val dp = resources.displayMetrics.density
+        text = label
+        setTextColor(0xFF22232A.toInt())
+        textSize = 14f
+        isSingleLine = true
+        background = rounded(0xFFF3F1FA.toInt(), 14 * dp)
+        setPadding((12 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt(), (12 * dp).toInt())
+        setOnClickListener { action() }
+    }
+
+    private fun small(ui: Context, label: String, action: () -> Unit) = TextView(ui).apply {
+        val dp = resources.displayMetrics.density
+        text = label
+        setTextColor(0xFF6B7080.toInt())
+        textSize = 13f
+        setPadding((8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (6 * dp).toInt())
+        setOnClickListener { action() }
     }
 
     /** On the bottom edge it peeks; anywhere else it stands. */
@@ -264,16 +306,16 @@ class PetService : Service() {
         }
         if (busy) return
         panelShown = !panelShown
-        menu.visibility = View.VISIBLE
-        note.visibility = View.GONE
-        panel.visibility = if (panelShown) View.VISIBLE else View.GONE
+        menu.visibility = if (panelShown) View.VISIBLE else View.GONE
+        // A laptop job's bubble stays up over the menu; anything else makes way.
+        if (!laptopWorking) bubble.visibility = View.GONE
+        panel.visibility = if (panelShown || bubble.visibility == View.VISIBLE) View.VISIBLE else View.GONE
         if (panelShown) placePanel()
         pet.setState(if (panelShown) "summon" else if (restingFace() == "peek") "hide" else "idle")
     }
 
     private fun openLibrary() {
-        panelShown = false
-        panel.visibility = View.GONE
+        closeMenu()
         pet.setState(if (restingFace() == "peek") "hide" else "idle")
         startActivity(Intent(this, LibraryActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
@@ -325,33 +367,84 @@ class PetService : Service() {
         }
     }
 
-    private fun say(text: String) {
-        note.text = text
-        note.visibility = View.VISIBLE
+    // --- the bubble over the pet's head ------------------------------------------------
+
+    private fun showBubble() {
+        bubble.visibility = View.VISIBLE
         panel.visibility = View.VISIBLE
         placePanel()
     }
 
-    /** Runs an action with a working face and a note, then shows the result until it's read. */
-    private fun work(working: String, face: String = "work", action: suspend () -> String) {
+    private fun hideBubble() {
+        bubble.visibility = View.GONE
+        if (!panelShown) {
+            panel.visibility = View.GONE
+            if (!busy && !operating) pet.setState(restingFace())
+        } else placePanel()
+    }
+
+    private fun closeMenu() {
+        panelShown = false
+        menu.visibility = View.GONE
+        if (bubble.visibility != View.VISIBLE) panel.visibility = View.GONE
+        pet.setState(restingFace())
+    }
+
+    /** A new line in the bubble: what it's doing now, if it's working, else a short note. */
+    private fun say(text: String) {
+        bubbleTurn++
+        if (bubble.working) bubble.progress(text) else bubble.info(text)
+        showBubble()
+        if (!bubble.working) lingerThenHide(text)
+    }
+
+    private fun progressNote(text: String) {
+        if (bubble.working) bubble.progress(text) else say(text)
+    }
+
+    /** Shows a finished result with Copy and Share, then tucks it away unless you're reading it. */
+    private fun tell(text: String, ok: Boolean) {
+        bubbleTurn++
+        pet.setState(if (ok) "success" else "error")
+        bubble.result(text, ok)
+        showBubble()
+        lingerThenHide(text)
+    }
+
+    private fun lingerThenHide(text: String) {
+        val mine = bubbleTurn
+        scope.launch {
+            val until = SystemClock.uptimeMillis() + (text.length * 60L).coerceIn(4000L, 30_000L)
+            while (bubbleTurn == mine && (bubble.expanded || SystemClock.uptimeMillis() < until)) delay(250)
+            if (bubbleTurn == mine) hideBubble()
+        }
+    }
+
+    private fun shareText(text: String) {
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+        startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    /** Runs an action with a working face and the bubble's spinner, then shows the result. */
+    private fun work(working: String, face: String = "work", stoppable: Boolean = false, action: suspend () -> String) {
         if (busy) return
         busy = true
+        panelShown = false
         menu.visibility = View.GONE
         pet.setState(face)
-        say(working)
+        bubbleTurn++
+        bubble.working(working, if (stoppable) ({
+            stopOperating = true
+            bubble.progress(getString(R.string.pet_stopping))
+        }) else null)
+        showBubble()
         scope.launch {
-            val message = runCatching { action() }.fold(
-                onSuccess = { pet.setState("success"); it },
-                onFailure = { pet.setState("error"); getString(R.string.pet_failed, it.message ?: it.toString()) },
+            val (message, ok) = runCatching { action() }.fold(
+                onSuccess = { it to true },
+                onFailure = { getString(R.string.pet_failed, it.message ?: it.toString()) to false },
             )
-            say(message)
-            noteTapped = CompletableDeferred()
-            withTimeoutOrNull((message.length * 50L).coerceIn(2200L, 30_000L)) { noteTapped?.await() }
-            noteTapped = null
-            panelShown = false
-            panel.visibility = View.GONE
-            pet.setState(if (restingFace() == "peek") "hide" else "idle")
             busy = false
+            tell(message, ok)
         }
     }
 
@@ -364,6 +457,7 @@ class PetService : Service() {
     private suspend fun snap(): Shot {
         val hands = hands()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) throw IllegalStateException(getString(R.string.pet_needs_android_11))
+        val panelWas = panel.visibility
         pet.visibility = View.INVISIBLE
         panel.visibility = View.INVISIBLE
         delay(150)
@@ -375,7 +469,7 @@ class PetService : Service() {
             return Shot(jpeg, bitmap.width, bitmap.height)
         } finally {
             pet.visibility = View.VISIBLE
-            panel.visibility = View.VISIBLE
+            panel.visibility = panelWas
         }
     }
 
@@ -461,15 +555,14 @@ class PetService : Service() {
     private fun askButler(talk: Boolean) {
         if (busy) return
         busy = true
+        pet.setState("listen")
         scope.launch {
             val shot = runCatching { snap() }.getOrNull()?.let { s ->
                 File(cacheDir, "ask-${UUID.randomUUID()}.jpg").apply { writeBytes(s.jpeg) }
             }
             val link = HandsService.instance?.browserUrl()
-            panelShown = false
-            panel.visibility = View.GONE
-            pet.setState(restingFace())
             busy = false
+            closeMenu()
             AskActivity.open(this@PetService, shot, link, talk)
         }
     }
@@ -488,7 +581,7 @@ class PetService : Service() {
      * Works towards `goal` one step at a time: a screenshot, Butler picks the next tap,
      * swipe or typing, the pet does it, repeat. Tap the pet to stop.
      */
-    private fun operate(goal: String) = work(getString(R.string.pet_thinking), face = "work") {
+    private fun operate(goal: String) = work(getString(R.string.pet_thinking), face = "work", stoppable = true) {
         val config = Config(this)
         val done = mutableListOf<String>()
         operating = true
@@ -504,7 +597,7 @@ class PetService : Service() {
                     "stop" -> return@work what.ifBlank { getString(R.string.pet_cant_finish) }
                 }
                 if (stopOperating) return@work getString(R.string.pet_stopped)
-                say(getString(R.string.pet_step, i, what.ifBlank { step.optString("do") }))
+                progressNote(getString(R.string.pet_step, i, what.ifBlank { step.optString("do") }))
                 val result = perform(step, shot)
                 done += listOfNotNull(step.optString("do"), step.optString("text").takeIf { !step.isNull("text") && it.isNotBlank() }?.let { "\"$it\"" },
                     step.optString("key").takeIf { !step.isNull("key") && it.isNotBlank() })
@@ -563,20 +656,70 @@ class PetService : Service() {
         }
     }
 
-    /** Tell my laptop: a command for the laptop, with your secret word in it. */
+    /** Tell my laptop: the command sheet, set to the laptop. */
     private fun openLaptop() {
-        panelShown = false
-        panel.visibility = View.GONE
-        startActivity(Intent(this, LaptopActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        closeMenu()
+        AskActivity.open(this, null, null, talk = false, laptop = true)
+    }
+
+    /**
+     * How a job you gave the laptop is going. While it works, the bubble shows the latest
+     * line with a spinner and Stop; when it ends, the result with Copy and Share. The end
+     * also goes in a quiet notification, in case you weren't looking at the screen.
+     */
+    private fun laptopStatus(state: String, title: String, text: String) {
+        addLaptopNews("$title: $text")
+        val running = state == "started" || state == "working"
+        laptopUntil = if (running) SystemClock.elapsedRealtime() + LAPTOP_QUIET_MS else 0L
+        if (running) {
+            if (busy) return
+            pet.setState("work")
+            bubbleTurn++
+            val line = getString(R.string.bubble_laptop, text)
+            if (bubble.working && bubble.visibility == View.VISIBLE) bubble.progress(line) else bubble.working(line, ::stopLaptop)
+            showBubble()
+            return
+        }
+        quietly(title, text)
+        if (!busy) tell("$title: $text", ok = state == "done")
+    }
+
+    private fun stopLaptop() {
+        bubble.progress(getString(R.string.laptop_stopping))
+        scope.launch {
+            runCatching { ButlerClient(Config(this@PetService)).laptopStop(off = false) }
+                .onFailure { bubble.progress(getString(R.string.pet_failed, it.message ?: it.toString())) }
+        }
+    }
+
+    /** A silent notification: no sound, no pop-down. */
+    private fun quietly(title: String, text: String) {
+        val tap = PendingIntent.getActivity(
+            this, nextNotification, Intent(this, AskActivity::class.java).putExtra(AskActivity.EXTRA_LAPTOP, true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val notification = NotificationCompat.Builder(this, QUIET_CHANNEL)
+            .setSmallIcon(R.drawable.ic_butler)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setAutoCancel(true)
+            .setContentIntent(tap)
+            .build()
+        runCatching { getSystemService(NotificationManager::class.java).notify(nextNotification++, notification) }
     }
 
     // --- the inbox: reminders and things sent from your laptop -------------------------
 
-    private suspend fun checkInbox() {
+    /** Takes what's waiting. With `wait`, the server holds on until something comes. False if offline. */
+    private suspend fun checkInbox(wait: Boolean = false): Boolean {
         val config = Config(this)
-        if (!config.isReady) return
-        val messages = runCatching { ButlerClient(config).inbox() }.getOrNull() ?: return // offline: next time
+        if (!config.isReady) return false
+        val messages = runCatching { ButlerClient(config).inbox(wait) }.getOrNull() ?: return false // offline: next time
         for (i in 0 until messages.length()) runCatching { deliver(config, messages.getJSONObject(i)) }
+        return true
     }
 
     private suspend fun deliver(config: Config, message: JSONObject) {
@@ -588,9 +731,7 @@ class PetService : Service() {
             "ring" -> ring(from)
             "status" -> { // how a job you gave the laptop is going
                 val status = JSONObject(body)
-                val text = status.optString("text")
-                addLaptopNews("${status.optString("title")}: $text")
-                announce(status.optString("title"), text, Intent(this, LaptopActivity::class.java))
+                laptopStatus(status.optString("state"), status.optString("title"), status.optString("text"))
             }
             "sync" -> { // what you copied on the laptop, quietly
                 lastSynced = body // so it isn't sent straight back
@@ -633,16 +774,17 @@ class PetService : Service() {
         Ringer.start(this)
         if (!busy) {
             pet.setState("attention")
-            say(getString(R.string.pet_ringing))
+            bubbleTurn++
+            bubble.info(getString(R.string.pet_ringing))
+            showBubble()
         }
     }
 
     private fun stopRinging() {
         Ringer.stop(this)
         if (!::pet.isInitialized || busy) return
-        panelShown = false
-        panel.visibility = View.GONE
-        pet.setState(if (restingFace() == "peek") "hide" else "idle")
+        bubbleTurn++
+        hideBubble()
     }
 
     /** Puts a file in Downloads/Butler and returns an Intent that opens it (Android 10+). */
@@ -682,7 +824,13 @@ class PetService : Service() {
             .apply { tap?.let(::setContentIntent) }
             .build()
         runCatching { getSystemService(NotificationManager::class.java).notify(nextNotification++, notification) }
-        if (!busy) work(title, face = "attention") { "$title: $text" }
+        if (!busy) {
+            pet.setState("attention")
+            bubbleTurn++
+            bubble.result("$title: $text")
+            showBubble()
+            lingerThenHide(text)
+        }
     }
 
     // --- foreground notification ------------------------------------------------------
@@ -694,6 +842,9 @@ class PetService : Service() {
         )
         manager.createNotificationChannel(
             NotificationChannel(INBOX_CHANNEL, getString(R.string.inbox_channel), NotificationManager.IMPORTANCE_HIGH),
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(QUIET_CHANNEL, getString(R.string.quiet_channel), NotificationManager.IMPORTANCE_LOW),
         )
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_butler)
@@ -707,6 +858,9 @@ class PetService : Service() {
     companion object {
         private const val CHANNEL = "pet"
         private const val INBOX_CHANNEL = "inbox"
+        private const val QUIET_CHANNEL = "updates"
+        private const val MENU_WIDTH_DP = 280
+        private const val LAPTOP_QUIET_MS = 15 * 60_000L
         private const val INBOX_EVERY_MS = 20_000L
         private const val STOP_RING = "com.anas.butler.STOP_RING"
         private const val MAX_STEPS = 15
