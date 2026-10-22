@@ -1,4 +1,4 @@
-# Butler
+# Butler 2.0
 
 A personal companion that lives on your phone and laptop. Phase 1 is the **save library**: share anything from any app, and Butler stores it, titles it, tags it and groups it so you can find it again.
 
@@ -16,6 +16,7 @@ Everything runs on one machine you own: the database, the server, your files, an
 | `deploy/` | Docker Compose setup for a VPS: Postgres, the server, HTTPS (Caddy), nightly backups |
 | `tests/` | Unit tests |
 | `desktop/gnome/` | Desktop pet for GNOME: peeks from the screen corner, saves and copies what you're looking at |
+| `design/` | Brand guide and logo masters (`design/brand/`), and the Little Butler mascot kit |
 
 Coming next: Analyze and Solve on the desktop pet, and the pet on Android.
 

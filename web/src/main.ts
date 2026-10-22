@@ -1,3 +1,5 @@
+import "./fonts";
+import "./b2-tokens.css";
 import "./style.css";
 import { binMarkup, crumpleIntoBin, fasten, glide, hashOf, layout, makeDraggable, type Spot, unfasten } from "./board";
 

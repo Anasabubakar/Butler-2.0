@@ -1,5 +1,7 @@
 # Little Butler · usable mascot kit v0.1
 
+> This is the animated pet. It is not the logo: logos, colours and type are in [`../brand/BRAND.md`](../brand/BRAND.md) (Butler 2.0 only, never the LEGACY Figma pages).
+
 A tiny, nonchalant charcoal shadow butler, based on the approved soft 3D concept.
 This archive contains real transparent art, playable animations and working UI source.
 
