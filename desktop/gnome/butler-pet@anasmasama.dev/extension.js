@@ -15,6 +15,7 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+import {Bubble} from './bubble.js';
 import {ClipboardHistory} from './history.js';
 import {HistoryPanel} from './historypanel.js';
 import {RemoteControl} from './remote.js';
@@ -241,6 +242,7 @@ export default class ButlerPetExtension extends Extension {
             operate: (config, goal, job, report) => this._operateRemote(config, goal, job, report),
             notify: (title, text) => Main.notify(`Butler: ${title}`, text),
             banner: text => this._setBanner(text),
+            status: (state, text) => this._remoteStatus(state, text),
         });
         this._remotePanel = new RemotePanel(this._remote);
         this._banner = new St.Label({style_class: 'butler-banner', visible: false, reactive: true});
@@ -297,14 +299,21 @@ export default class ButlerPetExtension extends Extension {
             this._confirmBox.add_child(button);
         }
 
-        this._note = new St.Label({style_class: 'butler-note', visible: false, reactive: true});
-        this._note.clutter_text.line_wrap = true;
-        this._note.connect('button-release-event', () => {
-            this._noteTapped?.();
-            return Clutter.EVENT_STOP;
-        });
+        // The bubble over its head: what it's doing (with Stop), then the answer (with Copy and ×).
+        this._bubble = new Bubble();
+        this._bubble.onClose = () => this._closeBubble();
+        this._bubble.onCopy = text => St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, text);
+        this._bubble.onTap = () => {
+            if (!this._noteTapped)
+                return false;
+            this._noteTapped();
+            return true;
+        };
+        this._bubble.onResize = () => this._placeBubble();
+        // Placed again once it's laid out, from the size it really is.
+        this._bubble.actor.connect('notify::allocation', () => this._placeBubble(true));
 
-        for (const actor of [this._menu, this._confirmBox, this._note, this._pet])
+        for (const actor of [this._menu, this._confirmBox, this._bubble.actor, this._pet])
             Main.layoutManager.addTopChrome(actor);
 
         this._monitorsId = Main.layoutManager.connect('monitors-changed', () => this._place(false));
@@ -344,11 +353,11 @@ export default class ButlerPetExtension extends Extension {
         Main.layoutManager.disconnect(this._monitorsId);
         Main.sessionMode.disconnect(this._sessionId);
         this._answer?.(false);
-        for (const actor of [this._menu, this._confirmBox, this._note, this._pet]) {
+        for (const actor of [this._menu, this._confirmBox, this._bubble.actor, this._pet]) {
             Main.layoutManager.removeChrome(actor);
             actor.destroy();
         }
-        this._pet = this._face = this._menu = this._note = this._ask = this._confirmBox = null;
+        this._pet = this._face = this._menu = this._bubble = this._ask = this._confirmBox = null;
         this._keyboard = this._pointer = null;
         this._session?.abort();
         this._session = null;
@@ -439,26 +448,31 @@ export default class ButlerPetExtension extends Extension {
         };
     }
 
-    _place(animate) {
-        const monitor = Main.layoutManager.primaryMonitor;
-        if (!monitor)
-            return;
+    /** Where the pet is going: its top-left corner, and how much of it shows. */
+    _target(monitor) {
         let {x, y} = this._home(monitor);
         // A docked pet hops up and away from the edge when it wakes; elsewhere it stays put.
         if (this._awake && this._docked()) {
             x = Math.max(x - HOP_X, monitor.x);
             y -= HOP_Y;
         }
-        const height = this._peeking ? PEEK_H : PET_H;
         if (this._peeking)
             y = monitor.y + monitor.height - PEEK_H;
+        return {x, y, height: this._peeking ? PEEK_H : PET_H};
+    }
+
+    _place(animate) {
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (!monitor)
+            return;
+        const {x, y, height} = this._target(monitor);
         if (animate) {
             this._pet.ease({x, y, height, duration: 380, mode: Clutter.AnimationMode.EASE_OUT_BACK});
         } else {
             this._pet.set_position(x, y);
             this._pet.height = height;
         }
-        // The menu and notes sit beside the pet: on its left if there's room, else its right.
+        // The menu sits beside the pet: on its left if there's room, else its right.
         const beside = width => (x - 12 - width >= monitor.x ? x - 12 - width : x + PET_W + 12);
         const within = (top, h) => Math.min(Math.max(top, monitor.y), monitor.y + monitor.height - h);
         const [, menuH] = this._menu.get_preferred_height(-1);
@@ -467,10 +481,25 @@ export default class ButlerPetExtension extends Extension {
         const [, boxH] = this._confirmBox.get_preferred_height(-1);
         const [, boxW] = this._confirmBox.get_preferred_width(-1);
         this._confirmBox.set_position(beside(boxW), within(y + PET_H + 8, boxH));
-        // Notes grow upwards, so a long answer never covers the pet.
-        const [, noteW] = this._note.get_preferred_width(-1);
-        const [, noteH] = this._note.get_preferred_height(noteW);
-        this._note.set_position(beside(noteW), within(y + 64 - noteH, noteH));
+        this._placeBubble();
+    }
+
+    /** The bubble sits on top of the pet's head and grows upwards, so it never covers the pet. */
+    _placeBubble(laidOut = false) {
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (!monitor || !this._bubble?.visible)
+            return;
+        const {x, y} = this._target(monitor);
+        const actor = this._bubble.actor;
+        let [width, height] = [actor.width, actor.height];
+        if (!laidOut) {
+            [, width] = actor.get_preferred_width(-1);
+            [, height] = actor.get_preferred_height(width);
+        }
+        const left = Math.min(Math.max(x + PET_W / 2 - width / 2, monitor.x + 8), monitor.x + monitor.width - width - 8);
+        const top = Math.max(y - height - 6, monitor.y + 8);
+        if (actor.x !== Math.round(left) || actor.y !== Math.round(top))
+            actor.set_position(Math.round(left), Math.round(top));
     }
 
     /** Settles down where it is: peeking on the bottom edge, or standing anywhere else. */
@@ -487,8 +516,8 @@ export default class ButlerPetExtension extends Extension {
         this._drag.moved = true;
         this._awake = false;
         this._menu.hide();
-        if (!this._busy)
-            this._note.hide();
+        if (!this._busy && !this._remoteLine)
+            this._bubble.hide();
         if (this._peeking) {
             this._unpeek();
             this._drag.y = this._pet.y;
@@ -516,8 +545,7 @@ export default class ButlerPetExtension extends Extension {
             return;
         }
         if (this._operating) {
-            this._operating.stop = true;
-            this._say('Stopping…');
+            this._stopOperating();
             return;
         }
         if (this._busy)
@@ -528,7 +556,8 @@ export default class ButlerPetExtension extends Extension {
         }
         this._unpeek();
         this._awake = true;
-        this._note.hide();
+        if (!this._remoteLine)
+            this._bubble.hide();
         this._closeAsk();
         this._menu.show();
         this._play('summon');
@@ -550,25 +579,50 @@ export default class ButlerPetExtension extends Extension {
             this._peek();
     }
 
+    /** Something to say that isn't a job, in the bubble with just ×. */
     _say(text) {
-        this._note.text = text;
-        this._note.show();
-        this._place(false);
+        this._bubble.info(text);
     }
 
-    /** Waits long enough to read the note (2 to 30 seconds), or until it's tapped. */
-    _hold(ms) {
+    /** × on the bubble: it goes, and anything waiting on it stops waiting. */
+    _closeBubble() {
+        this._bubble.hide();
+        this._bubbleClosed?.();
+        this._showRemote();
+    }
+
+    /** Stops a job on the screen; the bubble says so until it has. */
+    _stopOperating() {
+        if (!this._operating)
+            return;
+        this._operating.stop = true;
+        this._bubble.progress('Stopping…');
+    }
+
+    /**
+     * Waits long enough to read the bubble (2 to 30 seconds), and for as long as it's open
+     * to read in full, or until × is pressed. With `tappable`, clicking its line ends it too.
+     * Resolves to 'tapped', 'closed' or 'timeout'.
+     */
+    _hold(ms, tappable = false) {
         return new Promise(resolve => {
-            const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.min(30000, Math.max(2200, ms)), () => {
-                this._noteTapped = null;
-                resolve();
+            let left = Math.min(30000, Math.max(2200, ms));
+            const finish = how => {
+                GLib.source_remove(id);
+                this._bubbleClosed = this._noteTapped = null;
+                resolve(how);
+            };
+            const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+                if (!this._bubble?.expanded)
+                    left -= 250;
+                if (left > 0)
+                    return GLib.SOURCE_CONTINUE;
+                this._bubbleClosed = this._noteTapped = null;
+                resolve('timeout');
                 return GLib.SOURCE_REMOVE;
             });
-            this._noteTapped = () => {
-                GLib.source_remove(id);
-                this._noteTapped = null;
-                resolve();
-            };
+            this._bubbleClosed = () => finish('closed');
+            this._noteTapped = tappable ? () => finish('tapped') : null;
         });
     }
 
@@ -579,21 +633,22 @@ export default class ButlerPetExtension extends Extension {
         this._busy = true;
         this._menu.hide();
         this._play(clip);
-        this._say(working);
+        this._bubble.working(working);
         try {
             const done = await action();
             this._play('success');
-            this._say(done);
+            this._bubble.result(done || 'Done.', true);
         } catch (e) {
             this._play('error');
-            this._say(`Couldn't do that: ${e.message}`);
+            this._bubble.result(`Couldn't do that: ${e.message}`, false);
         }
-        await this._hold(this._note.text.length * 50);
+        await this._hold(this._bubble.text.length * 50);
         if (!this._pet)
             return;
-        this._note.hide();
+        this._bubble.hide();
         this._busy = false;
         this._goHome();
+        this._showRemote();
     }
 
     async _press(...keyvals) {
@@ -725,7 +780,7 @@ export default class ButlerPetExtension extends Extension {
                 text = await this._copySelection();
                 await this._press(Clutter.KEY_Escape);
                 if (isFeed(text)) {
-                    this._say('Finding the Share button…');
+                    this._bubble.progress('Finding the Share button…');
                     text = await this._linkFromShare(config, text) ?? text;
                 }
             } else {
@@ -805,7 +860,7 @@ export default class ButlerPetExtension extends Extension {
             const shot = await this._snapWindow().catch(() => null);
             const wav = await this._record();
             this._play('think');
-            this._say('On it…');
+            this._bubble.progress('On it…');
             return this._doCommand(config, {}, shot, [{field: 'audio', name: 'voice.wav', mime: 'audio/wav', bytes: wav}]);
         }, 'summon');
     }
@@ -834,6 +889,7 @@ export default class ButlerPetExtension extends Extension {
                 this._noteTapped = this._stopRecording = null;
                 resolve();
             };
+            this._bubble.working('Listening… tap me when you\'re done', () => this._stopRecording?.(), 'Done');
         });
         proc.send_signal(2); // like Ctrl+C, so the recorder finishes the file properly
         await new Promise(resolve => proc.wait_async(null, () => resolve()));
@@ -852,7 +908,7 @@ export default class ButlerPetExtension extends Extension {
         const result = await this._send(config, '/api/command',
             {device: 'laptop', kind: 'laptop', tz: timeZone(), ...fields}, shot, files);
         if (result.heard)
-            this._say(`“${result.heard}”\n\nOn it…`);
+            this._bubble.progress(`“${result.heard}”\n\nOn it…`);
         if (result.message)
             return this._handoff(result.message, shot, result.say);
         if (result.goal)
@@ -863,7 +919,7 @@ export default class ButlerPetExtension extends Extension {
             this._say(result.say);
             if (!await this._confirm())
                 return 'Okay, not sent.';
-            this._say('Sending…');
+            this._bubble.working('Sending…');
             return (await this._send(config, '/api/command/confirm', {confirm: result.confirm})).say;
         }
         if (result.send) {
@@ -882,6 +938,7 @@ export default class ButlerPetExtension extends Extension {
     async _operate(config, goal) {
         const done = [];
         this._operating = {stop: false};
+        this._bubble.working('Looking at the window…', () => this._stopOperating());
         try {
             for (let i = 1; i <= 15; i++) {
                 if (this._operating.stop)
@@ -897,7 +954,7 @@ export default class ButlerPetExtension extends Extension {
                     return step.say || "I couldn't finish that.";
                 if (this._operating.stop)
                     return 'Stopped.';
-                this._say(`Step ${i}: ${step.say || step.do}\n\n(Tap me to stop.)`);
+                this._bubble.progress(`Step ${i}: ${step.say || step.do}`);
                 await this._perform(step, shot.rect);
                 done.push(`${step.do}${step.text ? ` "${step.text}"` : ''}${step.key ? ` ${step.key}` : ''}: ${step.say}`);
                 await sleep(step.do === 'wait' ? 1500 : 800);
@@ -912,10 +969,10 @@ export default class ButlerPetExtension extends Extension {
     async _perform(step, rect) {
         const at = (x, y) => [rect.x + x / 1000 * rect.width, rect.y + y / 1000 * rect.height];
         const now = () => GLib.get_monotonic_time();
-        // The pet and its note mustn't catch the clicks.
-        const noteShown = this._note.visible;
+        // The pet and its bubble mustn't catch the clicks.
+        const bubbleShown = this._bubble.visible;
         this._pet.reactive = false;
-        this._note.hide();
+        this._bubble.actor.hide();
         try {
             switch (step.do) {
             case 'click':
@@ -986,7 +1043,7 @@ export default class ButlerPetExtension extends Extension {
         } finally {
             if (this._pet) {
                 this._pet.reactive = true;
-                this._note.visible = noteShown;
+                this._bubble.actor.visible = bubbleShown;
             }
         }
     }
@@ -1082,16 +1139,19 @@ export default class ButlerPetExtension extends Extension {
             this._closeAsk();
             this._menu.hide();
             this._awake = false;
-            for (const actor of [this._pet, this._note, this._banner])
+            for (const actor of [this._pet, this._bubble.actor, this._banner])
                 actor.hide();
             return;
         }
         this._pet.show();
         this._banner.visible = Boolean(this._remote?.job);
-        if (this._busy)
-            this._note.show();
-        else
+        if (this._busy) {
+            this._bubble.actor.show();
+            this._placeBubble();
+        } else {
             this._rest();
+            this._showRemote();
+        }
     }
 
     // --- remote control -------------------------------------------------------------------
@@ -1100,6 +1160,33 @@ export default class ButlerPetExtension extends Extension {
         this._menu.hide();
         this._goHome();
         this._remotePanel.open();
+    }
+
+    /** What a job from your phone is doing, shown in the bubble here too, like on the phone. */
+    _remoteStatus(state, text) {
+        if (state === 'started' || state === 'working') {
+            this._remoteLine = state === 'started' ? `From your phone: ${text}` : text;
+            this._showRemote();
+            return;
+        }
+        const wasRunning = Boolean(this._remoteLine);
+        this._remoteLine = null;
+        if (wasRunning && !this._busy && this._bubble?.working)
+            this._bubble.hide();
+        if (state === 'locked')
+            return; // it has already said so in a notification
+        const title = {done: 'Done', failed: "Couldn't finish", stopped: 'Stopped'}[state] ?? 'Remote control';
+        this._announce(title, text, null, state === 'done');
+    }
+
+    /** Puts the phone's job back in the bubble, unless the pet is busy with something of yours. */
+    _showRemote() {
+        if (!this._remoteLine || this._busy || !this._bubble || Main.sessionMode.isLocked)
+            return;
+        if (this._bubble.working)
+            this._bubble.progress(this._remoteLine);
+        else
+            this._bubble.working(this._remoteLine, () => this._remote?.stop());
     }
 
     /** The bar across the top while Butler is in control; null hides it. Esc stops the job while it shows. */
@@ -1184,6 +1271,8 @@ export default class ButlerPetExtension extends Extension {
                     return {ok: false, say: `I stopped before "${step.say}". That's one for you to do yourself.`};
                 if (job.stop)
                     return {ok: false, say: 'Stopped.'};
+                // Every step shows in the bubble here; your phone hears every 20 seconds or so.
+                this._remoteStatus('working', `Step ${i}: ${step.say || step.do}`);
                 if (Date.now() - lastReport > 20 * 1000) {
                     lastReport = Date.now();
                     report(`Step ${i}: ${step.say || step.do}`);
@@ -1355,7 +1444,7 @@ export default class ButlerPetExtension extends Extension {
         if (this._pet && !this._busy) {
             this._unpeek();
             this._play('summon');
-            this._say('I\'m here! Tap me to stop.');
+            this._bubble.working('I\'m here! Tap me to stop.', () => this._stopRinging());
         }
         const until = Date.now() + 60000;
         while (this._ringing && this._pet && Date.now() < until) {
@@ -1375,8 +1464,9 @@ export default class ButlerPetExtension extends Extension {
         this._ringer?.force_exit();
         this._ringer = null;
         if (this._pet && !this._busy) {
-            this._note.hide();
+            this._bubble.hide();
             this._goHome();
+            this._showRemote();
         }
     }
 
@@ -1470,8 +1560,11 @@ export default class ButlerPetExtension extends Extension {
         }
     }
 
-    /** A desktop notification, plus the pet saying it if it isn't busy. Tapping the note runs `onTap`. */
-    async _announce(title, text, onTap = null) {
+    /**
+     * A desktop notification, plus the pet saying it in its bubble if it isn't busy. Clicking
+     * the bubble runs `onTap`. With `ok`, it's how a job ended: a tick, or a "!" if it didn't work.
+     */
+    async _announce(title, text, onTap = null, ok = null) {
         Main.notify(`Butler: ${title}`, text);
         if (this._busy || !this._pet || Main.sessionMode.isLocked)
             return;
@@ -1479,26 +1572,19 @@ export default class ButlerPetExtension extends Extension {
         this._menu.hide();
         this._unpeek();
         this._play('summon');
-        this._say(`${title}: ${text}`);
-        const tapped = await new Promise(resolve => {
-            const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 15000, () => {
-                this._noteTapped = null;
-                resolve(false);
-                return GLib.SOURCE_REMOVE;
-            });
-            this._noteTapped = () => {
-                GLib.source_remove(id);
-                this._noteTapped = null;
-                resolve(true);
-            };
-        });
+        if (ok === null)
+            this._say(`${title}: ${text}`);
+        else
+            this._bubble.result(text, ok);
+        const how = await this._hold(15000, Boolean(onTap));
         if (!this._pet)
             return;
-        if (tapped)
-            onTap?.();
-        this._note.hide();
+        if (how === 'tapped')
+            onTap();
+        this._bubble.hide();
         this._busy = false;
         this._goHome();
+        this._showRemote();
     }
 
     /** Downloads a file sent here into ~/Downloads/Butler and returns its path. */

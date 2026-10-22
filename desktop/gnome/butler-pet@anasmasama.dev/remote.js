@@ -56,8 +56,8 @@ function findClaude(config) {
 
 export class RemoteControl {
     /**
-     * `host` is the pet: send(config, path, fields), operate(config, goal, job), notify(title, text)
-     * and banner(text or null) for the "Butler is in control" bar.
+     * `host` is the pet: send(config, path, fields), operate(config, goal, job), notify(title, text),
+     * banner(text or null) for the "Butler is in control" bar, and status(state, text) for its bubble.
      */
     constructor(host) {
         this._host = host;
@@ -161,7 +161,9 @@ export class RemoteControl {
 
     // --- commands ---------------------------------------------------------------------------
 
+    /** Tells your phone how it's going, and shows the same in the pet's bubble here. */
     _report(config, state, text) {
+        this._host.status?.(state, text);
         return this._host.send(config, '/api/laptop/status', {device: 'laptop', state, text})
             .catch(e => console.warn(`Butler: couldn't tell the phone (${state}): ${e.message}`));
     }
@@ -304,6 +306,8 @@ export class RemoteControl {
                     if (Date.now() - lastLive > LIVE_EVERY) { // the line in your phone's pet bubble
                         lastLive = Date.now();
                         this._report(config, 'working', last);
+                    } else {
+                        this._host.status?.('working', last); // the laptop's bubble shows every step
                     }
                 }
                 else if (got?.result)
