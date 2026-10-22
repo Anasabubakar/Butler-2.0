@@ -16,8 +16,10 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,6 +27,8 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButtonToggleGroup
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
@@ -33,22 +37,32 @@ import java.util.Locale
 import kotlin.coroutines.resume
 
 /**
- * Ask Butler: type or say what you want ("remind me at 3 to call Mum", "send this to my
+ * Tell Butler what to do: type or say it ("remind me at 3 to call Mum", "send this to my
  * laptop", "what does this mean?"). Little Butler takes a screenshot just before this
  * opens, so Butler knows what you were looking at.
+ *
+ * Switched to My laptop, it's a command for the laptop instead, with your secret word
+ * somewhere in it. The laptop checks the word and takes it out, so it never reaches the AI.
+ * The pet's bubble then shows what the laptop is doing.
  */
 class AskActivity : AppCompatActivity() {
 
     private lateinit var input: EditText
     private lateinit var answer: TextView
     private lateinit var go: Button
-    private var working = false
+    private lateinit var working: View
+    private lateinit var workingText: TextView
+    private lateinit var examples: LinearLayout
+    private lateinit var news: TextView
+    private var busy = false
+    private var laptop = false
 
     private val listen = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val heard = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
         if (!heard.isNullOrBlank()) {
             input.setText(heard)
-            ask()
+            input.setSelection(heard.length)
+            if (!laptop) ask() // for the laptop you check it first (and add your word), then press Send
         }
     }
 
@@ -70,7 +84,22 @@ class AskActivity : AppCompatActivity() {
         input = findViewById(R.id.ask_text)
         answer = findViewById(R.id.ask_answer)
         go = findViewById(R.id.ask_go)
+        working = findViewById(R.id.ask_working)
+        workingText = findViewById(R.id.ask_working_text)
+        examples = findViewById(R.id.ask_examples)
+        news = findViewById(R.id.ask_news)
         go.setOnClickListener { ask() }
+        val where = findViewById<MaterialButtonToggleGroup>(R.id.ask_where)
+        where.addOnButtonCheckedListener { _, id, checked -> if (checked) setLaptop(id == R.id.ask_laptop) }
+        if (intent.getBooleanExtra(EXTRA_LAPTOP, false)) where.check(R.id.ask_laptop) else setLaptop(false)
+        findViewById<Button>(R.id.ask_stop).setOnClickListener { stopLaptop(off = false) }
+        findViewById<Button>(R.id.ask_off).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setMessage(R.string.laptop_off_confirm)
+                .setPositiveButton(R.string.laptop_off) { _, _ -> stopLaptop(off = true) }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
         input.setOnEditorActionListener { _, action, _ ->
             if (action == EditorInfo.IME_ACTION_SEND) ask()
             action == EditorInfo.IME_ACTION_SEND
@@ -102,25 +131,97 @@ class AskActivity : AppCompatActivity() {
         }
     }
 
+    /** This phone or the laptop: changes the hint, the examples, and where the command goes. */
+    private fun setLaptop(on: Boolean) {
+        laptop = on
+        input.setHint(if (on) R.string.laptop_hint else R.string.ask_hint)
+        go.setText(if (on) R.string.laptop_go else R.string.ask_go)
+        // The secret word shouldn't end up in the keyboard's suggestions.
+        input.imeOptions = EditorInfo.IME_ACTION_SEND or (if (on) EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING else 0)
+        input.inputType = EditorInfo.TYPE_CLASS_TEXT or EditorInfo.TYPE_TEXT_FLAG_CAP_SENTENCES or
+            (if (on) EditorInfo.TYPE_TEXT_FLAG_NO_SUGGESTIONS else 0)
+        getSystemService(InputMethodManager::class.java)?.restartInput(input)
+        for (id in listOf(R.id.ask_explain, R.id.ask_laptop_controls)) {
+            findViewById<View>(id).visibility = if (on) View.VISIBLE else View.GONE
+        }
+        showNews()
+        answer.visibility = View.GONE
+        val dp = resources.displayMetrics.density
+        examples.removeAllViews()
+        for (example in resources.getStringArray(if (on) R.array.laptop_examples else R.array.ask_examples)) {
+            examples.addView(TextView(this).apply {
+                text = example
+                textSize = 13f
+                background = getDrawable(R.drawable.ask_chip)
+                setPadding((12 * dp).toInt(), (7 * dp).toInt(), (12 * dp).toInt(), (7 * dp).toInt())
+                setOnClickListener {
+                    input.setText(example.removeSuffix("…"))
+                    input.setSelection(input.text.length)
+                    input.requestFocus()
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                marginEnd = (8 * dp).toInt()
+            })
+        }
+    }
+
+    private fun showNews() {
+        val lines = synchronized(PetService.laptopNews) { PetService.laptopNews.take(3) }
+        news.text = lines.joinToString("\n\n")
+        news.visibility = if (laptop && lines.isNotEmpty()) View.VISIBLE else View.GONE
+    }
+
     private fun show(text: String) {
+        working.visibility = View.GONE
         answer.text = text
         answer.visibility = View.VISIBLE
     }
 
+    private fun setBusy(on: Boolean, label: Int = R.string.pet_thinking) {
+        busy = on
+        go.isEnabled = !on
+        workingText.setText(label)
+        working.visibility = if (on) View.VISIBLE else View.GONE
+        if (on) answer.visibility = View.GONE
+    }
+
     private fun ask() {
         val text = input.text.toString().trim()
-        if (text.isEmpty() || working) return
-        working = true
-        go.isEnabled = false
-        show(getString(R.string.pet_thinking))
+        if (text.isEmpty() || busy) return
+        if (laptop) return sendToLaptop(text)
+        setBusy(true)
         val shot = intent.getStringExtra(EXTRA_SHOT)?.let(::File)?.takeIf { it.exists() }?.readBytes()
         lifecycleScope.launch {
             val message = runCatching { act(ButlerClient(Config(this@AskActivity)).command(text, shot), shot) }
                 .getOrElse { getString(R.string.pet_failed, it.message ?: it.toString()) }
+            setBusy(false)
             show(message)
             input.text.clear()
-            working = false
-            go.isEnabled = true
+        }
+    }
+
+    /** Off to the laptop; then out of the way, so you can watch the pet's bubble. */
+    private fun sendToLaptop(text: String) {
+        setBusy(true, R.string.pet_sending)
+        lifecycleScope.launch {
+            val sent = runCatching { ButlerClient(Config(this@AskActivity)).laptopTask(text) }
+            setBusy(false)
+            sent.onSuccess {
+                input.text.clear()
+                show(getString(R.string.laptop_sent, it.joinToString(", ")))
+                delay(1500)
+                if (PetService.instance != null) finish()
+            }.onFailure { show(getString(R.string.pet_failed, it.message ?: it.toString())) }
+        }
+    }
+
+    private fun stopLaptop(off: Boolean) {
+        lifecycleScope.launch {
+            val said = runCatching { ButlerClient(Config(this@AskActivity)).laptopStop(off) }
+                .fold({ getString(if (off) R.string.laptop_switched_off else R.string.laptop_stopping) }, { getString(R.string.pet_failed, it.message ?: it.toString()) })
+            PetService.addLaptopNews(said)
+            show(said)
+            showNews()
         }
     }
 
@@ -244,15 +345,20 @@ class AskActivity : AppCompatActivity() {
         private const val EXTRA_SHOT = "shot"
         private const val EXTRA_LINK = "link"
         private const val EXTRA_TALK = "talk"
+        const val EXTRA_LAPTOP = "laptop"
 
-        /** Opens Ask Butler over the current app, with a screenshot file and the page's link if there is one. */
-        fun open(context: Context, shot: File?, link: String?, talk: Boolean) {
+        /**
+         * Opens the sheet over the current app, with a screenshot file and the page's link if
+         * there is one. `laptop` starts it switched to My laptop.
+         */
+        fun open(context: Context, shot: File?, link: String?, talk: Boolean, laptop: Boolean = false) {
             context.startActivity(
                 Intent(context, AskActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
                     .putExtra(EXTRA_SHOT, shot?.absolutePath)
                     .putExtra(EXTRA_LINK, link)
-                    .putExtra(EXTRA_TALK, talk),
+                    .putExtra(EXTRA_TALK, talk)
+                    .putExtra(EXTRA_LAPTOP, laptop),
             )
         }
     }
