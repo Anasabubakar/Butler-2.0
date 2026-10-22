@@ -1131,16 +1131,19 @@ export default class ButlerPetExtension extends Extension {
             this._closeAsk();
             this._menu.hide();
             this._awake = false;
-            for (const actor of [this._pet, this._note, this._banner])
+            for (const actor of [this._pet, this._bubble.actor, this._banner])
                 actor.hide();
             return;
         }
         this._pet.show();
         this._banner.visible = Boolean(this._remote?.job);
-        if (this._busy)
-            this._note.show();
-        else
+        if (this._busy) {
+            this._bubble.actor.show();
+            this._placeBubble();
+        } else {
             this._rest();
+            this._showRemote();
+        }
     }
 
     // --- remote control -------------------------------------------------------------------
