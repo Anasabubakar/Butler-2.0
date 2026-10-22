@@ -67,22 +67,13 @@
             </intent-filter>
         </activity>
 
-        <!-- Ask Butler: type or say what you want, over whatever app you're in. -->
+        <!-- Tell Butler what to do: type or say it, over whatever app you're in, for this phone or the laptop. -->
         <activity
             android:name=".AskActivity"
             android:excludeFromRecents="true"
             android:exported="false"
             android:taskAffinity=""
             android:theme="@style/Theme.Butler.Sheet" />
-
-        <!-- Tell my laptop: a command for the laptop, with your secret word in it. -->
-        <activity
-            android:name=".LaptopActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:taskAffinity=""
-            android:theme="@style/Theme.Butler.Sheet"
-            android:windowSoftInputMode="adjustResize" />
 
         <service
             android:name=".PetService"
