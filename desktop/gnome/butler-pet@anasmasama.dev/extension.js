@@ -15,6 +15,7 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+import {Bubble} from './bubble.js';
 import {ClipboardHistory} from './history.js';
 import {HistoryPanel} from './historypanel.js';
 import {RemoteControl} from './remote.js';
@@ -297,14 +298,19 @@ export default class ButlerPetExtension extends Extension {
             this._confirmBox.add_child(button);
         }
 
-        this._note = new St.Label({style_class: 'butler-note', visible: false, reactive: true});
-        this._note.clutter_text.line_wrap = true;
-        this._note.connect('button-release-event', () => {
-            this._noteTapped?.();
-            return Clutter.EVENT_STOP;
-        });
+        // The bubble over its head: what it's doing (with Stop), then the answer (with Copy and ×).
+        this._bubble = new Bubble();
+        this._bubble.onClose = () => this._closeBubble();
+        this._bubble.onCopy = text => St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, text);
+        this._bubble.onTap = () => {
+            if (!this._noteTapped)
+                return false;
+            this._noteTapped();
+            return true;
+        };
+        this._bubble.onResize = () => this._placeBubble();
 
-        for (const actor of [this._menu, this._confirmBox, this._note, this._pet])
+        for (const actor of [this._menu, this._confirmBox, this._bubble.actor, this._pet])
             Main.layoutManager.addTopChrome(actor);
 
         this._monitorsId = Main.layoutManager.connect('monitors-changed', () => this._place(false));
@@ -344,11 +350,11 @@ export default class ButlerPetExtension extends Extension {
         Main.layoutManager.disconnect(this._monitorsId);
         Main.sessionMode.disconnect(this._sessionId);
         this._answer?.(false);
-        for (const actor of [this._menu, this._confirmBox, this._note, this._pet]) {
+        for (const actor of [this._menu, this._confirmBox, this._bubble.actor, this._pet]) {
             Main.layoutManager.removeChrome(actor);
             actor.destroy();
         }
-        this._pet = this._face = this._menu = this._note = this._ask = this._confirmBox = null;
+        this._pet = this._face = this._menu = this._bubble = this._ask = this._confirmBox = null;
         this._keyboard = this._pointer = null;
         this._session?.abort();
         this._session = null;
@@ -439,26 +445,31 @@ export default class ButlerPetExtension extends Extension {
         };
     }
 
-    _place(animate) {
-        const monitor = Main.layoutManager.primaryMonitor;
-        if (!monitor)
-            return;
+    /** Where the pet is going: its top-left corner, and how much of it shows. */
+    _target(monitor) {
         let {x, y} = this._home(monitor);
         // A docked pet hops up and away from the edge when it wakes; elsewhere it stays put.
         if (this._awake && this._docked()) {
             x = Math.max(x - HOP_X, monitor.x);
             y -= HOP_Y;
         }
-        const height = this._peeking ? PEEK_H : PET_H;
         if (this._peeking)
             y = monitor.y + monitor.height - PEEK_H;
+        return {x, y, height: this._peeking ? PEEK_H : PET_H};
+    }
+
+    _place(animate) {
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (!monitor)
+            return;
+        const {x, y, height} = this._target(monitor);
         if (animate) {
             this._pet.ease({x, y, height, duration: 380, mode: Clutter.AnimationMode.EASE_OUT_BACK});
         } else {
             this._pet.set_position(x, y);
             this._pet.height = height;
         }
-        // The menu and notes sit beside the pet: on its left if there's room, else its right.
+        // The menu sits beside the pet: on its left if there's room, else its right.
         const beside = width => (x - 12 - width >= monitor.x ? x - 12 - width : x + PET_W + 12);
         const within = (top, h) => Math.min(Math.max(top, monitor.y), monitor.y + monitor.height - h);
         const [, menuH] = this._menu.get_preferred_height(-1);
@@ -467,10 +478,20 @@ export default class ButlerPetExtension extends Extension {
         const [, boxH] = this._confirmBox.get_preferred_height(-1);
         const [, boxW] = this._confirmBox.get_preferred_width(-1);
         this._confirmBox.set_position(beside(boxW), within(y + PET_H + 8, boxH));
-        // Notes grow upwards, so a long answer never covers the pet.
-        const [, noteW] = this._note.get_preferred_width(-1);
-        const [, noteH] = this._note.get_preferred_height(noteW);
-        this._note.set_position(beside(noteW), within(y + 64 - noteH, noteH));
+        this._placeBubble();
+    }
+
+    /** The bubble sits on top of the pet's head and grows upwards, so it never covers the pet. */
+    _placeBubble() {
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (!monitor || !this._bubble?.visible)
+            return;
+        const {x, y} = this._target(monitor);
+        const [, width] = this._bubble.actor.get_preferred_width(-1);
+        const [, height] = this._bubble.actor.get_preferred_height(width);
+        const left = Math.min(Math.max(x + PET_W / 2 - width / 2, monitor.x + 8), monitor.x + monitor.width - width - 8);
+        const top = Math.max(y - height - 6, monitor.y + 8);
+        this._bubble.actor.set_position(Math.round(left), Math.round(top));
     }
 
     /** Settles down where it is: peeking on the bottom edge, or standing anywhere else. */
