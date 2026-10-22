@@ -302,7 +302,7 @@ app.post("/api/laptop/task", async (c) => {
 
 // Stops what the laptop is doing. off=1 also switches remote control off on the laptop.
 app.post("/api/laptop/stop", async (c) => {
-  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  if (!(await signedIn(c))) return c.json({ error: "bad token" }, 401);
   const { text } = await deviceForm(c);
   const device = text("device", 100);
   if (!device) return c.json({ error: "device is required" }, 400);
