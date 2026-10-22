@@ -52,6 +52,31 @@ const FEEDS = [
 ];
 const isFeed = url => FEEDS.some(feed => feed.test(url));
 
+const REMOTE_STEPS = 30; // most steps a screen task from the phone takes
+// Steps a remote task never takes on its own (Glance's list): they're yours to do.
+const RISKY = /\b(delete|erase|discard|send|submit|publish|tweet|pay|purchase|buy|place order|checkout|check out|transfer|withdraw|uninstall|format|empty (?:the )?trash|sign out|log ?out|unsubscribe|reply all|password)\b/i;
+
+/** Whether two screenshots differ, compared as tiny grey pictures (Glance's trick). */
+function screenChanged(a, b) {
+    const tiny = bytes => {
+        const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(Gio.MemoryInputStream.new_from_bytes(bytes), null)
+            .scale_simple(64, 36, GdkPixbuf.InterpType.BILINEAR);
+        const pixels = pixbuf.get_pixels();
+        const stride = pixbuf.get_rowstride(), channels = pixbuf.get_n_channels();
+        const grey = [];
+        for (let y = 0; y < 36; y++) {
+            for (let x = 0; x < 64; x++) {
+                const i = y * stride + x * channels;
+                grey.push((pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3);
+            }
+        }
+        return grey;
+    };
+    const [ga, gb] = [tiny(a), tiny(b)];
+    const diff = ga.reduce((sum, v, i) => sum + Math.abs(v - gb[i]), 0) / ga.length;
+    return diff > 1.2;
+}
+
 /** This laptop's time zone, like Africa/Lagos, so "at 3pm" means your 3pm. */
 function timeZone() {
     const id = GLib.TimeZone.new_local().get_identifier();
