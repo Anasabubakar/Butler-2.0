@@ -630,6 +630,24 @@ function media(item: Item): HTMLElement | null {
   return el;
 }
 
+/** The post's own link on a saved screenshot or file, so you can see it was kept and open it. */
+function sourceLink(item: Item): HTMLElement | null {
+  if (!item.url || item.kind === "link" || item.kind === "text") return null;
+  let shown = item.url;
+  try {
+    const u = new URL(item.url);
+    shown = u.hostname.replace(/^www\./, "") + (u.pathname.length > 1 ? u.pathname : "");
+  } catch { /* keep it as saved */ }
+  return h("a", {
+    class: "source",
+    href: item.url,
+    target: "_blank",
+    rel: "noopener noreferrer",
+    title: item.url,
+    onclick: (e) => e.stopPropagation(),
+  }, `\u2197 ${shown}`);
+}
+
 /** A saved product's price, with what it was when you saved it if it has dropped. */
 function priceTag(item: Item): HTMLElement | null {
   if (!item.price || !item.price_currency) return null;
@@ -693,6 +711,7 @@ function note(item: Item): HTMLElement {
     item.status === "failed" ? h("p", { class: "muted" }, "Couldn't organize this one.") : null,
     item.summary ? h("p", { class: "summary" }, item.summary) : null,
     item.note ? h("p", { class: "note-text" }, item.note) : null,
+    sourceLink(item),
     priceTag(item),
     item.link_dead
       ? h("p", { class: "rescued" }, item.archive_url ? "The original page is gone. This opens a saved copy." : "The original page is gone.")
