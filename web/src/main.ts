@@ -224,8 +224,10 @@ function renderGrid() {
   if (!state.items.length && !alike.length) {
     gridEl.replaceChildren(
       h("div", { class: "empty" },
-        h("p", {}, state.q || f ? "Nothing matches that yet." : "Nothing saved yet."),
-        h("p", { class: "muted" }, "On your phone, use Share → Save to Butler from any app."),
+        h("p", {}, state.q || f ? "Nothing matches that yet." : "Nothing saved yet, sir."),
+        h("p", { class: "muted" }, state.q || f
+          ? "Try other words, or ask Butler: it searches by meaning too."
+          : "On your phone, use Share → Save to Butler from any app."),
       ),
     );
     return;
@@ -425,7 +427,7 @@ async function showSimilar(item: Item) {
     h("button", { class: "b2-button b2-button--ghost back", onclick: () => renderGrid() }, icon("back"), "Back"),
     ` Like “${item.title ?? "this"}”`,
   );
-  gridEl.replaceChildren(h("p", { class: "muted" }, "Looking…"));
+  gridEl.replaceChildren(h("p", { class: "muted" }, "Working…"));
   try {
     const found = await api<Item[]>(`/api/items/${item.id}/similar`);
     boards = [];
