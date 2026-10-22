@@ -596,7 +596,7 @@ app.post("/api/screen/step", async (c) => {
   } catch { /* none yet */ }
   // A screen task from the phone may take more steps (limit=30); 40 at most.
   const limit = Math.min(Number(got.text("limit")) || MAX_STEPS, 40);
-  if (done.length >= limit) return c.json({ do: "stop", say: `I stopped after ${limit} steps. Take it from here.` });
+  if (done.length >= limit) return c.json({ do: "stop", say: `Stopped after ${limit} steps. Over to you from here.` });
   try {
     return c.json(await nextStep(got.picture, goal, done, got.text("kind") === "phone" ? "phone" : "laptop"));
   } catch (e) {
