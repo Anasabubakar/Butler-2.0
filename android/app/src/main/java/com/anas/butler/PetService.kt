@@ -305,10 +305,12 @@ class PetService : Service() {
 
     /** Shrinks a touch while pressed, like a shadcn button. */
     @android.annotation.SuppressLint("ClickableViewAccessibility")
+    /** Pressed state: a slight shrink, or just a dim with reduced motion. */
     private fun pressable(view: View) = view.setOnTouchListener { v, event ->
+        val still = Ui.reducedMotion(v.context)
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> v.animate().scaleX(0.96f).scaleY(0.96f).setDuration(80).start()
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> v.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+            MotionEvent.ACTION_DOWN -> if (still) v.alpha = 0.7f else v.animate().scaleX(0.96f).scaleY(0.96f).setDuration(80).start()
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (still) v.alpha = 1f else v.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
         }
         false
     }
