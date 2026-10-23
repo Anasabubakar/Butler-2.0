@@ -155,6 +155,17 @@ export function describeSchedule(r: Pick<Recipe, "run_at" | "run_days">): string
   return `${when} at ${r.run_at}`;
 }
 
+// --- starting on an email -----------------------------------------------------------------
+
+/** Recipes that start on new email, with the time after which email counts as new. */
+export const emailWatchers = () =>
+  sql<(Recipe & { email_after: Date })[]>`select ${COLUMNS}, email_after from recipes where email_query is not null`;
+
+/** Notes how far a recipe's email check got, and why it failed if it did. */
+export async function emailChecked(id: string, after: Date | null, error: string | null) {
+  await sql`update recipes set email_after = coalesce(${after}, email_after), email_error = ${error} where id = ${id}`;
+}
+
 // --- running one --------------------------------------------------------------------
 
 /** The tools a recipe may use: from its connections (or all), never ones switched off. */
