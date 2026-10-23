@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Offer, Rule } from "../server/lib/mcp.ts";
-import { type Recipe, run, runsFreely, toolsFor } from "../server/lib/recipes.ts";
+import { checkedSchedule, describeSchedule, due, type Recipe, run, runsFreely, toolsFor } from "../server/lib/recipes.ts";
 
 const offer = (connection: string, name: string, readOnly: boolean, rule: Rule = readOnly ? "auto" : "ask"): Offer => ({
   key: `${connection}/${name}`,
@@ -11,7 +11,7 @@ const offer = (connection: string, name: string, readOnly: boolean, rule: Rule =
 });
 
 const recipe = (over: Partial<Recipe> = {}): Recipe => ({
-  id: "r1", name: "Morning check", instructions: "Look at my tasks, then text me the top one.", connections: [], last_run_at: null, ...over,
+  id: "r1", name: "Morning check", instructions: "Look at my tasks, then text me the top one.", connections: [], last_run_at: null, run_at: null, run_days: [0, 1, 2, 3, 4, 5, 6], ...over,
 });
 
 const offers = [offer("Notion", "list_tasks", true), offer("Zapier", "send_sms", false), offer("Notion", "search", true, "ask")];
@@ -109,4 +109,27 @@ test("a recipe with no tools just answers", async () => {
     Deno.env.delete("GEMINI_API_KEY");
     await server.shutdown();
   }
+});
+
+test("a scheduled recipe is due once a day, at or after its time, on its days", () => {
+  const weekdays = { run_at: "08:00", run_days: [1, 2, 3, 4, 5] };
+  // 2026-10-23 is a Friday.
+  assert.equal(due(weekdays, "2026-10-23T07:59:00+01:00", null), false);
+  assert.equal(due(weekdays, "2026-10-23T08:00:00+01:00", null), true);
+  assert.equal(due(weekdays, "2026-10-23T08:04:00+01:00", "2026-10-22"), true);
+  assert.equal(due(weekdays, "2026-10-23T08:04:00+01:00", "2026-10-23"), false); // already ran today
+  assert.equal(due(weekdays, "2026-10-23T11:30:00+01:00", null), false); // missed by hours: skip today
+  assert.equal(due(weekdays, "2026-10-24T08:00:00+01:00", null), false); // Saturday
+  assert.equal(due({ run_at: null, run_days: [5] }, "2026-10-23T08:00:00+01:00", null), false);
+});
+
+test("schedules are checked and described plainly", () => {
+  assert.deepEqual(checkedSchedule({ run_at: "07:30", run_days: [5, 1, 1, 9] }), { run_at: "07:30", run_days: [1, 5] });
+  assert.deepEqual(checkedSchedule({ run_at: null, run_days: [] }).run_at, null);
+  assert.throws(() => checkedSchedule({ run_at: "25:00", run_days: [1] }), /HH:MM/);
+  assert.throws(() => checkedSchedule({ run_at: "08:00", run_days: [] }), /at least one day/);
+  assert.equal(describeSchedule({ run_at: "08:00", run_days: [0, 1, 2, 3, 4, 5, 6] }), "every day at 08:00");
+  assert.equal(describeSchedule({ run_at: "08:00", run_days: [5, 4, 3, 2, 1] }), "weekdays at 08:00");
+  assert.equal(describeSchedule({ run_at: "18:30", run_days: [4, 1] }), "Mon, Thu at 18:30");
+  assert.equal(describeSchedule({ run_at: null, run_days: [] }), "only when you ask");
 });
