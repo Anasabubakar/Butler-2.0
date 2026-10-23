@@ -101,3 +101,24 @@ test("without tools, the planner doesn't mention them", async () => {
     await server.shutdown();
   }
 });
+
+test("the planner lists saved recipes and reads which one to run", async () => {
+  let prompt = "";
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+    prompt = (await req.json()).contents[0].parts.at(-1).text;
+    return Response.json({ candidates: [{ content: { parts: [{ text: '{"action":"recipe","reply":"On it.","recipe":"Morning check"}' }] } }] });
+  });
+  Deno.env.set("GEMINI_URL", `http://localhost:${server.addr.port}`);
+  Deno.env.set("GEMINI_API_KEY", "test-key");
+  try {
+    const got = await plan("run my morning check", {
+      device: "phone", timeZone: "UTC", devices: [], recipes: [{ name: "Morning check", about: "Look at my tasks" }],
+    }, null);
+    assert.equal(got.action, "recipe");
+    assert.equal(got.recipe, "Morning check");
+    assert.match(prompt, /"Morning check": Look at my tasks/);
+  } finally {
+    Deno.env.delete("GEMINI_API_KEY");
+    await server.shutdown();
+  }
+});

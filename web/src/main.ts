@@ -2,9 +2,8 @@ import "./fonts";
 import "./b2-tokens.css";
 import "./b2-components.css";
 import "./style.css";
-import "./pages.css";
-import "./landing.css";
-import { renderAsk } from "./ask";
+import { openConnections } from "./connections";
+import { openRecipes } from "./recipes";
 import { binMarkup, crumpleIntoBin, fasten, glide, hashOf, layout, makeDraggable, type Spot, unfasten } from "./board";
 import { renderDevices } from "./devices";
 import { renderLanding, renderSignIn } from "./landing";
@@ -125,6 +124,41 @@ function renderLibrary() {
     debounce = window.setTimeout(() => { state.q = search.value.trim(); refresh(); }, 250);
   });
 
+  const signOut = h("button", {
+    class: "ghost",
+    onclick: async () => { await api("/api/logout", { method: "POST" }).catch(() => {}); renderSignIn(); },
+  }, "Sign out");
+
+  const googleButton = h("button", { class: "ghost", hidden: true });
+  renderGoogle(googleButton);
+
+  // Lost your phone? It rings loudly, even on silent, the next time it checks in.
+  const ringButton = h("button", {
+    class: "ghost ring", title: "Make your phone ring loudly, even on silent",
+    onclick: async () => {
+      ringButton.disabled = true;
+      try {
+        showError((await api<{ say: string }>("/api/ring", { method: "POST", body: JSON.stringify({ target: "phone" }) })).say);
+      } catch (e) {
+        if (!(e instanceof SignedOut)) showError(`Couldn't ring your phone: ${(e as Error).message}`);
+      } finally {
+        ringButton.disabled = false;
+      }
+    },
+  }, "Ring my phone");
+
+  // Other services' tools (MCP) that Ask Butler can use.
+  const connectionsButton = h("button", {
+    class: "ghost", title: "Connect other services, like Zapier, so Ask Butler can use their tools",
+    onclick: () => openConnections(api, h, ago),
+  }, "Connections");
+
+  // Saved instructions that Ask Butler runs by name, and steps waiting for your yes.
+  const recipesButton = h("button", {
+    class: "ghost", title: "Save instructions once and run them by name",
+    onclick: () => openRecipes(api, h, ago),
+  }, "Recipes");
+
   sidebarEl = h("nav", { class: "sidebar", "aria-label": "Collections" });
   headingEl = h("h2", { class: "heading" });
   gridEl = h("section", { class: "boards" });
@@ -134,7 +168,16 @@ function renderLibrary() {
   binEl.append(h("span", { class: "bin__label" }, "Wastebin"));
 
   app.replaceChildren(
-    topBar("library", search),
+    h("header", { class: "top" },
+      h("a", { class: "brand", href: "#", onclick: (e) => { e.preventDefault(); setFilter(null); } },
+        butlerTile("Butler 2.0 library")),
+      search,
+      googleButton,
+      recipesButton,
+      connectionsButton,
+      ringButton,
+      signOut,
+    ),
     h("main", { class: "layout" }, sidebarEl, h("div", { class: "content" }, headingEl, gridEl)),
     binEl,
   );

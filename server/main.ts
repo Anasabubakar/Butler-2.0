@@ -29,7 +29,9 @@ import * as video from "./lib/video.ts";
 import * as spending from "./lib/spending.ts";
 import * as streaks from "./lib/streaks.ts";
 import * as laptop from "./lib/laptop.ts";
-import * as prefs from "./lib/prefs.ts";
+import * as mcp from "./lib/mcp.ts";
+import * as recipes from "./lib/recipes.ts";
+import { vaultReady } from "./lib/vault.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -383,13 +385,21 @@ function holdEmail(email: google.Email): string {
 }
 
 // Tools from your MCP connections that can change things wait here for your yes, the same way.
-const pendingTools = new Map<string, { offer: mcp.Offer; args: Record<string, unknown>; said: string; expires: number }>();
+// (They're kept in memory, so a restart or deploy forgets them; you just ask again.)
+interface PendingTool {
+  offer: mcp.Offer;
+  args: Record<string, unknown>;
+  said: string;
+  expires: number;
+  from: string; // "Ask Butler" or the recipe's name
+}
+const pendingTools = new Map<string, PendingTool>();
 
-function holdTool(offer: mcp.Offer, args: Record<string, unknown>, said: string): string {
+function holdTool(offer: mcp.Offer, args: Record<string, unknown>, said: string, from = "Ask Butler", forMs = 10 * 60_000): string {
   const now = Date.now();
   for (const [id, p] of pendingTools) if (p.expires < now) pendingTools.delete(id);
   const id = crypto.randomUUID();
-  pendingTools.set(id, { offer, args, said, expires: now + 10 * 60_000 });
+  pendingTools.set(id, { offer, args, said, expires: now + forMs, from });
   return id;
 }
 
@@ -406,6 +416,55 @@ async function useTool(offer: mcp.Offer, args: Record<string, unknown>, said: st
   } catch (e) {
     return `${offer.key} didn't work: ${(e as Error).message}`;
   }
+}
+
+// --- recipes ---------------------------------------------------------------------------
+
+/** How long a device waits for a recipe before Butler finishes it in the background. */
+const RECIPE_WAIT_MS = Number(env("BUTLER_RECIPE_WAIT_MS", "18000"));
+
+/** Every tool from your connections that isn't switched off; none if that can't be read. */
+const toolOffers = () => mcp.offers().catch((e) => {
+  console.error("mcp offers", String(e).slice(0, 200));
+  return [] as mcp.Offer[];
+});
+
+/**
+ * Runs a recipe. If it's done in time you get the result (and a yes/no if it wants to change
+ * something); otherwise it carries on and every device gets the result as a note, with any
+ * step that needs your yes waiting under Recipes on the website.
+ */
+async function startRecipe(recipe: recipes.Recipe, said: string, timeZone: string): Promise<{ say: string; confirm?: string }> {
+  const job = recipes.run(recipe, {
+    said, now: localIso(new Date(), timeZone), timeZone, offers: await toolOffers(),
+    use: (offer, args) => mcp.use(offer, args, false),
+  });
+  await recipes.ran(recipe.id).catch(() => {});
+  let timer: number | undefined;
+  const early = await Promise.race([
+    job.catch((e: Error) => ({ say: `${recipe.name} didn't work: ${e.message.slice(0, 200)}` }) as recipes.Done),
+    new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), RECIPE_WAIT_MS); }),
+  ]);
+  clearTimeout(timer);
+  if (early) {
+    if (!early.waiting) return { say: early.say };
+    const { offer, args } = early.waiting;
+    const confirm = holdTool(offer, args, said || recipe.instructions, recipe.name);
+    return { say: `${early.say ? `${early.say}\n\n` : ""}Use ${offer.key}?\n\n${showArgs(args)}`, confirm };
+  }
+  job.then(async (done) => {
+    let body = `${recipe.name}: ${done.say}`;
+    if (done.waiting) {
+      const { offer, args } = done.waiting;
+      holdTool(offer, args, said || recipe.instructions, recipe.name, 24 * 3_600_000);
+      body += `\n\nIt wants to use ${offer.key}:\n${showArgs(args)}\n\nSay yes or no under Recipes on the Butler website.`;
+    }
+    return body;
+  }, (e: Error) => `${recipe.name} didn't work: ${e.message.slice(0, 200)}`).then(async (body) => {
+    const everywhere = (await inbox.devices()).map((d) => d.name);
+    if (everywhere.length) await inbox.send(everywhere, { from_device: "Butler", kind: "note", body });
+  }).catch((e) => console.error("recipe note", String(e).slice(0, 200)));
+  return { say: `Still working on ${recipe.name}. I'll send you the result as a note.` };
 }
 
 // Ask Butler: what you typed or said, plus optionally a screenshot of what you're looking at.
@@ -435,14 +494,15 @@ app.post("/api/command", async (c) => {
 
   const timeZone = safeZone(text("tz", 100));
   if (timeZone !== "UTC" && timeZone === text("tz", 100)) await settings.set("time_zone", timeZone); // for the morning brief
-  const offers = (await mcp.offers().catch((e) => {
-    console.error("mcp offers", String(e).slice(0, 200));
-    return [];
-  })).slice(0, 60);
+  const offers = (await toolOffers()).slice(0, 60);
   const tools = offers.map((o) => ({ key: o.key, description: o.tool.description, args: shortArgs(o.tool.schema) }));
+  const saved = await recipes.list().catch(() => []);
   let p;
   try {
-    p = await plan(typed, { device, timeZone, devices: await inbox.devices(), teasing: (await prefs.load()).teasing }, picture, voice);
+    p = await plan(typed, {
+      device, timeZone, devices: await inbox.devices(), tools,
+      recipes: saved.map((r) => ({ name: r.name, about: r.instructions.slice(0, 120) })),
+    }, picture, voice);
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
@@ -608,6 +668,12 @@ app.post("/api/command", async (c) => {
         return json({ action: "confirm", say: `Use ${offer.key}?\n\n${showArgs(args)}`, confirm: holdTool(offer, args, said) });
       }
       return json({ action: "answer", say: await useTool(offer, args, said, false) });
+    }
+    case "recipe": {
+      const recipe = saved.find((r) => r.name.toLowerCase() === (p.recipe ?? "").trim().toLowerCase());
+      if (!recipe) return json({ action: "answer", say: "I couldn't find that recipe." });
+      const done = await startRecipe(recipe, said, timeZone);
+      return json(done.confirm ? { action: "confirm", ...done } : { action: "answer", say: done.say });
     }
     default:
       return json({ action: "answer", say: p.reply || "I can't do that yet. Try saying it another way?" });
@@ -897,6 +963,73 @@ app.delete("/api/mcp/:id", async (c) => {
   if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
   await mcp.remove(id);
   return c.json({ ok: true });
+});
+
+// --- recipes and steps waiting for your yes (managed on the website) ------------------------
+
+app.use("/api/recipes", requireSession);
+app.use("/api/recipes/*", requireSession);
+app.use("/api/approvals/*", requireSession);
+
+/** What's waiting for your yes, from Ask Butler or a recipe, newest first. */
+function waiting() {
+  const now = Date.now();
+  return [...pendingTools].filter(([, p]) => p.expires > now).reverse().map(([id, p]) => ({
+    id, from: p.from, tool: p.offer.key, details: showArgs(p.args), expires: new Date(p.expires).toISOString(),
+  }));
+}
+
+app.get("/api/recipes", async (c) => c.json({
+  recipes: await recipes.list(),
+  connections: (await mcp.list()).map((conn) => conn.name),
+  waiting: waiting(),
+}));
+
+async function saveRecipe(c: Context, id: string | null) {
+  const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+  const str = (k: string) => (typeof body[k] === "string" ? body[k] as string : "");
+  const connections = Array.isArray(body.connections) ? body.connections.filter((x): x is string => typeof x === "string") : [];
+  try {
+    return c.json(await recipes.save(id, str("name"), str("instructions"), connections));
+  } catch (e) {
+    return c.json({ error: (e as Error).message.slice(0, 300) }, 400);
+  }
+}
+
+app.post("/api/recipes", (c) => saveRecipe(c, null));
+
+app.put("/api/recipes/:id", (c) => {
+  const id = c.req.param("id");
+  return UUID_RE.test(id) ? saveRecipe(c, id) : c.json({ error: "not found" }, 404);
+});
+
+app.delete("/api/recipes/:id", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  await recipes.remove(id);
+  return c.json({ ok: true });
+});
+
+// Try a recipe from the website. A step that changes things comes back as `confirm`.
+app.post("/api/recipes/:id/run", async (c) => {
+  const id = c.req.param("id");
+  const recipe = UUID_RE.test(id) ? await recipes.byId(id) : null;
+  if (!recipe) return c.json({ error: "not found" }, 404);
+  if (!geminiReady()) return c.json({ error: "no AI model: set GEMINI_API_KEY on the server" }, 503);
+  return c.json(await startRecipe(recipe, "", await ownerZone()));
+});
+
+// Your yes (or no) to a step waiting for it.
+app.post("/api/approvals/:id", async (c) => {
+  const id = c.req.param("id");
+  const { yes } = await c.req.json().catch(() => ({})) as { yes?: unknown };
+  const pending = pendingTools.get(id);
+  pendingTools.delete(id);
+  if (!pending || pending.expires < Date.now()) return c.json({ error: "that expired, ask again" }, 410);
+  if (yes !== true) return c.json({ say: "Okay, skipped." });
+  const offer = (await mcp.offers()).find((o) => o.key === pending.offer.key);
+  if (!offer) return c.json({ say: `${pending.offer.key} has been switched off or removed, so I didn't use it.` });
+  return c.json({ say: await useTool(offer, pending.args, pending.said, true) });
 });
 
 app.use("/api/google/*", requireSession);
