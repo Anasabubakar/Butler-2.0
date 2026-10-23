@@ -1,3 +1,10 @@
+/*
+ * Butler 2.0 on the laptop (Figma B2 · 02, B2 · 06, B2 · 17). The same values as
+ * web/src/b2-tokens.css: ink #111111, paper #F8F7F4, line #D8D5CF, muted #65625E,
+ * vermilion #E4462D as a small accent, action red #B83120 behind white text. Inter for text.
+ * Radius 12 for controls and the bubble, 20 for panels. No blue, purple or orange.
+ */
+
 .butler-menu {
   background-color: #ffffff;
   border-radius: 16px;
@@ -8,14 +15,14 @@
 }
 
 .butler-menu-title {
-  color: #555b66;
+  color: #65625e;
   font-size: 10pt;
   font-weight: 800;
   padding: 4px 10px 8px;
 }
 
 .butler-action {
-  color: #1b1b22;
+  color: #111111;
   font-size: 11pt;
   font-weight: 600;
   text-align: left;
@@ -25,13 +32,13 @@
 }
 
 .butler-action:hover {
-  background-color: #fff1e4;
+  background-color: #f2f0ec;
 }
 
 /* The bubble over the pet's head, matching the phone pet's. */
 .butler-bubble {
   color: #ffffff;
-  background-color: rgba(27, 27, 34, 0.94);
+  background-color: rgba(17, 17, 17, 0.96);
   border-radius: 20px;
   padding: 8px 8px 8px 12px;
   font-size: 11pt;
@@ -55,16 +62,16 @@
 }
 
 .butler-bubble-ok {
-  color: #5bd68a;
+  color: #ffffff;
 }
 
 .butler-bubble-bad {
-  color: #e5484d;
+  color: #ff8a73; /* failed text on ink, as on the website */
 }
 
 .butler-bubble-chip {
   color: #ffffff;
-  background-color: #2e2e3a;
+  background-color: #262523;
   border-radius: 14px;
   padding: 4px 10px;
   font-size: 10pt;
@@ -72,28 +79,28 @@
 }
 
 .butler-bubble-chip:hover {
-  background-color: #3c3c4a;
+  background-color: #2e2c29;
 }
 
 .butler-bubble-stop {
-  background-color: #e5484d;
+  background-color: #b83120;
 }
 
 .butler-bubble-stop:hover {
-  background-color: #f0595e;
+  background-color: #9c2a1b;
 }
 
 .butler-bubble-body {
-  color: #e4e4ea;
+  color: #e6e3dd;
   width: 290px;
   margin-top: 6px;
   padding-right: 4px;
 }
 
 .butler-ask {
-  color: #1b1b22;
-  background-color: #f4f4f6;
-  border: 1px solid #d9dbe0;
+  color: #111111;
+  background-color: #f8f7f4;
+  border: 1px solid #d8d5cf;
   border-radius: 10px;
   padding: 8px 10px;
   margin-top: 6px;
@@ -101,7 +108,7 @@
 }
 
 .butler-ask:focus {
-  border-color: #f08a24;
+  border-color: #e4462d;
 }
 
 /* Clipboard history */
@@ -123,7 +130,7 @@
 }
 
 .butler-history-title {
-  color: #1b1b22;
+  color: #111111;
   font-size: 13pt;
   font-weight: 800;
   padding-right: 4px;
@@ -132,7 +139,7 @@
 .butler-history-status,
 .butler-history-hint,
 .butler-history-empty {
-  color: #555b66;
+  color: #65625e;
   font-size: 10pt;
 }
 
@@ -142,18 +149,18 @@
 
 .butler-history-bar {
   spacing: 4px;
-  background-color: #fff1e4;
+  background-color: #f2f0ec;
   border-radius: 10px;
   padding: 4px 4px 4px 12px;
 }
 
 .butler-history-count {
-  color: #1b1b22;
+  color: #111111;
   font-weight: 700;
 }
 
 .butler-history-button {
-  color: #1b1b22;
+  color: #111111;
   font-size: 10pt;
   font-weight: 600;
   padding: 6px 10px;
@@ -162,7 +169,7 @@
 
 .butler-history-button:hover,
 .butler-history-icon:hover {
-  background-color: #f4f4f6;
+  background-color: #f8f7f4;
 }
 
 .butler-history-list {
@@ -173,12 +180,12 @@
   spacing: 6px;
   padding: 6px;
   border-radius: 12px;
-  border: 1px solid #ececf0;
+  border: 1px solid #e6e3dd;
 }
 
 .butler-history-row.selected {
-  background-color: #fff1e4;
-  border-color: #f08a24;
+  background-color: #f2f0ec;
+  border-color: #e4462d;
 }
 
 .butler-history-body {
@@ -187,11 +194,11 @@
 }
 
 .butler-history-body:hover {
-  background-color: #f4f4f6;
+  background-color: #f8f7f4;
 }
 
 .butler-history-text {
-  color: #1b1b22;
+  color: #111111;
   font-size: 10.5pt;
 }
 
@@ -208,7 +215,7 @@
 }
 
 .butler-history-when {
-  color: #555b66;
+  color: #65625e;
   font-size: 9pt;
   text-align: right;
 }
@@ -218,13 +225,13 @@
 }
 
 .butler-history-icon {
-  color: #555b66;
+  color: #65625e;
   padding: 6px;
   border-radius: 8px;
 }
 
 .butler-history-icon.pinned {
-  color: #f08a24;
+  color: #e4462d;
 }
 
 .butler-history-footer {
@@ -238,12 +245,12 @@
 }
 
 .butler-remote-status {
-  color: #1b1b22;
+  color: #111111;
   font-size: 10.5pt;
 }
 
 .butler-remote-heading {
-  color: #555b66;
+  color: #65625e;
   font-size: 9.5pt;
   font-weight: 800;
   padding-top: 6px;
@@ -255,33 +262,33 @@
 
 .butler-remote-switch {
   color: #ffffff;
-  background-color: #1b1b22;
+  background-color: #111111;
   font-weight: 700;
   padding: 8px 16px;
   border-radius: 10px;
 }
 
 .butler-remote-switch:hover {
-  background-color: #33333d;
+  background-color: #2e2c29;
 }
 
 .butler-remote-danger {
-  background-color: #c0392b;
+  background-color: #b83120;
 }
 
 .butler-remote-danger:hover {
-  background-color: #a93226;
+  background-color: #9c2a1b;
 }
 
 .butler-remote-log {
-  color: #1b1b22;
+  color: #111111;
   font-size: 9.5pt;
   font-family: monospace;
 }
 
 .butler-banner {
   color: #ffffff;
-  background-color: #c0392b;
+  background-color: #b83120;
   border-radius: 999px;
   padding: 8px 18px;
   font-size: 10.5pt;
