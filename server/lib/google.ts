@@ -14,6 +14,7 @@ export const SCOPES = [
   "email",
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/gmail.readonly", // for recipes that start when an email arrives
   "https://www.googleapis.com/auth/contacts.readonly",
   "https://www.googleapis.com/auth/contacts.other.readonly",
   "https://www.googleapis.com/auth/drive.file", // only files Butler itself makes: the backups

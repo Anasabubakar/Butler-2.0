@@ -42,3 +42,8 @@ test("the consent page asks for offline access with every scope", () => {
     Deno.env.delete("PUBLIC_URL");
   }
 });
+
+test("the consent page asks to read email, for recipes that start on one", () => {
+  Deno.env.set("GOOGLE_CLIENT_ID", "id");
+  assert.match(new URL(consentUrl("st")).searchParams.get("scope")!, /gmail\.readonly/);
+});
