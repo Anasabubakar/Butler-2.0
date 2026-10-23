@@ -359,7 +359,7 @@ body.dragging-note { cursor: grabbing; user-select: none; }
 .conn-add label:nth-child(2) { grid-column: 1 / -1; }
 .conn input, .conn select {
   width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line);
-  background: var(--bg); color: var(--text); font: inherit;
+  background: var(--bg); color: var(--text); font: inherit; font-size: 15px;
 }
 .conn-add input[hidden] { display: none; }
 .conn-primary {
@@ -387,6 +387,7 @@ body.dragging-note { cursor: grabbing; user-select: none; }
 @media (max-width: 760px) {
   .conn-add { grid-template-columns: 1fr; }
   .conn-head { flex-wrap: wrap; }
+  .conn-head > div { flex-basis: 100%; }
   .conn-tools li { flex-direction: column; align-items: stretch; }
   .conn-tools select { width: 100%; }
 }
