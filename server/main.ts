@@ -819,6 +819,60 @@ app.get("/api/meaning", async (c) => {
 
 // --- your Google account, connected from the website ------------------------------------
 
+// --- MCP connections: other services' tools for Ask Butler (managed on the website) ------
+
+app.use("/api/mcp", requireSession);
+app.use("/api/mcp/*", requireSession);
+
+/** A connection as the website sees it: never its link or key. */
+const shown = (conn: mcp.Connection) => ({
+  id: conn.id, name: conn.name, host: conn.host, checked_at: conn.checked_at, error: conn.error,
+  tools: conn.tools.map((t) => ({ name: t.name, description: t.description, readOnly: t.readOnly, rule: mcp.ruleFor(conn, t) })),
+});
+
+app.get("/api/mcp", async (c) =>
+  c.json({ ready: vaultReady(), connections: (await mcp.list()).map(shown), calls: await mcp.recentCalls(20) }));
+
+app.post("/api/mcp", async (c) => {
+  if (!vaultReady()) return c.json({ error: "set BUTLER_VAULT_KEY on the server first" }, 503);
+  const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+  const str = (k: string, max: number) => (typeof body[k] === "string" ? (body[k] as string).trim().slice(0, max) : "");
+  try {
+    const headers = mcp.headersFor(str("auth", 20) || "none", str("key", 4000), str("header", 60));
+    return c.json(shown(await mcp.add(str("name", 40), str("url", 2000), headers)));
+  } catch (e) {
+    const message = (e as Error).message;
+    return c.json({ error: /duplicate key/.test(message) ? "you already have a connection with that name" : message.slice(0, 300) }, 400);
+  }
+});
+
+app.post("/api/mcp/:id/refresh", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  try {
+    return c.json(shown(await mcp.refresh(id)));
+  } catch (e) {
+    return c.json({ error: (e as Error).message.slice(0, 300) }, 404);
+  }
+});
+
+app.put("/api/mcp/:id/rule", async (c) => {
+  const id = c.req.param("id");
+  const { tool, rule } = await c.req.json().catch(() => ({})) as { tool?: unknown; rule?: unknown };
+  if (!UUID_RE.test(id) || typeof tool !== "string" || !mcp.RULES.includes(rule as mcp.Rule)) {
+    return c.json({ error: "tool and rule (auto, ask or off) are required" }, 400);
+  }
+  await mcp.setRule(id, tool.slice(0, 200), rule as mcp.Rule);
+  return c.json({ ok: true });
+});
+
+app.delete("/api/mcp/:id", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  await mcp.remove(id);
+  return c.json({ ok: true });
+});
+
 app.use("/api/google/*", requireSession);
 
 app.get("/api/google/status", async (c) => {
