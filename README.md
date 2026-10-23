@@ -109,6 +109,17 @@ Ask Butler can add events to your Google Calendar and send email from your Gmail
 
 Without this, calendar requests open a filled-in event for you to save, and email requests ask you to connect first.
 
+### Connections (MCP)
+
+Ask Butler can use tools from other services that speak MCP (the Model Context Protocol): Zapier, Notion, GitHub, or a server you wrote. On the website, press **Connections**, give it a name, paste the server's link, and add its key if it needs one (most use **API key (Bearer)**). Butler connects, lists the server's tools, and from then on picks one when it fits what you asked, like "add milk to my shopping list in Notion".
+
+- Tools the server marks as read-only run straight away. Anything that could send, change or delete shows you exactly what it will do and waits for your yes on the phone or laptop. You can change this per tool: **Just do it**, **Ask me first** or **Off**.
+- One tool per request, and what a tool sends back is only shown to you, never acted on, so a tool's reply can't make Butler use another tool.
+- Links and keys are encrypted in the database (see `BUTLER_VAULT_KEY`) and never sent back to the browser.
+- Only public `https://` addresses are allowed: nothing on your home network, the Docker network, or this server's own machine.
+- **What Butler used lately** lists every call, whether you said yes first, and hovering shows what came back.
+- Not yet: servers that sign in with OAuth (connect those with an API key or a link that has the key in it, as Zapier gives you), and local (stdio) servers.
+
 ### Backups to Google Drive
 
 The server keeps a database dump a day in `deploy/backups`, but that dies with the server. Once Google is connected, Butler also copies the newest dump and every saved file to a **Butler backups** folder in your Drive, every 6 hours, keeping the last 14 dumps. It can only see files it made there (`drive.file`), nothing else in your Drive. Hover the Google button on the website to see the last backup; it shows ⚠ if one failed.
