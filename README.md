@@ -118,7 +118,9 @@ Ask Butler can use tools from other services that speak MCP (the Model Context P
 - Links and keys are encrypted in the database (see `BUTLER_VAULT_KEY`) and never sent back to the browser.
 - Only public `https://` addresses are allowed: nothing on your home network, the Docker network, or this server's own machine.
 - **What Butler used lately** lists every call, whether you said yes first, and hovering shows what came back.
-- Not yet: servers that sign in with OAuth (connect those with an API key or a link that has the key in it, as Zapier gives you), and local (stdio) servers.
+- Not yet: servers that only sign in with OAuth, and local (stdio) servers.
+
+**Zapier:** at [mcp.zapier.com](https://mcp.zapier.com), make a server, pick the actions you want, and generate a connection token (it's shown once). In Butler, use the link `https://mcp.zapier.com/api/v1/connect`, sign-in **API key (Bearer)**, and the token as the key.
 
 ### Backups to Google Drive
 
