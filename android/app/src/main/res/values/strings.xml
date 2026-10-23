@@ -17,7 +17,7 @@
     <string name="settings_connect_help">The address and token from your Butler server. The token stays on this phone.</string>
     <string name="save_url_hint">Server address (https://…/api/save)</string>
     <string name="token_hint">Token</string>
-    <string name="device_hint">This phone's name</string>
+    <string name="device_hint">This phone\'s name</string>
     <string name="settings_saved">Saved, sir. This phone is connected.</string>
     <string name="settings_incomplete">Add an https server address and the token first.</string>
     <string name="hands_description">Lets Little Butler see the screen and tap for you, only when you press one of its buttons: Save this, Copy this, Analyze this, Solve this, Send to laptop, or when you ask it to do something on screen. If you turn on clipboard sync, it also notices when you tap Copy, so what you copied can go to your laptop.</string>
