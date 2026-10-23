@@ -13,12 +13,21 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
+        <!-- B2 · 11: the mascot (app tile, since the sheet is dark) and "Ask Butler". -->
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="12dp"
+            android:importantForAccessibility="no"
+            android:src="@mipmap/ic_launcher" />
+
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/ask_title"
-            android:textAppearance="?attr/textAppearanceTitleLarge"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="22sp"
             android:textStyle="bold" />
 
         <com.google.android.material.button.MaterialButton
@@ -74,7 +83,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="16dp"
         android:background="@drawable/ask_box"
         android:gravity="center_vertical"
         android:orientation="horizontal"
@@ -88,7 +97,9 @@
             android:layout_weight="1"
             android:background="@null"
             android:hint="@string/ask_hint"
-            android:textColor="?attr/colorOnSurface"
+            android:textColor="@color/b2_ink"
+            android:textColorHint="@color/b2_muted"
+            android:textSize="16sp"
             android:imeOptions="actionSend"
             android:importantForAutofill="no"
             android:inputType="textCapSentences"
@@ -101,15 +112,18 @@
             android:layout_height="wrap_content"
             android:contentDescription="@string/ask_talk"
             app:icon="@drawable/ic_mic"
-            app:iconTint="?attr/colorOnSurfaceVariant" />
+            app:iconTint="@color/b2_muted" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/ask_go"
-            style="@style/Widget.Material3.Button.IconButton.Filled"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:contentDescription="@string/ask_go"
-            app:icon="@drawable/ic_arrow_up" />
+            android:minHeight="48dp"
+            android:text="@string/ask_go"
+            android:textColor="@color/b2_ink"
+            android:textSize="16sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
     <!-- Examples: tap one to fill the box. -->
@@ -178,18 +192,25 @@
         android:orientation="horizontal"
         android:visibility="gone">
 
-        <Button
+        <!-- B2 · 13: Stop is always in reach, red with white text; never joked about. -->
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/ask_stop"
-            style="?attr/borderlessButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/laptop_stop" />
+            android:minHeight="48dp"
+            android:text="@string/laptop_stop"
+            android:textColor="@color/b2_white"
+            app:backgroundTint="@color/b2_action_red"
+            app:cornerRadius="12dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/ask_off"
-            style="?attr/borderlessButtonStyle"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/laptop_off" />
+            android:layout_marginStart="8dp"
+            android:minHeight="48dp"
+            android:text="@string/laptop_off"
+            app:cornerRadius="12dp" />
     </LinearLayout>
 </LinearLayout>
