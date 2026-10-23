@@ -8,11 +8,14 @@ interface Recipe {
   instructions: string;
   connections: string[];
   last_run_at: string | null;
+  run_at: string | null;
+  run_days: number[];
+  schedule: string; // in words, like "weekdays at 08:00"
 }
 
 interface Waiting { id: string; from: string; tool: string; details: string; expires: string }
 
-interface Status { recipes: Recipe[]; connections: string[]; waiting: Waiting[] }
+interface Status { recipes: Recipe[]; connections: string[]; waiting: Waiting[]; timeZone: string }
 
 type Api = <T>(path: string, init?: RequestInit) => Promise<T>;
 type H = <K extends keyof HTMLElementTagNameMap>(
@@ -42,7 +45,7 @@ export function openRecipes(api: Api, h: H, ago: (iso: string) => string) {
   document.body.append(dialog);
   dialog.showModal();
 
-  let status: Status = { recipes: [], connections: [], waiting: [] };
+  let status: Status = { recipes: [], connections: [], waiting: [], timeZone: "UTC" };
 
   async function load() {
     try {
@@ -119,7 +122,8 @@ export function openRecipes(api: Api, h: H, ago: (iso: string) => string) {
     holder.append(
       h("div", { class: "conn-head" },
         h("div", {}, h("h3", {}, r.name),
-          h("p", { class: "muted small" }, [uses, r.last_run_at ? `ran ${ago(r.last_run_at)}` : "not run yet"].join(" · "))),
+          h("p", { class: "muted small" },
+            [uses, r.run_at ? `runs ${r.schedule}` : null, r.last_run_at ? `ran ${ago(r.last_run_at)}` : "not run yet"].filter(Boolean).join(" · "))),
         runIt, edit, remove,
       ),
       h("p", { class: "recipe-text" }, r.instructions),
@@ -136,6 +140,15 @@ export function openRecipes(api: Api, h: H, ago: (iso: string) => string) {
     const boxes = status.connections.map((c) =>
       h("label", { class: "recipe-check" },
         h("input", { type: "checkbox", value: c, checked: Boolean(r?.connections.some((x) => x.toLowerCase() === c.toLowerCase())) }), c));
+    // Runs on its own: a time (your time zone) and the days.
+    const scheduled = h("input", { type: "checkbox", checked: Boolean(r?.run_at) });
+    const time = h("input", { type: "time", value: r?.run_at ?? "08:00", "aria-label": "Time" });
+    const dayBoxes = [1, 2, 3, 4, 5, 6, 0].map((d) =>
+      h("label", { class: "recipe-check" },
+        h("input", { type: "checkbox", value: String(d), checked: r?.run_at ? r.run_days.includes(d) : true }),
+        ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]));
+    const when = h("div", { class: "recipe-when", hidden: !r?.run_at }, time, ...dayBoxes);
+    scheduled.addEventListener("change", () => { when.hidden = !scheduled.checked; });
     const save = h("button", { type: "submit", class: "conn-primary" }, r ? "Save" : "Add recipe");
     const note = h("p", { class: "muted small" });
     const ideas = r ? null : h("p", { class: "recipe-ideas" }, "Ideas: ", ...IDEAS.map(([n, t]) => {
@@ -151,6 +164,8 @@ export function openRecipes(api: Api, h: H, ago: (iso: string) => string) {
       boxes.length
         ? h("fieldset", {}, h("legend", {}, "Connections it may use (none ticked: any)"), ...boxes)
         : h("p", { class: "muted small" }, "No connections yet, so it can only answer. Add some under Connections."),
+      h("label", { class: "recipe-check" }, scheduled, `Run on its own (${status.timeZone} time), and send me the result`),
+      when,
       h("div", { class: "recipe-actions" }, save,
         r ? h("button", { type: "button", class: "ghost", onclick: () => load() }, "Cancel") : null),
       note,
@@ -162,7 +177,11 @@ export function openRecipes(api: Api, h: H, ago: (iso: string) => string) {
       try {
         await api(r ? `/api/recipes/${r.id}` : "/api/recipes", {
           method: r ? "PUT" : "POST",
-          body: JSON.stringify({ name: name.value, instructions: text.value, connections }),
+          body: JSON.stringify({
+            name: name.value, instructions: text.value, connections,
+            run_at: scheduled.checked ? time.value : null,
+            run_days: dayBoxes.map((b) => b.querySelector("input")!).filter((i) => i.checked).map((i) => Number(i.value)),
+          }),
         });
         await load();
       } catch (err) {
