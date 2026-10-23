@@ -131,6 +131,9 @@ A recipe is a set of instructions you save once and run by name, like Poke's rec
 - If a recipe takes longer than about 18 seconds (`BUTLER_RECIPE_WAIT_MS`), Butler finishes it in the background and sends every device a note. A step waiting for your yes then shows under **Waiting for your yes** in Recipes on the website, for 24 hours.
 - Waiting steps are kept in memory, so a deploy or restart forgets them and you run the recipe again.
 - **Run on its own**: tick it and pick a time (your time zone, as your devices last reported it) and days. Butler runs it once on each of those days and sends every device the result as a note. If the server was down at that time it catches up within 3 hours, otherwise it skips that day.
+- **Run on new email**: tick it and give a Gmail search, like `from:mybank.com subject:alert`. Every 2 minutes Butler looks for email matching it that came in since you saved the search, and runs the recipe once per email, with the sender, subject and text given to the recipe to work on. This needs Butler to read your email (`gmail.readonly`): if you connected Google before this existed, press **Connect Google** again. A check that fails shows on the recipe.
+- **Start it from a link**: open "Start it from a link" on a recipe and press **Make a secret link**. Anything that can send a POST to it (a Zapier or IFTTT webhook, Tasker or MacroDroid on your phone, a script) starts the recipe, and whatever it sends (up to 16 KB) is given to the recipe to work on. Keep the link private; **New link** replaces it and **Turn off** removes it.
+- What starts a recipe (an email, what a link was sent) is treated as data, never as instructions, and anything that changes things still waits for your yes. A recipe started this way runs at most once every 30 seconds and 30 times a day, so a noisy inbox or a leaked link can't flood you.
 
 ### Backups to Google Drive
 
