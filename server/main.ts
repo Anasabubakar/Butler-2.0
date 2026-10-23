@@ -461,6 +461,26 @@ async function recipesIfDue(now = new Date()) {
   }
 }
 
+// Events (a new email, a POST to a recipe's secret link) start recipes in the background.
+const eventLimit = new recipes.EventLimit();
+
+/** Starts a recipe because something happened; false when it has run too often lately. */
+async function startOnEvent(recipe: recipes.Recipe, event: string): Promise<boolean> {
+  if (!eventLimit.allow(recipe.id)) {
+    console.log(`recipe: ${recipe.name} started too often, skipped an event`);
+    return false;
+  }
+  console.log(`recipe: running ${recipe.name} on an event`);
+  const timeZone = await ownerZone();
+  await recipes.ran(recipe.id).catch(() => {});
+  const job = recipes.run(recipe, {
+    said: "", event, now: localIso(new Date(), timeZone), timeZone, offers: await toolOffers(),
+    use: (offer, args) => mcp.use(offer, args, false),
+  });
+  noteWhenDone(recipe, job, "");
+  return true;
+}
+
 /**
  * Runs a recipe. If it's done in time you get the result (and a yes/no if it wants to change
  * something); otherwise it carries on and every device gets the result as a note, with any
