@@ -131,7 +131,7 @@ export function openRecipes(api: Api, h: H, ago: (iso: string) => string) {
         runIt, edit, remove,
       ),
       h("p", { class: "recipe-text" }, r.instructions),
-      r.email_error ? h("p", { class: "conn-error" }, `Email check failed: ${r.email_error}`) : null,
+      ...(r.email_error ? [h("p", { class: "conn-error" }, `Email check failed: ${r.email_error}`)] : []),
       linkBox(r),
       out,
     );
