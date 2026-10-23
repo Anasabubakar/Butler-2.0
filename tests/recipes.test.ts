@@ -154,3 +154,15 @@ test("email searches are tidied, and empty ones mean no email start", () => {
   assert.equal(checkedQuery(null), null);
   assert.throws(() => checkedQuery("x".repeat(301)), /under 300/);
 });
+
+test("events can't start a recipe too often", () => {
+  const limit = new EventLimit(30_000, 3);
+  const t = 1_000_000;
+  assert.equal(limit.allow("a", t), true);
+  assert.equal(limit.allow("a", t + 10_000), false); // too soon
+  assert.equal(limit.allow("b", t + 10_000), true); // another recipe is separate
+  assert.equal(limit.allow("a", t + 31_000), true);
+  assert.equal(limit.allow("a", t + 62_000), true);
+  assert.equal(limit.allow("a", t + 93_000), false); // 3 a day
+  assert.equal(limit.allow("a", t + 86_400_000 + 1), true); // the next day
+});
