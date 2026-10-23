@@ -23,10 +23,11 @@
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
 }
 
+/* "What needs handling?" (B2 · 17): a heading, not a small grey caption. */
 .butler-menu-title {
-  color: #65625e;
-  font-size: 10pt;
-  font-weight: 800;
+  color: #111111;
+  font-size: 13pt;
+  font-weight: 700;
   padding: 4px 10px 8px;
 }
 
