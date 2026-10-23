@@ -451,12 +451,13 @@ class PetService : Service() {
     }
 
     /** Shows a finished result with Copy and Share, then tucks it away unless you're reading it. */
-    private fun tell(text: String, ok: Boolean) {
+    private fun tell(text: String, ok: Boolean, device: String? = null) {
         bubbleTurn++
         pet.setState(if (ok) "success" else "error")
         pet.effect(if (ok) ButlerSpriteView.Effect.DONE else ButlerSpriteView.Effect.FAILED)
-        bubble.result(text, ok)
+        bubble.result(text, ok, device)
         showBubble()
+        Speaker.say(this, text)
         lingerThenHide(text)
     }
 
@@ -483,10 +484,11 @@ class PetService : Service() {
         pet.setState(face)
         pet.effect(ButlerSpriteView.Effect.WORKING)
         bubbleTurn++
+        val here = getString(R.string.ask_on_phone)
         bubble.working(working, if (stoppable) ({
             stopOperating = true
             bubble.progress(getString(R.string.pet_stopping))
-        }) else null)
+        }) else null, device = here)
         showBubble()
         scope.launch {
             val (message, ok) = runCatching { action() }.fold(
@@ -494,7 +496,7 @@ class PetService : Service() {
                 onFailure = { getString(R.string.pet_failed, it.message ?: it.toString()) to false },
             )
             busy = false
-            tell(message, ok)
+            tell(message, ok, here)
         }
     }
 
@@ -738,11 +740,15 @@ class PetService : Service() {
             bubbleTurn++
             val line = getString(R.string.bubble_laptop, text)
             if (bubble.working && bubble.visibility == View.VISIBLE) bubble.progress(line) else bubble.working(line, ::stopLaptop)
+            bubble.heading(title) // "My laptop • Working", from Butler
             showBubble()
             return
         }
         quietly(title, text)
-        if (!busy) tell("$title: $text", ok = state == "done")
+        if (!busy) {
+            tell(text, ok = state == "done")
+            bubble.heading(title)
+        }
     }
 
     private fun stopLaptop() {
