@@ -65,7 +65,7 @@ export function openConnections(api: Api, h: H, ago: (iso: string) => string) {
           "Tools that only read run straight away; anything that could send, change or delete asks you first."),
       status.ready ? addForm() : h("p", { class: "conn-error" }, "The server needs BUTLER_VAULT_KEY set before it can keep keys safely."),
       ...status.connections.map(card),
-      status.calls.length ? activity(status.calls) : null,
+      ...(status.calls.length ? [activity(status.calls)] : []),
     );
   }
 
