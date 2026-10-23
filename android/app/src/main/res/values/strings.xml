@@ -76,6 +76,8 @@
     <string name="ask_nothing_to_send">nothing to send</string>
     <string name="ask_sent">Sent to %1$s.</string>
     <string name="ask_send">Send</string>
+    <string name="ready_to_send">Ready to send</string>
+    <string name="dont_send">Don\'t send</string>
     <string name="ask_not_sent">Not sent. Nothing left your phone.</string>
     <string name="pet_stopping">Stopping…</string>
     <string name="pet_stopped">Stopped.</string>
