@@ -130,7 +130,7 @@ A recipe is a set of instructions you save once and run by name, like Poke's rec
 - A step that would send, change or delete is always the last step, and it waits for your yes. That holds even for tools you've set to **Just do it**, because inside a recipe, earlier tool replies could try to steer what it does next.
 - If a recipe takes longer than about 18 seconds (`BUTLER_RECIPE_WAIT_MS`), Butler finishes it in the background and sends every device a note. A step waiting for your yes then shows under **Waiting for your yes** in Recipes on the website, for 24 hours.
 - Waiting steps are kept in memory, so a deploy or restart forgets them and you run the recipe again.
-- Not yet: recipes that run on a schedule.
+- **Run on its own**: tick it and pick a time (your time zone, as your devices last reported it) and days. Butler runs it once on each of those days and sends every device the result as a note. If the server was down at that time it catches up within 3 hours, otherwise it skips that day.
 
 ### Backups to Google Drive
 
