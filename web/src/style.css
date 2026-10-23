@@ -413,3 +413,6 @@ body.dragging-note { cursor: grabbing; user-select: none; }
   .recipe-actions { width: 100%; }
   .recipe-actions button { flex: 1; }
 }
+.recipe-when { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.recipe-when[hidden] { display: none; }
+.recipe-when input[type="time"] { width: auto; }
