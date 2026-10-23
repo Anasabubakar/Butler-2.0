@@ -14,6 +14,13 @@ export interface Recipe {
   instructions: string;
   connections: string[]; // empty: every connection
   last_run_at: string | null;
+  run_at: string | null; // "HH:MM" your time, when it runs on its own; null: only when you ask
+  run_days: number[]; // 0 = Sunday ... 6 = Saturday
+}
+
+export interface Schedule {
+  run_at: string | null;
+  run_days: number[];
 }
 
 export const NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N} ._'-]{0,59}$/u;
@@ -23,7 +30,8 @@ const MAX_SEEN = 2500; // of each tool's reply, shown to the next step
 
 // --- stored recipes ------------------------------------------------------------------
 
-const COLUMNS = sql`id, name, instructions, connections, last_run_at`;
+const COLUMNS = sql`id, name, instructions, connections, last_run_at, run_at, run_days`;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export const list = () => sql<Recipe[]>`select ${COLUMNS} from recipes order by lower(name)`;
 
@@ -44,15 +52,28 @@ function checked(name: string, instructions: string, connections: string[]) {
   return { name: name.trim(), instructions: instructions.trim(), connections: [...new Set(connections.map((c) => c.trim()).filter(Boolean))].slice(0, 20) };
 }
 
+/** A schedule you gave, checked: a real time, and at least one day. */
+export function checkedSchedule(s: Schedule): Schedule {
+  if (s.run_at === null) return { run_at: null, run_days: [0, 1, 2, 3, 4, 5, 6] };
+  if (!TIME_RE.test(s.run_at)) throw new Error("give the time as HH:MM, like 08:00");
+  const days = [...new Set(s.run_days.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort();
+  if (!days.length) throw new Error("pick at least one day for it to run");
+  return { run_at: s.run_at, run_days: days };
+}
+
 /** Saves a new recipe, or changes the one with `id`. */
-export async function save(id: string | null, name: string, instructions: string, connections: string[]): Promise<Recipe> {
+export async function save(
+  id: string | null, name: string, instructions: string, connections: string[],
+  schedule: Schedule = { run_at: null, run_days: [] },
+): Promise<Recipe> {
   const r = checked(name, instructions, connections);
+  const { run_at, run_days } = checkedSchedule(schedule);
   try {
     const [row] = id
-      ? await sql<Recipe[]>`update recipes set name = ${r.name}, instructions = ${r.instructions}, connections = ${r.connections}
-          where id = ${id} returning ${COLUMNS}`
-      : await sql<Recipe[]>`insert into recipes (name, instructions, connections)
-          values (${r.name}, ${r.instructions}, ${r.connections}) returning ${COLUMNS}`;
+      ? await sql<Recipe[]>`update recipes set name = ${r.name}, instructions = ${r.instructions}, connections = ${r.connections},
+          run_at = ${run_at}, run_days = ${run_days} where id = ${id} returning ${COLUMNS}`
+      : await sql<Recipe[]>`insert into recipes (name, instructions, connections, run_at, run_days)
+          values (${r.name}, ${r.instructions}, ${r.connections}, ${run_at}, ${run_days}) returning ${COLUMNS}`;
     if (!row) throw new Error("that recipe is gone");
     return row;
   } catch (e) {
@@ -67,6 +88,51 @@ export async function remove(id: string) {
 
 export async function ran(id: string) {
   await sql`update recipes set last_run_at = now() where id = ${id}`;
+}
+
+// --- running on their own --------------------------------------------------------------
+
+const LATE_BY_HOURS = 3; // a run missed by longer than this (server down) is skipped for the day
+
+/**
+ * Whether a recipe should run on its own now. `local` is your local time, ISO with its offset,
+ * and `ranOn` the last day it ran on its own.
+ */
+export function due(r: Pick<Recipe, "run_at" | "run_days">, local: string, ranOn: string | null): boolean {
+  if (!r.run_at) return false;
+  const day = local.slice(0, 10);
+  if (ranOn === day) return false;
+  const weekday = new Date(`${day}T00:00:00Z`).getUTCDay();
+  if (!r.run_days.includes(weekday)) return false;
+  const minutes = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const late = minutes(local.slice(11, 16)) - minutes(r.run_at);
+  return late >= 0 && late < LATE_BY_HOURS * 60;
+}
+
+/** Recipes that should run on their own now, each marked as run today so it runs once. */
+export async function claimDue(local: string): Promise<Recipe[]> {
+  const day = local.slice(0, 10);
+  const rows = await sql<(Recipe & { scheduled_on: string | null })[]>`
+    select ${COLUMNS}, to_char(scheduled_on, 'YYYY-MM-DD') as scheduled_on from recipes where run_at is not null`;
+  const claimed: Recipe[] = [];
+  for (const r of rows.filter((r) => due(r, local, r.scheduled_on))) {
+    // Only one claim wins, even if two checks overlap.
+    const [won] = await sql`update recipes set scheduled_on = ${day}
+      where id = ${r.id} and scheduled_on is distinct from ${day} returning id`;
+    if (won) claimed.push(r);
+  }
+  return claimed;
+}
+
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** "every day at 08:00", "weekdays at 08:00", "Mon, Thu at 18:30". */
+export function describeSchedule(r: Pick<Recipe, "run_at" | "run_days">): string {
+  if (!r.run_at) return "only when you ask";
+  const days = [...r.run_days].sort().join();
+  const when = days === "0,1,2,3,4,5,6" ? "every day" : days === "1,2,3,4,5" ? "weekdays" : days === "0,6" ? "weekends"
+    : [...r.run_days].sort().map((d) => DAY_NAMES[d]).join(", ");
+  return `${when} at ${r.run_at}`;
 }
 
 // --- running one --------------------------------------------------------------------
