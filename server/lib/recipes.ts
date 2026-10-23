@@ -199,6 +199,25 @@ export async function byHook(token: string): Promise<Recipe | null> {
   return row ?? null;
 }
 
+/**
+ * Keeps events from running a recipe too often: a leaked link or a noisy inbox can't
+ * use up your AI quota or flood your devices with notes.
+ */
+export class EventLimit {
+  private runs = new Map<string, number[]>();
+  constructor(private gapMs = 30_000, private perDay = 30) {}
+
+  allow(id: string, now = Date.now()): boolean {
+    const recent = (this.runs.get(id) ?? []).filter((t) => now - t < 86_400_000);
+    if (recent.length >= this.perDay || (recent.length && now - recent.at(-1)! < this.gapMs)) {
+      this.runs.set(id, recent);
+      return false;
+    }
+    this.runs.set(id, [...recent, now]);
+    return true;
+  }
+}
+
 // --- running one --------------------------------------------------------------------
 
 /** The tools a recipe may use: from its connections (or all), never ones switched off. */
