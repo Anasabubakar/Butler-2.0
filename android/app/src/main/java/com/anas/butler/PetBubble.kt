@@ -13,9 +13,10 @@ import android.widget.ProgressBar
 import android.widget.TextView
 
 /**
- * The speech bubble over Little Butler's head. While it works: a spinner, one short line
- * of what it's doing, and Stop. When it's done: a tick (or a warning), the first line of the
- * answer, and Copy, Share and close. Tap the line to read all of it.
+ * B2/PetBubble, the speech bubble over Little Butler's head (Figma B2 · 17): an ink card with
+ * where and what state on top ("My laptop • Working"), one short line of what it's doing,
+ * and Stop. When it's done: a tick (or a warning), the first line of the answer, and Copy,
+ * Share and close. Tap the line to read all of it.
  */
 class PetBubble(context: Context) : LinearLayout(context) {
 
@@ -39,9 +40,17 @@ class PetBubble(context: Context) : LinearLayout(context) {
     private val mark = FrameLayout(context).apply {
         addView(markIcon, FrameLayout.LayoutParams((14 * dp).toInt(), (14 * dp).toInt(), Gravity.CENTER))
     }
+    private val where = TextView(context).apply {
+        setTextColor(Ui.SUBTLE)
+        textSize = 13f
+        isSingleLine = true
+        ellipsize = TextUtils.TruncateAt.END
+        visibility = View.GONE
+    }
     private val line = TextView(context).apply {
         setTextColor(Ui.TEXT)
-        textSize = 14f
+        textSize = 15f
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
         isSingleLine = true
         ellipsize = TextUtils.TruncateAt.END
         maxWidth = (210 * dp).toInt()
@@ -54,17 +63,29 @@ class PetBubble(context: Context) : LinearLayout(context) {
         setTextIsSelectable(true)
         visibility = View.GONE
     }
-    private val stop = Ui.iconButton(context, R.drawable.ic_stop, context.getString(R.string.bubble_stop), size = 28,
-        tint = Ui.DANGER) { stopAction?.invoke() }
+    // "Stop" in words, as in B2 · 17, with a 48 dp target. Never hidden while something runs.
+    private val stop = TextView(context).apply {
+        setText(R.string.bubble_stop)
+        setTextColor(Ui.TEXT)
+        textSize = 15f
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+        gravity = Gravity.CENTER
+        minHeight = (48 * dp).toInt()
+        setPadding((12 * dp).toInt(), 0, (8 * dp).toInt(), 0)
+        isClickable = true
+        setOnClickListener { stopAction?.invoke() }
+        layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+    }
     private val copy = Ui.iconButton(context, R.drawable.ic_copy, context.getString(R.string.bubble_copy), size = 28) { onCopy?.invoke(full) }
     private val share = Ui.iconButton(context, R.drawable.ic_share, context.getString(R.string.bubble_share), size = 28) { onShare?.invoke(full) }
     private val close = Ui.iconButton(context, R.drawable.ic_close, context.getString(R.string.close), size = 28) { onClose?.invoke() }
 
     init {
         orientation = VERTICAL
-        background = Ui.rounded(Ui.BACKGROUND, 18 * dp, Ui.MUTED, dp.toInt())
+        background = Ui.rounded(Ui.BACKGROUND, 12 * dp, Ui.BORDER, dp.toInt())
         elevation = 6 * dp
-        setPadding((12 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt())
+        setPadding((16 * dp).toInt(), (10 * dp).toInt(), (8 * dp).toInt(), (10 * dp).toInt())
+        addView(where, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { bottomMargin = (2 * dp).toInt() })
         val top = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -84,11 +105,15 @@ class PetBubble(context: Context) : LinearLayout(context) {
         body.setOnClickListener { toggleExpanded() }
     }
 
-    /** Working on something: spinner, a short line, and Stop if it can be stopped. */
-    fun working(text: String, onStop: (() -> Unit)? = null) {
+    /**
+     * Working on something: spinner, a short line, and Stop if it can be stopped. `device`
+     * names where it's happening ("My laptop"), shown with the Working state word.
+     */
+    fun working(text: String, onStop: (() -> Unit)? = null, device: String? = null) {
         working = true
         stopAction = onStop
-        show(text, spinning = true)
+        show(text, spinning = !Ui.reducedMotion(context))
+        setWhere(device, R.string.state_working)
         stop.visibility = if (onStop != null) View.VISIBLE else View.GONE
         copy.visibility = View.GONE
         share.visibility = View.GONE
@@ -103,26 +128,36 @@ class PetBubble(context: Context) : LinearLayout(context) {
         val next = firstLine(text)
         if (line.text.toString() == next) return
         line.animate().cancel()
+        if (Ui.reducedMotion(context)) {
+            line.text = next
+            return
+        }
         line.animate().alpha(0f).translationY(-4 * dp).setDuration(90).withEndAction {
             line.text = next
             line.translationY = 4 * dp
-            line.animate().alpha(1f).translationY(0f).setDuration(160).withEndAction(null).start()
+            line.animate().alpha(1f).translationY(0f).setDuration(Ui.LISTEN_MS).withEndAction(null).start()
         }.start()
     }
 
-    /** Finished: a tick or a warning that pops in, the answer, and Copy, Share and close. */
-    fun result(text: String, ok: Boolean = true) {
+    /**
+     * Finished: a tick or a warning that settles in (a small nod, no bounce), the answer, and
+     * Copy, Share and close. With `device`, the top line says where and Complete or Failed.
+     */
+    fun result(text: String, ok: Boolean = true, device: String? = null) {
         working = false
         stopAction = null
         show(text, spinning = false)
+        setWhere(device, if (ok) R.string.state_complete else R.string.state_failed)
         markIcon.setImageResource(if (ok) R.drawable.ic_check else R.drawable.ic_alert)
         markIcon.imageTintList = ColorStateList.valueOf(Ui.CARD)
         mark.background = Ui.rounded(if (ok) Ui.OK else Ui.DANGER, 11 * dp)
         mark.visibility = View.VISIBLE
-        mark.scaleX = 0.4f
-        mark.scaleY = 0.4f
-        mark.animate().scaleX(1f).scaleY(1f).setDuration(260)
-            .setInterpolator(android.view.animation.OvershootInterpolator(3f)).start()
+        if (!Ui.reducedMotion(context)) {
+            mark.scaleX = 0.7f
+            mark.scaleY = 0.7f
+            mark.animate().scaleX(1f).scaleY(1f).setDuration(320)
+                .setInterpolator(android.view.animation.PathInterpolator(0.2f, 0.8f, 0.2f, 1f)).start()
+        }
         stop.visibility = View.GONE
         val worthKeeping = text.length > 40
         copy.visibility = if (worthKeeping) View.VISIBLE else View.GONE
@@ -135,7 +170,13 @@ class PetBubble(context: Context) : LinearLayout(context) {
     /** Something to say that isn't a job: no spinner, just close. */
     fun info(text: String) {
         result(text, ok = true)
+        where.visibility = View.GONE
         mark.visibility = View.GONE
+    }
+
+    private fun setWhere(device: String?, state: Int) {
+        where.text = device?.let { context.getString(R.string.bubble_where, it, context.getString(state)) }
+        where.visibility = if (device != null) View.VISIBLE else View.GONE
     }
 
     private fun show(text: String, spinning: Boolean) {
@@ -157,7 +198,7 @@ class PetBubble(context: Context) : LinearLayout(context) {
         if (on && body.visibility != View.VISIBLE) {
             body.alpha = 0f
             body.visibility = View.VISIBLE
-            body.animate().alpha(1f).setDuration(180).setInterpolator(LinearInterpolator()).start()
+            body.animate().alpha(1f).setDuration(if (Ui.reducedMotion(context)) 0 else 180).setInterpolator(LinearInterpolator()).start()
         } else if (!on) {
             body.visibility = View.GONE
         }
