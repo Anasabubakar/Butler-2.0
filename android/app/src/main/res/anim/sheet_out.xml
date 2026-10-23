@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The reverse of sheet_in, a little quicker. -->
+<!-- B2 · 07 "dismiss": the reverse of sheet_in, tucked away with the exit easing. -->
 <set xmlns:android="http://schemas.android.com/apk/res/android"
-    android:duration="130"
-    android:interpolator="@android:interpolator/accelerate_cubic">
+    android:duration="220"
+    android:interpolator="@interpolator/b2_exit">
     <alpha android:fromAlpha="1" android:toAlpha="0" />
     <scale
         android:fromXScale="1" android:toXScale="0.95"
