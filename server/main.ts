@@ -1119,6 +1119,20 @@ app.delete("/api/recipes/:id/hook", async (c) => {
   return c.json({ ok: true });
 });
 
+const MAX_EVENT_BYTES = 16_000;
+
+// The secret link itself: no sign-in, the token is the key. It answers at once and the
+// recipe runs in the background, with its result sent to your devices as a note.
+app.post("/api/hooks/:token", async (c) => {
+  const recipe = await recipes.byHook(c.req.param("token")).catch(() => null);
+  if (!recipe) return c.json({ error: "not found" }, 404);
+  if (Number(c.req.header("content-length") ?? 0) > MAX_EVENT_BYTES) return c.json({ error: "too big" }, 413);
+  const sent = (await c.req.text().catch(() => "")).slice(0, MAX_EVENT_BYTES);
+  if (!geminiReady()) return c.json({ error: "no AI model on the server" }, 503);
+  const started = await startOnEvent(recipe, `Something was sent to this recipe's link:\n${sent || "(nothing)"}`);
+  return started ? c.json({ ok: true, recipe: recipe.name }, 202) : c.json({ error: "started too often, try later" }, 429);
+});
+
 // Your yes (or no) to a step waiting for it.
 app.post("/api/approvals/:id", async (c) => {
   const id = c.req.param("id");
