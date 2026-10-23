@@ -2,6 +2,7 @@ import "./fonts";
 import "./b2-tokens.css";
 import "./style.css";
 import { openConnections } from "./connections";
+import { openRecipes } from "./recipes";
 import { binMarkup, crumpleIntoBin, fasten, glide, hashOf, layout, makeDraggable, type Spot, unfasten } from "./board";
 
 class SignedOut extends Error {}
@@ -234,6 +235,12 @@ function renderLibrary() {
     onclick: () => openConnections(api, h, ago),
   }, "Connections");
 
+  // Saved instructions that Ask Butler runs by name, and steps waiting for your yes.
+  const recipesButton = h("button", {
+    class: "ghost", title: "Save instructions once and run them by name",
+    onclick: () => openRecipes(api, h, ago),
+  }, "Recipes");
+
   sidebarEl = h("nav", { class: "sidebar", "aria-label": "Collections" });
   headingEl = h("h2", { class: "heading" });
   gridEl = h("section", { class: "boards" });
@@ -248,6 +255,7 @@ function renderLibrary() {
         butlerTile("Butler 2.0 library")),
       search,
       googleButton,
+      recipesButton,
       connectionsButton,
       ringButton,
       signOut,
