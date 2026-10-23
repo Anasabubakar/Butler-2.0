@@ -14,7 +14,7 @@ import { cleanUrl, extractUrl, kindFor, platformFor } from "./lib/rules.ts";
 import { aiProviders, geminiKeys, geminiModels, geminiReady } from "./lib/gemini.ts";
 import { LOOK_MODES, type LookMode, locate, look, MAX_STEPS, nextStep } from "./lib/screen.ts";
 import * as inbox from "./lib/inbox.ts";
-import { calendarUrl, localIso, parseWhen, plan, safeZone } from "./lib/command.ts";
+import { calendarUrl, explain, localIso, parseWhen, plan, safeZone, shortArgs } from "./lib/command.ts";
 import * as google from "./lib/google.ts";
 import * as backup from "./lib/backup.ts";
 import * as meaning from "./lib/meaning.ts";
@@ -29,6 +29,8 @@ import * as video from "./lib/video.ts";
 import * as spending from "./lib/spending.ts";
 import * as streaks from "./lib/streaks.ts";
 import * as laptop from "./lib/laptop.ts";
+import * as mcp from "./lib/mcp.ts";
+import { vaultReady } from "./lib/vault.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -370,6 +372,32 @@ function holdEmail(email: google.Email): string {
   return id;
 }
 
+// Tools from your MCP connections that can change things wait here for your yes, the same way.
+const pendingTools = new Map<string, { offer: mcp.Offer; args: Record<string, unknown>; said: string; expires: number }>();
+
+function holdTool(offer: mcp.Offer, args: Record<string, unknown>, said: string): string {
+  const now = Date.now();
+  for (const [id, p] of pendingTools) if (p.expires < now) pendingTools.delete(id);
+  const id = crypto.randomUUID();
+  pendingTools.set(id, { offer, args, said, expires: now + 10 * 60_000 });
+  return id;
+}
+
+/** A tool's arguments, one per line, for you to check before saying yes. */
+const showArgs = (args: Record<string, unknown>) =>
+  Object.entries(args).map(([k, v]) => `${k}: ${(typeof v === "string" ? v : JSON.stringify(v)).slice(0, 500)}`).join("\n") ||
+  "(no details)";
+
+/** Runs a tool and says what came of it in plain words. */
+async function useTool(offer: mcp.Offer, args: Record<string, unknown>, said: string, asked: boolean): Promise<string> {
+  try {
+    const result = await mcp.use(offer, args, asked);
+    return await explain(said, offer.key, result).catch(() => result.slice(0, 600));
+  } catch (e) {
+    return `${offer.key} didn't work: ${(e as Error).message}`;
+  }
+}
+
 // Ask Butler: what you typed or said, plus optionally a screenshot of what you're looking at.
 app.post("/api/command", async (c) => {
   if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
@@ -397,9 +425,14 @@ app.post("/api/command", async (c) => {
 
   const timeZone = safeZone(text("tz", 100));
   if (timeZone !== "UTC" && timeZone === text("tz", 100)) await settings.set("time_zone", timeZone); // for the morning brief
+  const offers = (await mcp.offers().catch((e) => {
+    console.error("mcp offers", String(e).slice(0, 200));
+    return [];
+  })).slice(0, 60);
+  const tools = offers.map((o) => ({ key: o.key, description: o.tool.description, args: shortArgs(o.tool.schema) }));
   let p;
   try {
-    p = await plan(typed, { device, timeZone, devices: await inbox.devices() }, picture, voice);
+    p = await plan(typed, { device, timeZone, devices: await inbox.devices(), tools }, picture, voice);
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
@@ -557,19 +590,36 @@ app.post("/api/command", async (c) => {
         message: { app: p.app ?? "whatsapp", person: who, name, phone, text: p.text || said, attach_screen: Boolean(p.attach_screen) },
       });
     }
+    case "tool": {
+      const offer = offers.find((o) => o.key === p.tool);
+      if (!offer) return json({ action: "answer", say: "I couldn't find that tool in your connections." });
+      const args = p.args ?? {};
+      if (offer.rule === "ask") {
+        return json({ action: "confirm", say: `Use ${offer.key}?\n\n${showArgs(args)}`, confirm: holdTool(offer, args, said) });
+      }
+      return json({ action: "answer", say: await useTool(offer, args, said, false) });
+    }
     default:
       return json({ action: "answer", say: p.reply || "I'm not sure how to help with that yet." });
   }
 });
 
-// Your yes to an email Ask Butler wrote.
+// Your yes to an email Ask Butler wrote, or to a tool that changes things.
 app.post("/api/command/confirm", async (c) => {
   if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
   const { text } = await deviceForm(c);
   const id = text("confirm", 100) ?? "";
+  const tool = pendingTools.get(id);
+  pendingTools.delete(id);
+  if (tool) {
+    if (tool.expires < Date.now()) return c.json({ error: "that expired, ask again" }, 410);
+    const offer = (await mcp.offers()).find((o) => o.key === tool.offer.key);
+    if (!offer) return c.json({ say: `${tool.offer.key} has been switched off or removed, so I didn't use it.` });
+    return c.json({ say: await useTool(offer, tool.args, tool.said, true) });
+  }
   const pending = pendingEmails.get(id);
   pendingEmails.delete(id);
-  if (!pending || pending.expires < Date.now()) return c.json({ error: "that email expired, ask again" }, 410);
+  if (!pending || pending.expires < Date.now()) return c.json({ error: "that expired, ask again" }, 410);
   try {
     await google.sendEmail(pending.email);
   } catch (e) {
@@ -768,6 +818,60 @@ app.get("/api/meaning", async (c) => {
 });
 
 // --- your Google account, connected from the website ------------------------------------
+
+// --- MCP connections: other services' tools for Ask Butler (managed on the website) ------
+
+app.use("/api/mcp", requireSession);
+app.use("/api/mcp/*", requireSession);
+
+/** A connection as the website sees it: never its link or key. */
+const shown = (conn: mcp.Connection) => ({
+  id: conn.id, name: conn.name, host: conn.host, checked_at: conn.checked_at, error: conn.error,
+  tools: conn.tools.map((t) => ({ name: t.name, description: t.description, readOnly: t.readOnly, rule: mcp.ruleFor(conn, t) })),
+});
+
+app.get("/api/mcp", async (c) =>
+  c.json({ ready: vaultReady(), connections: (await mcp.list()).map(shown), calls: await mcp.recentCalls(20) }));
+
+app.post("/api/mcp", async (c) => {
+  if (!vaultReady()) return c.json({ error: "set BUTLER_VAULT_KEY on the server first" }, 503);
+  const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+  const str = (k: string, max: number) => (typeof body[k] === "string" ? (body[k] as string).trim().slice(0, max) : "");
+  try {
+    const headers = mcp.headersFor(str("auth", 20) || "none", str("key", 4000), str("header", 60));
+    return c.json(shown(await mcp.add(str("name", 40), str("url", 2000), headers)));
+  } catch (e) {
+    const message = (e as Error).message;
+    return c.json({ error: /duplicate key/.test(message) ? "you already have a connection with that name" : message.slice(0, 300) }, 400);
+  }
+});
+
+app.post("/api/mcp/:id/refresh", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  try {
+    return c.json(shown(await mcp.refresh(id)));
+  } catch (e) {
+    return c.json({ error: (e as Error).message.slice(0, 300) }, 404);
+  }
+});
+
+app.put("/api/mcp/:id/rule", async (c) => {
+  const id = c.req.param("id");
+  const { tool, rule } = await c.req.json().catch(() => ({})) as { tool?: unknown; rule?: unknown };
+  if (!UUID_RE.test(id) || typeof tool !== "string" || !mcp.RULES.includes(rule as mcp.Rule)) {
+    return c.json({ error: "tool and rule (auto, ask or off) are required" }, 400);
+  }
+  await mcp.setRule(id, tool.slice(0, 200), rule as mcp.Rule);
+  return c.json({ ok: true });
+});
+
+app.delete("/api/mcp/:id", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  await mcp.remove(id);
+  return c.json({ ok: true });
+});
 
 app.use("/api/google/*", requireSession);
 

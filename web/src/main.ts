@@ -1,6 +1,7 @@
 import "./fonts";
 import "./b2-tokens.css";
 import "./style.css";
+import { openConnections } from "./connections";
 import { binMarkup, crumpleIntoBin, fasten, glide, hashOf, layout, makeDraggable, type Spot, unfasten } from "./board";
 
 class SignedOut extends Error {}
@@ -227,6 +228,12 @@ function renderLibrary() {
     },
   }, "Ring my phone");
 
+  // Other services' tools (MCP) that Ask Butler can use.
+  const connectionsButton = h("button", {
+    class: "ghost", title: "Connect other services, like Zapier, so Ask Butler can use their tools",
+    onclick: () => openConnections(api, h, ago),
+  }, "Connections");
+
   sidebarEl = h("nav", { class: "sidebar", "aria-label": "Collections" });
   headingEl = h("h2", { class: "heading" });
   gridEl = h("section", { class: "boards" });
@@ -241,6 +248,7 @@ function renderLibrary() {
         butlerTile("Butler 2.0 library")),
       search,
       googleButton,
+      connectionsButton,
       ringButton,
       signOut,
     ),
