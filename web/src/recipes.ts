@@ -126,14 +126,56 @@ export function openRecipes(api: Api, h: H, ago: (iso: string) => string) {
       h("div", { class: "conn-head" },
         h("div", {}, h("h3", {}, r.name),
           h("p", { class: "muted small" },
-            [uses, r.run_at ? `runs ${r.schedule}` : null, r.email_query ? `runs on email matching "${r.email_query}"` : null, r.last_run_at ? `ran ${ago(r.last_run_at)}` : "not run yet"].filter(Boolean).join(" · "))),
+            [uses, r.run_at ? `runs ${r.schedule}` : null, r.email_query ? `runs on email matching "${r.email_query}"` : null,
+              r.has_hook ? "runs from its link" : null, r.last_run_at ? `ran ${ago(r.last_run_at)}` : "not run yet"].filter(Boolean).join(" · "))),
         runIt, edit, remove,
       ),
       h("p", { class: "recipe-text" }, r.instructions),
       r.email_error ? h("p", { class: "conn-error" }, `Email check failed: ${r.email_error}`) : null,
+      linkBox(r),
       out,
     );
     return holder;
+  }
+
+  /** A recipe's secret link: anything that can send a POST to it starts the recipe. */
+  function linkBox(r: Recipe): HTMLElement {
+    const box = h("details", { class: "recipe-link" }, h("summary", {}, "Start it from a link (Zapier, IFTTT, Tasker…)"));
+    const area = h("div", {});
+    box.append(area);
+    const show = (url: string | null) => {
+      if (!url) {
+        const make = h("button", { type: "button", class: "ghost" }, "Make a secret link");
+        make.addEventListener("click", () => change("POST"));
+        area.replaceChildren(h("p", { class: "muted small" },
+          "Anything that sends a POST to the link starts this recipe, and what it sends is given to the recipe to work on. " +
+            "Keep the link private: whoever has it can start the recipe (anything that changes things still waits for your yes)."), make);
+        return;
+      }
+      const field = h("input", { readonly: true, value: url, "aria-label": "Secret link" });
+      const copy = h("button", { type: "button", class: "ghost" }, "Copy");
+      copy.addEventListener("click", async () => {
+        await navigator.clipboard.writeText(url).catch(() => field.select());
+        copy.textContent = "Copied";
+      });
+      const fresh = h("button", { type: "button", class: "ghost" }, "New link");
+      fresh.addEventListener("click", () => confirm("Make a new link? The old one stops working.") && change("POST"));
+      const off = h("button", { type: "button", class: "ghost" }, "Turn off");
+      off.addEventListener("click", () => change("DELETE"));
+      area.replaceChildren(field, h("div", { class: "recipe-actions" }, copy, fresh, off));
+    };
+    const change = async (method: "POST" | "DELETE") => {
+      try {
+        show((await api<{ url?: string }>(`/api/recipes/${r.id}/hook`, { method })).url ?? null);
+      } catch (e) {
+        area.replaceChildren(h("p", { class: "conn-error" }, (e as Error).message));
+      }
+    };
+    box.addEventListener("toggle", async () => {
+      if (!box.open || area.childElementCount) return;
+      show(r.has_hook ? (await api<{ url: string | null }>(`/api/recipes/${r.id}/hook`).catch(() => ({ url: null }))).url : null);
+    });
+    return box;
   }
 
   function form(r: Recipe | null): HTMLElement {
