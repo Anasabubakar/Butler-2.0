@@ -7,6 +7,7 @@ import { sql } from "./db.ts";
 import { askGemini } from "./gemini.ts";
 import type { Offer } from "./mcp.ts";
 import { shortArgs } from "./command.ts";
+import { lock, unlock } from "./vault.ts";
 
 export interface Recipe {
   id: string;
@@ -164,6 +165,38 @@ export const emailWatchers = () =>
 /** Notes how far a recipe's email check got, and why it failed if it did. */
 export async function emailChecked(id: string, after: Date | null, error: string | null) {
   await sql`update recipes set email_after = coalesce(${after}, email_after), email_error = ${error} where id = ${id}`;
+}
+
+// --- starting from a secret link -------------------------------------------------------------
+
+const sha256 = async (text: string) =>
+  [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))]
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+
+/** Gives a recipe a new secret link token (any old one stops working) and returns it. */
+export async function makeHook(id: string): Promise<string> {
+  const token = [...crypto.getRandomValues(new Uint8Array(24))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const [row] = await sql`update recipes set hook_hash = ${await sha256(token)}, hook_secret = ${await lock(token)}
+    where id = ${id} returning id`;
+  if (!row) throw new Error("that recipe is gone");
+  return token;
+}
+
+/** A recipe's secret link token, or null when it has none. */
+export async function hookToken(id: string): Promise<string | null> {
+  const [row] = await sql<{ hook_secret: string | null }[]>`select hook_secret from recipes where id = ${id}`;
+  return row?.hook_secret ? await unlock(row.hook_secret) : null;
+}
+
+export async function dropHook(id: string) {
+  await sql`update recipes set hook_hash = null, hook_secret = null where id = ${id}`;
+}
+
+/** The recipe a secret link token starts, if any. */
+export async function byHook(token: string): Promise<Recipe | null> {
+  if (!/^[0-9a-f]{48}$/.test(token)) return null;
+  const [row] = await sql<Recipe[]>`select ${COLUMNS} from recipes where hook_hash = ${await sha256(token)}`;
+  return row ?? null;
 }
 
 // --- running one --------------------------------------------------------------------
