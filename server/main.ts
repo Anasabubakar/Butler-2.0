@@ -1001,7 +1001,8 @@ function waiting() {
 }
 
 app.get("/api/recipes", async (c) => c.json({
-  recipes: await recipes.list(),
+  recipes: (await recipes.list()).map((r) => ({ ...r, schedule: recipes.describeSchedule(r) })),
+  timeZone: await ownerZone(),
   connections: (await mcp.list()).map((conn) => conn.name),
   waiting: waiting(),
 }));
@@ -1010,8 +1011,12 @@ async function saveRecipe(c: Context, id: string | null) {
   const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
   const str = (k: string) => (typeof body[k] === "string" ? body[k] as string : "");
   const connections = Array.isArray(body.connections) ? body.connections.filter((x): x is string => typeof x === "string") : [];
+  const schedule = {
+    run_at: str("run_at") || null,
+    run_days: Array.isArray(body.run_days) ? body.run_days.map(Number) : [],
+  };
   try {
-    return c.json(await recipes.save(id, str("name"), str("instructions"), connections));
+    return c.json(await recipes.save(id, str("name"), str("instructions"), connections, schedule));
   } catch (e) {
     return c.json({ error: (e as Error).message.slice(0, 300) }, 400);
   }
