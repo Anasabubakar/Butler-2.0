@@ -131,10 +131,11 @@ class PetService : Service() {
             addView(LinearLayout(ui).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
+                // B2 · 17: "What needs handling?" in bold white on ink.
                 addView(TextView(ui).apply {
-                    setText(R.string.pet_menu_name)
+                    setText(R.string.pet_menu_heading)
                     setTextColor(Ui.TEXT)
-                    textSize = 15f
+                    textSize = 18f
                     typeface = android.graphics.Typeface.DEFAULT_BOLD
                 }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
                 addView(Ui.iconButton(ui, R.drawable.ic_close, getString(R.string.close), size = 30, tint = Ui.SUBTLE,
@@ -156,8 +157,10 @@ class PetService : Service() {
                     setTextColor(Ui.SUBTLE)
                     textSize = 15f
                 }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-                addView(Ui.iconButton(ui, R.drawable.ic_mic, getString(R.string.pet_talk), size = 36, tint = Ui.CARD,
-                    background = Ui.TEXT) { askButler(talk = true) })
+                if (Config(this@PetService).microphone) {
+                    addView(Ui.iconButton(ui, R.drawable.ic_mic, getString(R.string.pet_talk), size = 36, tint = Ui.CARD,
+                        background = Ui.TEXT) { askButler(talk = true) })
+                }
             }, LinearLayout.LayoutParams(wide, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (8 * dp).toInt() })
             addView(TextView(ui).apply {
                 setText(R.string.pet_menu_title)
@@ -269,9 +272,10 @@ class PetService : Service() {
         val dp = resources.displayMetrics.density
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        background = Ui.rounded(Ui.CARD, 12 * dp, Ui.MUTED, dp.toInt())
+        background = Ui.rounded(Ui.CARD, 12 * dp, Ui.BORDER, dp.toInt())
+        minimumHeight = (48 * dp).toInt()
         setPadding((10 * dp).toInt(), (11 * dp).toInt(), (8 * dp).toInt(), (11 * dp).toInt())
-        addView(icon(ui, iconRes, Ui.ACCENT, 18))
+        addView(icon(ui, iconRes, Ui.TEXT, 18))
         addView(TextView(ui).apply {
             text = label
             setTextColor(Ui.TEXT)
