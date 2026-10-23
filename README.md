@@ -122,6 +122,16 @@ Ask Butler can use tools from other services that speak MCP (the Model Context P
 
 **Zapier:** at [mcp.zapier.com](https://mcp.zapier.com), make a server, pick the actions you want, and generate a connection token (it's shown once). In Butler, use the link `https://mcp.zapier.com/api/v1/connect`, sign-in **API key (Bearer)**, and the token as the key.
 
+### Recipes
+
+A recipe is a set of instructions you save once and run by name, like Poke's recipes. On the website, press **Recipes**, give it a name ("Morning check") and write what Butler should do, the way you'd tell a person. You can tick which connections it may use (none ticked means any). Then say "run my morning check" to Ask Butler, or press **Run** on the website.
+
+- A recipe can take up to 5 steps with tools that only read, using what each one sends back for the next step.
+- A step that would send, change or delete is always the last step, and it waits for your yes. That holds even for tools you've set to **Just do it**, because inside a recipe, earlier tool replies could try to steer what it does next.
+- If a recipe takes longer than about 18 seconds (`BUTLER_RECIPE_WAIT_MS`), Butler finishes it in the background and sends every device a note. A step waiting for your yes then shows under **Waiting for your yes** in Recipes on the website, for 24 hours.
+- Waiting steps are kept in memory, so a deploy or restart forgets them and you run the recipe again.
+- Not yet: recipes that run on a schedule.
+
 ### Backups to Google Drive
 
 The server keeps a database dump a day in `deploy/backups`, but that dies with the server. Once Google is connected, Butler also copies the newest dump and every saved file to a **Butler backups** folder in your Drive, every 6 hours, keeping the last 14 dumps. It can only see files it made there (`drive.file`), nothing else in your Drive. Hover the Google button on the website to see the last backup; it shows ⚠ if one failed.
