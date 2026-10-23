@@ -1092,6 +1092,33 @@ app.post("/api/recipes/:id/run", async (c) => {
   return c.json(await startRecipe(recipe, "", await ownerZone()));
 });
 
+// A recipe's secret link: anything that can send a POST (Zapier, IFTTT, Tasker, a script)
+// can start it, and what it sends is given to the recipe as data.
+const hookUrl = (c: Context, token: string) => `${publicBase(c)}/api/hooks/${token}`;
+
+app.post("/api/recipes/:id/hook", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  if (!vaultReady()) return c.json({ error: "the server needs BUTLER_VAULT_KEY set first" }, 503);
+  try {
+    return c.json({ url: hookUrl(c, await recipes.makeHook(id)) });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 404);
+  }
+});
+
+app.get("/api/recipes/:id/hook", async (c) => {
+  const id = c.req.param("id");
+  const token = UUID_RE.test(id) ? await recipes.hookToken(id).catch(() => null) : null;
+  return c.json({ url: token ? hookUrl(c, token) : null });
+});
+
+app.delete("/api/recipes/:id/hook", async (c) => {
+  const id = c.req.param("id");
+  if (UUID_RE.test(id)) await recipes.dropHook(id);
+  return c.json({ ok: true });
+});
+
 // Your yes (or no) to a step waiting for it.
 app.post("/api/approvals/:id", async (c) => {
   const id = c.req.param("id");
