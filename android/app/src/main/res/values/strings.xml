@@ -89,6 +89,8 @@
     <string name="handoff_opened">Opened %1$s with the message. %2$s</string>
     <string name="handoff_press_send">Check it and press Send.</string>
     <string name="handoff_pick">Pick %1$s, then press Send.</string>
+    <string name="notify_open">Open</string>
+    <string name="notify_view">View</string>
     <string name="inbox_channel">Reminders and things sent to this phone</string>
     <string name="inbox_from">\u0020from %1$s</string>
     <string name="inbox_reminder">Reminder</string>
@@ -96,10 +98,10 @@
     <string name="ring_text">Butler is ringing this phone%1$s. Tap the pet or here to stop.</string>
     <string name="ring_found">Found it</string>
     <string name="pet_ringing">Here, sir. Tap me to stop the ringing.</string>
-    <string name="inbox_copied">Copied%1$s</string>
-    <string name="inbox_link">Link%1$s</string>
+    <string name="inbox_copied">On your clipboard%1$s</string>
+    <string name="inbox_link">A link%1$s</string>
     <string name="inbox_file">Saved to Downloads/Butler%1$s</string>
-    <string name="inbox_note">Note%1$s</string>
+    <string name="inbox_note">A note%1$s</string>
     <string name="allow_notifications">Allow notifications so reminders can reach you</string>
     <string name="pet_laptop">Tell my laptop</string>
     <string name="laptop_explain">Put your secret word anywhere in it. Remote control has to be on at the laptop, and the laptop awake.</string>
