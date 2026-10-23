@@ -106,8 +106,13 @@ class AskActivity : AppCompatActivity() {
             if (action == EditorInfo.IME_ACTION_SEND) ask()
             action == EditorInfo.IME_ACTION_SEND
         }
-        findViewById<Button>(R.id.ask_talk).setOnClickListener { talk() }
-        if (intent.getBooleanExtra(EXTRA_TALK, false) && savedInstanceState == null) {
+        // The microphone is its own switch in Settings; off means no mic button at all.
+        val mic = Config(this).microphone
+        findViewById<Button>(R.id.ask_talk).apply {
+            visibility = if (mic) View.VISIBLE else View.GONE
+            setOnClickListener { talk() }
+        }
+        if (mic && intent.getBooleanExtra(EXTRA_TALK, false) && savedInstanceState == null) {
             talk()
         } else {
             // Ready to type straight away: box focused, keyboard up.
@@ -120,6 +125,7 @@ class AskActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        Speaker.stop()
         if (isFinishing) intent.getStringExtra(EXTRA_SHOT)?.let { File(it).delete() }
         super.onDestroy()
     }
@@ -140,7 +146,7 @@ class AskActivity : AppCompatActivity() {
     private fun setLaptop(on: Boolean) {
         laptop = on
         input.setHint(if (on) R.string.laptop_hint else R.string.ask_hint)
-        go.contentDescription = getString(if (on) R.string.laptop_go else R.string.ask_go)
+        go.setText(if (on) R.string.laptop_go else R.string.ask_go)
         // The secret word shouldn't end up in the keyboard's suggestions.
         input.imeOptions = EditorInfo.IME_ACTION_SEND or (if (on) EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING else 0)
         input.inputType = EditorInfo.TYPE_CLASS_TEXT or EditorInfo.TYPE_TEXT_FLAG_CAP_SENTENCES or
@@ -182,6 +188,12 @@ class AskActivity : AppCompatActivity() {
         answer.visibility = View.VISIBLE
     }
 
+    /** A finished answer: shown, and spoken too if Voice replies is on. */
+    private fun reply(text: String) {
+        show(text)
+        Speaker.say(this, text)
+    }
+
     private fun setBusy(on: Boolean, label: Int = R.string.pet_thinking) {
         busy = on
         go.isEnabled = !on
@@ -200,7 +212,7 @@ class AskActivity : AppCompatActivity() {
             val message = runCatching { act(ButlerClient(Config(this@AskActivity)).command(text, shot), shot) }
                 .getOrElse { getString(R.string.pet_failed, it.message ?: it.toString()) }
             setBusy(false)
-            show(message)
+            reply(message)
             input.text.clear()
         }
     }
@@ -274,10 +286,12 @@ class AskActivity : AppCompatActivity() {
 
     /** Asks Send or Cancel, for things that need your yes first, like an email. */
     private suspend fun confirm(text: String): Boolean = suspendCancellableCoroutine { cont ->
+        // B2 · 13 "Ready to send": recipient, message and attachment together, then your yes.
         val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.ready_to_send)
             .setMessage(text)
             .setPositiveButton(R.string.ask_send) { _, _ -> if (cont.isActive) cont.resume(true) }
-            .setNegativeButton(R.string.cancel) { _, _ -> if (cont.isActive) cont.resume(false) }
+            .setNegativeButton(R.string.dont_send) { _, _ -> if (cont.isActive) cont.resume(false) }
             .setOnCancelListener { if (cont.isActive) cont.resume(false) }
             .show()
         cont.invokeOnCancellation { dialog.dismiss() }
