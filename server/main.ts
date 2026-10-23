@@ -29,6 +29,7 @@ import * as video from "./lib/video.ts";
 import * as spending from "./lib/spending.ts";
 import * as streaks from "./lib/streaks.ts";
 import * as laptop from "./lib/laptop.ts";
+import * as prefs from "./lib/prefs.ts";
 import * as mcp from "./lib/mcp.ts";
 import * as recipes from "./lib/recipes.ts";
 import { vaultReady } from "./lib/vault.ts";
@@ -500,7 +501,7 @@ app.post("/api/command", async (c) => {
   let p;
   try {
     p = await plan(typed, {
-      device, timeZone, devices: await inbox.devices(), tools,
+      device, timeZone, devices: await inbox.devices(), tools, teasing: (await prefs.load()).teasing,
       recipes: saved.map((r) => ({ name: r.name, about: r.instructions.slice(0, 120) })),
     }, picture, voice);
   } catch (e) {

@@ -1,6 +1,8 @@
 // The signed-in website's frame: the header from B2 · 09 (lockup, search, Google status,
 // Ring my phone) plus links to Ask Butler, Devices and Settings.
-import { api, button, h, icon, lockup, SignedOut, toast } from "./ui";
+import { openConnections } from "./connections";
+import { openRecipes } from "./recipes";
+import { ago, api, button, h, icon, lockup, SignedOut, toast } from "./ui";
 
 export type Page = "library" | "ask" | "devices" | "settings";
 
@@ -41,6 +43,17 @@ export function topBar(active: Page, middle?: Node): HTMLElement {
   });
   ring.classList.add("top__ring");
 
+  // Saved instructions Ask Butler runs by name (and steps waiting for your yes),
+  // and the services (MCP) whose tools it can use.
+  const recipes = button("Recipes", {
+    kind: "quiet", icon: "clock", title: "Save instructions once and run them by name",
+    onclick: () => openRecipes(api, h, ago),
+  });
+  const connections = button("Connections", {
+    kind: "quiet", icon: "external", title: "Connect other services, like Zapier, so Ask Butler can use their tools",
+    onclick: () => openConnections(api, h, ago),
+  });
+
   return h("header", { class: "top" },
     h("a", { class: "brand", href: href("library"), "aria-label": "Butler 2.0 library" }, lockup(34)),
     middle ?? h("span", { class: "top__spacer" }),
@@ -51,6 +64,8 @@ export function topBar(active: Page, middle?: Node): HTMLElement {
       }, icon(p.icon), h("span", {}, p.text))),
     ),
     google,
+    recipes,
+    connections,
     ring,
   );
 }
