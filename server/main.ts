@@ -430,6 +430,37 @@ const toolOffers = () => mcp.offers().catch((e) => {
   return [] as mcp.Offer[];
 });
 
+/** Sends every device a recipe's result as a note when it's done; a step needing your yes waits on the website. */
+function noteWhenDone(recipe: recipes.Recipe, job: Promise<recipes.Done>, said: string) {
+  job.then((done) => {
+    let body = `${recipe.name}: ${done.say}`;
+    if (done.waiting) {
+      const { offer, args } = done.waiting;
+      holdTool(offer, args, said || recipe.instructions, recipe.name, 24 * 3_600_000);
+      body += `\n\nIt wants to use ${offer.key}:\n${showArgs(args)}\n\nSay yes or no under Recipes on the Butler website.`;
+    }
+    return body;
+  }, (e: Error) => `${recipe.name} didn't work: ${e.message.slice(0, 200)}`).then(async (body) => {
+    const everywhere = (await inbox.devices()).map((d) => d.name);
+    if (everywhere.length) await inbox.send(everywhere, { from_device: "Butler", kind: "note", body });
+  }).catch((e) => console.error("recipe note", String(e).slice(0, 200)));
+}
+
+/** Runs the recipes whose time has come (each once a day), and sends the results as notes. */
+async function recipesIfDue(now = new Date()) {
+  const timeZone = await ownerZone();
+  const local = localIso(now, timeZone);
+  const due = await recipes.claimDue(local);
+  if (!due.length) return;
+  const offers = await toolOffers();
+  for (const recipe of due) {
+    console.log(`recipe: running ${recipe.name} on schedule`);
+    await recipes.ran(recipe.id).catch(() => {});
+    const job = recipes.run(recipe, { said: "", now: local, timeZone, offers, use: (offer, args) => mcp.use(offer, args, false) });
+    noteWhenDone(recipe, job, "");
+  }
+}
+
 /**
  * Runs a recipe. If it's done in time you get the result (and a yes/no if it wants to change
  * something); otherwise it carries on and every device gets the result as a note, with any
@@ -453,18 +484,7 @@ async function startRecipe(recipe: recipes.Recipe, said: string, timeZone: strin
     const confirm = holdTool(offer, args, said || recipe.instructions, recipe.name);
     return { say: `${early.say ? `${early.say}\n\n` : ""}Use ${offer.key}?\n\n${showArgs(args)}`, confirm };
   }
-  job.then(async (done) => {
-    let body = `${recipe.name}: ${done.say}`;
-    if (done.waiting) {
-      const { offer, args } = done.waiting;
-      holdTool(offer, args, said || recipe.instructions, recipe.name, 24 * 3_600_000);
-      body += `\n\nIt wants to use ${offer.key}:\n${showArgs(args)}\n\nSay yes or no under Recipes on the Butler website.`;
-    }
-    return body;
-  }, (e: Error) => `${recipe.name} didn't work: ${e.message.slice(0, 200)}`).then(async (body) => {
-    const everywhere = (await inbox.devices()).map((d) => d.name);
-    if (everywhere.length) await inbox.send(everywhere, { from_device: "Butler", kind: "note", body });
-  }).catch((e) => console.error("recipe note", String(e).slice(0, 200)));
+  noteWhenDone(recipe, job, said);
   return { say: `Still working on ${recipe.name}. I'll send you the result as a note.` };
 }
 
@@ -1283,6 +1303,7 @@ if (import.meta.main) {
   setInterval(backUpSoon, 6 * 60 * 60 * 1000);
   setInterval(() => briefIfDue().catch((e) => console.error("brief:", e)), 5 * 60_000);
   setInterval(() => recapIfDue().catch((e) => console.error("recap:", e)), 5 * 60_000);
+  setInterval(() => recipesIfDue().catch((e) => console.error("recipes:", e)), 60_000);
   setInterval(() => watchPrices().catch((e) => console.error("prices:", e)), 30 * 60_000);
   setInterval(() => rescueLinks().catch((e) => console.error("links:", e)), 10 * 60_000);
   if (geminiReady()) console.log("AI providers, in order:", aiProviders().join(", "));
