@@ -213,7 +213,7 @@ export default class ButlerPetExtension extends Extension {
         });
 
         this._menu = new St.BoxLayout({vertical: true, style_class: 'butler-menu', visible: false});
-        this._menu.add_child(new St.Label({text: 'What should I do?', style_class: 'butler-menu-title'}));
+        this._menu.add_child(new St.Label({text: 'What needs handling?', style_class: 'butler-menu-title'}));
         for (const [label, run] of [
             ['Save this', () => this._saveThis()],
             ['Copy this', () => this._copyThis()],
