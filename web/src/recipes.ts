@@ -217,7 +217,7 @@ export function openRecipes(api: Api, h: H, ago: (iso: string) => string) {
         : h("p", { class: "muted small" }, "No connections yet, so it can only answer. Add some under Connections."),
       h("label", { class: "recipe-check" }, scheduled, `Run on its own (${status.timeZone} time), and send me the result`),
       when,
-      h("label", { class: "recipe-check" }, onEmail, "Also run it when a new email matches this Gmail search"),
+      h("label", { class: "recipe-check" }, onEmail, "Run it when a new email matches this Gmail search"),
       query,
       h("div", { class: "recipe-actions" }, save,
         r ? h("button", { type: "button", class: "ghost", onclick: () => load() }, "Cancel") : null),
