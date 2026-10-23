@@ -428,6 +428,8 @@ export default class ButlerPetExtension extends Extension {
         this._show('peek.png');
         this._face.remove_all_transitions();
         this._face.translation_y = -PEEK_TOP;
+        if (!St.Settings.get().enable_animations)
+            return this._place(false); // reduced motion: no idle loop (B2 · 07)
         this._face.ease({
             translation_y: -PEEK_TOP + 2,
             duration: 1600,
@@ -478,7 +480,8 @@ export default class ButlerPetExtension extends Extension {
             return;
         const {x, y, height} = this._target(monitor);
         if (animate) {
-            this._pet.ease({x, y, height, duration: 380, mode: Clutter.AnimationMode.EASE_OUT_BACK});
+            // B2 · 07 summon: pull up from the edge in 260 ms and settle without a bounce.
+            this._pet.ease({x, y, height, duration: 260, mode: Clutter.AnimationMode.EASE_OUT_CUBIC});
         } else {
             this._pet.set_position(x, y);
             this._pet.height = height;
