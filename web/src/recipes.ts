@@ -126,10 +126,11 @@ export function openRecipes(api: Api, h: H, ago: (iso: string) => string) {
       h("div", { class: "conn-head" },
         h("div", {}, h("h3", {}, r.name),
           h("p", { class: "muted small" },
-            [uses, r.run_at ? `runs ${r.schedule}` : null, r.last_run_at ? `ran ${ago(r.last_run_at)}` : "not run yet"].filter(Boolean).join(" · "))),
+            [uses, r.run_at ? `runs ${r.schedule}` : null, r.email_query ? `runs on email matching "${r.email_query}"` : null, r.last_run_at ? `ran ${ago(r.last_run_at)}` : "not run yet"].filter(Boolean).join(" · "))),
         runIt, edit, remove,
       ),
       h("p", { class: "recipe-text" }, r.instructions),
+      r.email_error ? h("p", { class: "conn-error" }, `Email check failed: ${r.email_error}`) : null,
       out,
     );
     return holder;
