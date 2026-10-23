@@ -1063,7 +1063,7 @@ async function saveRecipe(c: Context, id: string | null) {
     run_days: Array.isArray(body.run_days) ? body.run_days.map(Number) : [],
   };
   try {
-    return c.json(await recipes.save(id, str("name"), str("instructions"), connections, schedule));
+    return c.json(await recipes.save(id, str("name"), str("instructions"), connections, schedule, str("email_query") || null));
   } catch (e) {
     return c.json({ error: (e as Error).message.slice(0, 300) }, 400);
   }
