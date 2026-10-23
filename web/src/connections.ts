@@ -168,8 +168,8 @@ export function openConnections(api: Api, h: H, ago: (iso: string) => string) {
     return h("section", { class: "conn-card" },
       h("h3", {}, "What Butler used lately"),
       h("ul", { class: "conn-log" }, ...calls.map((c) =>
-        h("li", {},
-          h("span", { class: `conn-dot ${c.status}` }),
+        h("li", { title: c.result ?? "" },
+          h("span", { class: `conn-dot ${c.status}`, "aria-label": c.status === "done" ? "worked" : "failed" }),
           h("span", {}, `${c.connection}/${c.tool}`, c.asked ? h("span", { class: "muted" }, " · you said yes") : null),
           h("span", { class: "muted small" }, ago(c.at)),
         ))),
