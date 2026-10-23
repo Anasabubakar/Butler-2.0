@@ -16,6 +16,9 @@ export interface Recipe {
   last_run_at: string | null;
   run_at: string | null; // "HH:MM" your time, when it runs on its own; null: only when you ask
   run_days: number[]; // 0 = Sunday ... 6 = Saturday
+  email_query: string | null; // a Gmail search; a new email matching it starts the recipe
+  email_error: string | null; // why the last email check failed
+  has_hook: boolean; // whether it has a secret link that starts it
 }
 
 export interface Schedule {
@@ -30,7 +33,8 @@ const MAX_SEEN = 2500; // of each tool's reply, shown to the next step
 
 // --- stored recipes ------------------------------------------------------------------
 
-const COLUMNS = sql`id, name, instructions, connections, last_run_at, run_at, run_days`;
+const COLUMNS = sql`id, name, instructions, connections, last_run_at, run_at, run_days, email_query, email_error,
+  hook_hash is not null as has_hook`;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export const list = () => sql<Recipe[]>`select ${COLUMNS} from recipes order by lower(name)`;
@@ -61,19 +65,35 @@ export function checkedSchedule(s: Schedule): Schedule {
   return { run_at: s.run_at, run_days: days };
 }
 
-/** Saves a new recipe, or changes the one with `id`. */
+/** A Gmail search you gave, tidied: null when there is none. */
+export function checkedQuery(q: string | null | undefined): string | null {
+  const t = (q ?? "").replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  if (t.length > 300) throw new Error("keep the email search under 300 characters");
+  return t;
+}
+
+/**
+ * Saves a new recipe, or changes the one with `id`. Giving it a new email search means
+ * only emails from now on start it, not ones already in your inbox.
+ */
 export async function save(
   id: string | null, name: string, instructions: string, connections: string[],
-  schedule: Schedule = { run_at: null, run_days: [] },
+  schedule: Schedule = { run_at: null, run_days: [] }, emailQuery: string | null = null,
 ): Promise<Recipe> {
   const r = checked(name, instructions, connections);
   const { run_at, run_days } = checkedSchedule(schedule);
+  const q = checkedQuery(emailQuery);
   try {
     const [row] = id
       ? await sql<Recipe[]>`update recipes set name = ${r.name}, instructions = ${r.instructions}, connections = ${r.connections},
-          run_at = ${run_at}, run_days = ${run_days} where id = ${id} returning ${COLUMNS}`
-      : await sql<Recipe[]>`insert into recipes (name, instructions, connections, run_at, run_days)
-          values (${r.name}, ${r.instructions}, ${r.connections}, ${run_at}, ${run_days}) returning ${COLUMNS}`;
+          run_at = ${run_at}, run_days = ${run_days},
+          email_after = case when email_query is distinct from ${q} then now() else email_after end,
+          email_error = case when email_query is distinct from ${q} then null else email_error end,
+          email_query = ${q}
+          where id = ${id} returning ${COLUMNS}`
+      : await sql<Recipe[]>`insert into recipes (name, instructions, connections, run_at, run_days, email_query, email_after)
+          values (${r.name}, ${r.instructions}, ${r.connections}, ${run_at}, ${run_days}, ${q}, now()) returning ${COLUMNS}`;
     if (!row) throw new Error("that recipe is gone");
     return row;
   } catch (e) {
