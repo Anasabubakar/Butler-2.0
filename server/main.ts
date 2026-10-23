@@ -619,7 +619,7 @@ app.post("/api/command/confirm", async (c) => {
   }
   const pending = pendingEmails.get(id);
   pendingEmails.delete(id);
-  if (!pending || pending.expires < Date.now()) return c.json({ error: "that email expired, ask again" }, 410);
+  if (!pending || pending.expires < Date.now()) return c.json({ error: "that expired, ask again" }, 410);
   try {
     await google.sendEmail(pending.email);
   } catch (e) {
