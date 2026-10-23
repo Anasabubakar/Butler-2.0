@@ -11,6 +11,9 @@ interface Recipe {
   run_at: string | null;
   run_days: number[];
   schedule: string; // in words, like "weekdays at 08:00"
+  email_query: string | null; // a Gmail search; new email matching it starts the recipe
+  email_error: string | null;
+  has_hook: boolean; // whether a secret link starts it
 }
 
 interface Waiting { id: string; from: string; tool: string; details: string; expires: string }
@@ -149,6 +152,11 @@ export function openRecipes(api: Api, h: H, ago: (iso: string) => string) {
         ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]));
     const when = h("div", { class: "recipe-when", hidden: !r?.run_at }, time, ...dayBoxes);
     scheduled.addEventListener("change", () => { when.hidden = !scheduled.checked; });
+    // Starts on email: a Gmail search, and each new email that matches runs it.
+    const onEmail = h("input", { type: "checkbox", checked: Boolean(r?.email_query) });
+    const query = h("input", { maxlength: "300", placeholder: "from:mybank.com subject:alert", autocomplete: "off",
+      "aria-label": "Gmail search", value: r?.email_query ?? "", hidden: !r?.email_query });
+    onEmail.addEventListener("change", () => { query.hidden = !onEmail.checked; if (onEmail.checked) query.focus(); });
     const save = h("button", { type: "submit", class: "conn-primary" }, r ? "Save" : "Add recipe");
     const note = h("p", { class: "muted small" });
     const ideas = r ? null : h("p", { class: "recipe-ideas" }, "Ideas: ", ...IDEAS.map(([n, t]) => {
@@ -166,6 +174,8 @@ export function openRecipes(api: Api, h: H, ago: (iso: string) => string) {
         : h("p", { class: "muted small" }, "No connections yet, so it can only answer. Add some under Connections."),
       h("label", { class: "recipe-check" }, scheduled, `Run on its own (${status.timeZone} time), and send me the result`),
       when,
+      h("label", { class: "recipe-check" }, onEmail, "Also run it when a new email matches this Gmail search"),
+      query,
       h("div", { class: "recipe-actions" }, save,
         r ? h("button", { type: "button", class: "ghost", onclick: () => load() }, "Cancel") : null),
       note,
@@ -181,6 +191,7 @@ export function openRecipes(api: Api, h: H, ago: (iso: string) => string) {
             name: name.value, instructions: text.value, connections,
             run_at: scheduled.checked ? time.value : null,
             run_days: dayBoxes.map((b) => b.querySelector("input")!).filter((i) => i.checked).map((i) => Number(i.value)),
+            email_query: onEmail.checked ? query.value : null,
           }),
         });
         await load();
