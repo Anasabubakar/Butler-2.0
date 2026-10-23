@@ -71,15 +71,18 @@ export function checked(job: Job, folders: string[]): Job {
   }
 }
 
-/** The status the phone shows, as a notification title and text. */
+/**
+ * The status the phone shows, as a notification title. Uses the Butler 2.0 state words
+ * (Figma B2 · 13): Working, Complete, Failed, Stopped, and names the device it ran on.
+ */
 export function statusTitle(state: State): string {
   return {
-    started: "Laptop: on it",
-    working: "Laptop: still working",
-    done: "Laptop: done",
-    failed: "Laptop: failed",
-    refused: "Laptop: refused",
-    stopped: "Laptop: stopped",
-    locked: "Laptop: remote control locked",
+    started: "My laptop • Working",
+    working: "My laptop • Still working",
+    done: "My laptop • Complete",
+    failed: "My laptop • Failed",
+    refused: "My laptop • Didn't run this",
+    stopped: "My laptop • Stopped",
+    locked: "My laptop • Remote control is locked",
   }[state];
 }

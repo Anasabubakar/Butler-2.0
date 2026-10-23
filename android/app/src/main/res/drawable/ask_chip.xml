@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- An example command you can tap to fill the box. -->
+<!-- An example command you can tap to fill the box: charcoal with a thin line. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#18181B" />
-    <stroke android:width="1dp" android:color="#3F3F46" />
-    <corners android:radius="16dp" />
+    <solid android:color="@color/b2_dark_surface" />
+    <stroke android:width="1dp" android:color="@color/b2_dark_line" />
+    <corners android:radius="12dp" />
 </shape>

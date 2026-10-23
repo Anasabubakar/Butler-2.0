@@ -76,6 +76,23 @@ class ButlerClient(private val config: Config) {
         }
     }
 
+    /** The preferences every device shares: teasing ("on", "less", "off") and quiet mode. */
+    suspend fun prefs(): JSONObject = JSONObject(json("GET", "/api/prefs", null))
+
+    /** Changes shared preferences (only the fields given) and returns them all. */
+    suspend fun savePrefs(patch: JSONObject): JSONObject = JSONObject(json("PUT", "/api/prefs", patch))
+
+    private suspend fun json(method: String, path: String, body: JSONObject?): String = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(base + path).header("x-butler-token", config.token)
+            .method(method, body?.toString()?.toRequestBody("application/json".toMediaType()))
+            .build()
+        client.newCall(request).execute().use { res ->
+            val text = res.body?.string().orEmpty()
+            if (!res.isSuccessful) throw IOException(if (res.code == 401) "Butler refused the token" else "Butler answered ${res.code}")
+            text
+        }
+    }
+
     /** Posts a form and returns the answer's body, or throws with Butler's error message. */
     suspend fun post(path: String, fields: Map<String, String>, file: Attachment?): String = withContext(Dispatchers.IO) {
         val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply {

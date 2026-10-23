@@ -1,6 +1,7 @@
-// The speech bubble over the pet's head, like the phone pet's (PetBubble.kt). While it
-// works: a spinner, one short line of what it's doing, and Stop. When it's done: a tick
-// (or a "!"), the first line of the answer, and Copy and ×. Click the line to read all of it.
+// B2/PetBubble over the pet's head (Figma B2 · 17), like the phone pet's (PetBubble.kt):
+// where and what state on top ("My laptop • Working"), one short line of what it's doing,
+// and Stop. When it's done: a tick (or a "!"), the first line of the answer, and Copy and ×.
+// Click the line to read all of it.
 import Clutter from 'gi://Clutter';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
@@ -37,6 +38,8 @@ export class Bubble {
         this._stopAction = null;
 
         this.actor = new St.BoxLayout({vertical: true, style_class: 'butler-bubble', visible: false, reactive: true});
+        this._heading = new St.Label({style_class: 'butler-bubble-heading', visible: false});
+        this.actor.add_child(this._heading);
 
         const top = new St.BoxLayout({style_class: 'butler-bubble-top'});
         this._spinner = new Animation.Spinner(16, {animate: true, hideOnStop: true});
@@ -96,11 +99,15 @@ export class Bubble {
         return Boolean(this.actor?.visible);
     }
 
-    /** Working on something: spinner, a short line, and Stop (or `stopLabel`) if it can be stopped. */
-    working(text, onStop = null, stopLabel = 'Stop') {
+    /**
+     * Working on something: spinner, a short line, and Stop (or `stopLabel`) if it can be
+     * stopped. `heading` says where and what state, such as "My laptop • Working".
+     */
+    working(text, onStop = null, stopLabel = 'Stop', heading = 'My laptop • Working') {
         this._working = true;
         this._stopAction = onStop;
         this._show(text, true);
+        this.heading(heading);
         this._stop.label = stopLabel;
         this._stop.visible = Boolean(onStop);
         this._copy.visible = false;
@@ -118,11 +125,12 @@ export class Bubble {
         this._changed();
     }
 
-    /** Finished: a tick or a "!", the answer, and Copy and ×. */
-    result(text, ok = true) {
+    /** Finished: a tick or a "!", the answer, and Copy and ×, under "My laptop • Complete" or "• Failed". */
+    result(text, ok = true, heading = `My laptop • ${ok ? 'Complete' : 'Failed'}`) {
         this._working = false;
         this._stopAction = null;
         this._show(text, false);
+        this.heading(heading);
         this._mark.text = ok ? '✓' : '!';
         this._mark.style_class = `butler-bubble-mark ${ok ? 'butler-bubble-ok' : 'butler-bubble-bad'}`;
         this._mark.visible = true;
@@ -137,8 +145,15 @@ export class Bubble {
 
     /** Something to say that isn't a job: no spinner or tick, just ×. */
     info(text) {
-        this.result(text, true);
+        this.result(text, true, null);
         this._mark.visible = false;
+        this._changed();
+    }
+
+    /** The top line: where it's happening and its state word. Null hides it. */
+    heading(text) {
+        this._heading.text = text ?? '';
+        this._heading.visible = Boolean(text);
         this._changed();
     }
 

@@ -213,6 +213,10 @@ app.post("/api/screen/look", async (c) => {
 
 const deviceToken = (c: Context) => sameSecret(c.req.header("x-butler-token") ?? "", TOKEN);
 
+/** A device with the token, or you, signed in on the website. */
+const signedIn = async (c: Context) =>
+  deviceToken(c) || await validSession(getCookie(c, SESSION_COOKIE), SESSION_SECRET);
+
 async function deviceForm(c: Context) {
   const form = await c.req.formData().catch(() => null);
   const text = (k: string, max = 5000) => {
@@ -288,7 +292,7 @@ app.post("/api/send", async (c) => {
 
 // A command for the laptop, as you typed it (secret word included). Forgotten once delivered.
 app.post("/api/laptop/task", async (c) => {
-  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  if (!(await signedIn(c))) return c.json({ error: "bad token" }, 401);
   const { text } = await deviceForm(c);
   const device = text("device", 100);
   const command = text("text", 2000);
@@ -301,7 +305,7 @@ app.post("/api/laptop/task", async (c) => {
 
 // Stops what the laptop is doing. off=1 also switches remote control off on the laptop.
 app.post("/api/laptop/stop", async (c) => {
-  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  if (!(await signedIn(c))) return c.json({ error: "bad token" }, 401);
   const { text } = await deviceForm(c);
   const device = text("device", 100);
   if (!device) return c.json({ error: "device is required" }, 400);
@@ -330,6 +334,12 @@ app.post("/api/laptop/plan", async (c) => {
   }
 });
 
+// The latest job update from each laptop, so the website can show what it's doing (B2 · 13).
+const laptopStatus = new Map<string, { state: laptop.State; title: string; text: string; at: string }>();
+
+app.get("/api/laptop/status", requireSession, (c) =>
+  c.json([...laptopStatus].map(([device, s]) => ({ device, ...s }))));
+
 // How a laptop job is going: passed on to your phones as a notification.
 app.post("/api/laptop/status", async (c) => {
   if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
@@ -341,6 +351,7 @@ app.post("/api/laptop/status", async (c) => {
   }
   const to = await inbox.resolveTarget(text("target", 100) ?? "phone", device);
   const body = JSON.stringify({ state, title: laptop.statusTitle(state), text: text("text", 3000) ?? "" });
+  laptopStatus.set(device, { state, title: laptop.statusTitle(state), text: text("text", 3000) ?? "", at: new Date().toISOString() });
   await inbox.send(to, { from_device: device, kind: "status", body });
   return c.json({ sent_to: to });
 });
@@ -458,7 +469,7 @@ async function startRecipe(recipe: recipes.Recipe, said: string, timeZone: strin
 
 // Ask Butler: what you typed or said, plus optionally a screenshot of what you're looking at.
 app.post("/api/command", async (c) => {
-  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  if (!(await signedIn(c))) return c.json({ error: "bad token" }, 401);
   if (!geminiReady()) return c.json({ error: "no AI model: set GEMINI_API_KEY on the server" }, 503);
   const { form, text, deviceKind } = await deviceForm(c);
   const device = text("device", 100);
@@ -507,7 +518,7 @@ app.post("/api/command", async (c) => {
       await inbox.send(everywhere.length ? everywhere : [device], {
         from_device: device, kind: "reminder", body: p.text || said, due_at: due.toISOString(),
       });
-      return json({ action: "remind", say: p.reply || "Reminder set." });
+      return json({ action: "remind", say: p.reply || "Reminder set, sir." });
     }
     case "calendar": {
       const start = parseWhen(p.when);
@@ -518,19 +529,19 @@ app.post("/api/command", async (c) => {
       if (google.googleConfigured() && await google.account()) {
         try {
           await google.addEvent(title, start, end, timeZone);
-          return json({ action: "calendar", say: p.reply || "Added to your calendar." });
+          return json({ action: "calendar", say: p.reply || "It's on your calendar." });
         } catch (e) {
           return c.json({ error: String(e).slice(0, 300) }, 502);
         }
       }
       // Google isn't connected: open the event filled in, and you tap Save.
       return json({
-        action: "calendar", say: "Here's the event. Tap Save to add it.", open: calendarUrl(title, start, end),
+        action: "calendar", say: "Here's the event. Check it, then tap Save to add it.", open: calendarUrl(title, start, end),
       });
     }
     case "email": {
       if (!google.googleConfigured() || !(await google.account())) {
-        return json({ action: "answer", say: "Connect your Google account on the Butler website first, then ask again." });
+        return json({ action: "answer", say: "I need your Google account for that. Connect it under Devices on the Butler website, then ask again." });
       }
       const who = (p.person ?? "").trim();
       if (!who) return json({ action: "answer", say: "Who should I email?" });
@@ -555,7 +566,7 @@ app.post("/api/command", async (c) => {
       const also = others.length ? `\n(Also found: ${others.map((o) => `${o.name} <${o.email}>`).join(", ")}.)` : "";
       return json({
         action: "confirm",
-        say: `Send this to ${to.name} <${to.email}>?\nSubject: ${subject}\n\n${body}${attachment ? "\n\n[screenshot attached]" : ""}${also}`,
+        say: `Ready to send. Check the recipient and attachment first.\nTo: ${to.name} <${to.email}>\nSubject: ${subject}\n\n${body}${attachment ? "\n\nAttachment: screenshot.jpg" : ""}${also}`,
         confirm,
       });
     }
@@ -569,7 +580,7 @@ app.post("/api/command", async (c) => {
         device, kind: "text", url: null, body: p.text || said, note: null, mime: null, platform: null,
       });
       organizeItem(id, await rawFor((await db.getItem(id))!));
-      return json({ action: "save", say: p.reply || "Saved to Butler." });
+      return json({ action: "save", say: p.reply || "Saved, sir." });
     }
     case "screen":
       return json({ action: "screen", say: p.reply, goal: p.text || said });
@@ -610,7 +621,7 @@ app.post("/api/command", async (c) => {
       await stopFocus();
       await inbox.send(to, {
         from_device: FOCUS, kind: "reminder", due_at: new Date(Date.now() + minutes * 60_000).toISOString(),
-        body: `Focus time's up${on}: ${span} done. Stand up, stretch, drink water. 🎉`,
+        body: `Focus time's up${on}: ${span} done. Stand up, stretch, drink some water.`,
       });
       const end = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit" })
         .format(new Date(Date.now() + minutes * 60_000));
@@ -621,7 +632,7 @@ app.post("/api/command", async (c) => {
       });
     }
     case "unfocus":
-      return json({ action: "answer", say: (await stopFocus()) ? "Focus timer stopped." : "There's no focus timer running." });
+      return json({ action: "answer", say: (await stopFocus()) ? "Focus timer stopped." : "No focus timer is running." });
     case "ring":
       return json({ action: "answer", say: await ring(p.target || "phone", device) });
     case "recap":
@@ -665,13 +676,13 @@ app.post("/api/command", async (c) => {
       return json(done.confirm ? { action: "confirm", ...done } : { action: "answer", say: done.say });
     }
     default:
-      return json({ action: "answer", say: p.reply || "I'm not sure how to help with that yet." });
+      return json({ action: "answer", say: p.reply || "I can't do that yet. Try saying it another way?" });
   }
 });
 
 // Your yes to an email Ask Butler wrote, or to a tool that changes things.
 app.post("/api/command/confirm", async (c) => {
-  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  if (!(await signedIn(c))) return c.json({ error: "bad token" }, 401);
   const { text } = await deviceForm(c);
   const id = text("confirm", 100) ?? "";
   const tool = pendingTools.get(id);
@@ -690,7 +701,7 @@ app.post("/api/command/confirm", async (c) => {
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
-  return c.json({ say: `Sent to ${pending.email.to.name}.` });
+  return c.json({ say: `Sent to ${pending.email.to.name}, sir.` });
 });
 
 // The screen helper: the next single step towards a goal, from a screenshot.
@@ -706,7 +717,7 @@ app.post("/api/screen/step", async (c) => {
   } catch { /* none yet */ }
   // A screen task from the phone may take more steps (limit=30); 40 at most.
   const limit = Math.min(Number(got.text("limit")) || MAX_STEPS, 40);
-  if (done.length >= limit) return c.json({ do: "stop", say: `I stopped after ${limit} steps. Take it from here.` });
+  if (done.length >= limit) return c.json({ do: "stop", say: `Stopped after ${limit} steps. Over to you from here.` });
   try {
     return c.json(await nextStep(got.picture, goal, done, got.text("kind") === "phone" ? "phone" : "laptop"));
   } catch (e) {
@@ -715,10 +726,10 @@ app.post("/api/screen/step", async (c) => {
 });
 
 app.post("/api/login", async (c) => {
-  if (!loginThrottle.allow(clientIp(c))) return c.json({ error: "Too many tries. Wait a minute." }, 429);
+  if (!loginThrottle.allow(clientIp(c))) return c.json({ error: "Too many tries. Wait a minute, then try again." }, 429);
   const { password } = await c.req.json<{ password?: string }>().catch(() => ({ password: undefined }));
   if (!password || !PASSWORD_HASH || !(await verifyPassword(password, PASSWORD_HASH))) {
-    return c.json({ error: "Wrong password" }, 401);
+    return c.json({ error: "That password didn't work. Check it and try again." }, 401);
   }
   setCookie(c, SESSION_COOKIE, await newSession(SESSION_SECRET), {
     httpOnly: true, secure: COOKIE_SECURE, sameSite: "Lax", path: "/", maxAge: SESSION_DAYS * 86_400,
@@ -741,9 +752,9 @@ app.post("/api/logout", (c) => {
 /** Makes `target` ring loudly so you can find it, and says what happened. */
 async function ring(target: string, from: string): Promise<string> {
   const to = await inbox.resolveTarget(target, from);
-  if (!to.length) return `I don't know a ${target} yet. Open Butler on it once so it checks in.`;
+  if (!to.length) return `I don't know your ${target} yet. Open Butler on it once so it checks in.`;
   await inbox.send(to, { from_device: from, kind: "ring" });
-  return `Ringing your ${target} now. It may take up to 20 seconds to start.`;
+  return `Ringing your ${target}, sir. It can take up to 20 seconds to start.`;
 }
 
 // The website's "Ring my phone" button, for when the phone is lost and the laptop pet isn't handy.
@@ -756,6 +767,22 @@ app.post("/api/ring", async (c) => {
 
 app.use("/api/me", requireSession);
 app.get("/api/me", (c) => c.json({ ok: true }));
+
+// Your devices and when each last checked in, for the Devices page.
+app.use("/api/devices", requireSession);
+app.get("/api/devices", async (c) => c.json(await inbox.devices()));
+
+// Preferences every device shares. Devices read them with the token; you change them on the website.
+app.get("/api/prefs", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "sign in" }, 401);
+  return c.json(await prefs.load());
+});
+app.put("/api/prefs", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "sign in" }, 401);
+  const body = await c.req.json().catch(() => null);
+  if (!body || typeof body !== "object") return c.json({ error: "send a JSON object" }, 400);
+  return c.json(await prefs.save(body as Record<string, unknown>));
+});
 
 app.use("/api/items/*", requireSession);
 app.use("/api/items", requireSession);

@@ -24,6 +24,31 @@ class Config(context: Context) {
         get() = prefs.getBoolean(KEY_SYNC, false)
         set(v) = prefs.edit().putBoolean(KEY_SYNC, v).apply()
 
+    /** Speak answers aloud on this phone. Off unless you turn it on (B2 · 11, B2 · 16). */
+    var voiceReplies: Boolean
+        get() = prefs.getBoolean(KEY_VOICE, false)
+        set(v) = prefs.edit().putBoolean(KEY_VOICE, v).apply()
+
+    /** Allow spoken commands when you press the mic. A separate switch from voice replies. */
+    var microphone: Boolean
+        get() = prefs.getBoolean(KEY_MIC, true)
+        set(v) = prefs.edit().putBoolean(KEY_MIC, v).apply()
+
+    /** Replace the pet's movement with subtle state changes on this phone. */
+    var reducedMotion: Boolean
+        get() = prefs.getBoolean(KEY_MOTION, false)
+        set(v) = prefs.edit().putBoolean(KEY_MOTION, v).apply()
+
+    /** Quiet mode, shared by every device; the phone keeps the last copy it read from Butler. */
+    var quiet: Boolean
+        get() = prefs.getBoolean(KEY_QUIET, false)
+        set(v) = prefs.edit().putBoolean(KEY_QUIET, v).apply()
+
+    /** Teasing ("on", "less" or "off"), shared by every device. */
+    var teasing: String
+        get() = prefs.getString(KEY_TEASING, "off") ?: "off"
+        set(v) = prefs.edit().putString(KEY_TEASING, v).apply()
+
     val isReady: Boolean
         get() = saveUrl.startsWith("https://") && token.isNotEmpty()
 
@@ -35,5 +60,10 @@ class Config(context: Context) {
         const val KEY_TOKEN = "token"
         const val KEY_DEVICE = "device"
         const val KEY_SYNC = "clipboard_sync"
+        const val KEY_VOICE = "voice_replies"
+        const val KEY_MIC = "microphone"
+        const val KEY_MOTION = "reduced_motion"
+        const val KEY_QUIET = "quiet"
+        const val KEY_TEASING = "teasing"
     }
 }

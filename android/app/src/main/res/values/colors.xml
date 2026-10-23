@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Butler 2.0 colours (Figma B2 · 02), the same values as web/src/b2-tokens.css.
+     Black and white lead; vermilion is a small accent. No blue or purple. -->
+<resources>
+    <color name="b2_ink">#111111</color>
+    <color name="b2_white">#FFFFFF</color>
+    <color name="b2_paper">#F8F7F4</color>
+    <color name="b2_vermilion">#E4462D</color>
+    <!-- Behind small white text (Stop, red buttons): white on #E4462D fails contrast. -->
+    <color name="b2_action_red">#B83120</color>
+    <color name="b2_muted">#65625E</color>
+    <color name="b2_line">#D8D5CF</color>
+    <color name="b2_dark_surface">#191919</color>
+    <color name="b2_dark_muted">#A8A49E</color>
+    <color name="b2_dark_line">#2E2C29</color>
+    <color name="b2_dark_failed">#FF8A73</color>
+</resources>
