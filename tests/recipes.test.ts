@@ -147,3 +147,10 @@ test("what started a recipe is shown to it as data", async () => {
     await server.shutdown();
   }
 });
+
+test("email searches are tidied, and empty ones mean no email start", () => {
+  assert.equal(checkedQuery("  from:bank.com \n subject:alert "), "from:bank.com subject:alert");
+  assert.equal(checkedQuery(""), null);
+  assert.equal(checkedQuery(null), null);
+  assert.throws(() => checkedQuery("x".repeat(301)), /under 300/);
+});
