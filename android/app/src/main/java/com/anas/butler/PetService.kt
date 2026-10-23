@@ -229,7 +229,12 @@ class PetService : Service() {
         // Reminders and things sent from your laptop. While the laptop is on a job of yours,
         // the pet keeps a line open so its updates show up within a second or two.
         scope.launch {
+            var prefsAt = 0L
             while (isActive) {
+                if (SystemClock.elapsedRealtime() - prefsAt > PREFS_EVERY_MS || prefsAt == 0L) {
+                    prefsAt = SystemClock.elapsedRealtime()
+                    refreshPrefs()
+                }
                 val waited = checkInbox(wait = laptopWorking)
                 if (!laptopWorking || !waited) delay(INBOX_EVERY_MS)
             }
@@ -776,6 +781,9 @@ class PetService : Service() {
         )
         val notification = NotificationCompat.Builder(this, QUIET_CHANNEL)
             .setSmallIcon(R.drawable.ic_butler)
+            .setColor(Ui.ACCENT)
+            .setGroup(QUIET_GROUP)
+            .addAction(0, getString(R.string.notify_view), tap)
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
@@ -784,6 +792,16 @@ class PetService : Service() {
             .setContentIntent(tap)
             .build()
         runCatching { getSystemService(NotificationManager::class.java).notify(nextNotification++, notification) }
+    }
+
+    /** Quiet mode and teasing are shared by every device; keep this phone's copy fresh. */
+    private suspend fun refreshPrefs() {
+        val config = Config(this)
+        if (!config.isReady) return
+        runCatching { ButlerClient(config).prefs() }.onSuccess {
+            config.quiet = it.optBoolean("quiet", config.quiet)
+            config.teasing = it.optString("teasing", config.teasing)
+        }
     }
 
     // --- the inbox: reminders and things sent from your laptop -------------------------
@@ -802,7 +820,7 @@ class PetService : Service() {
             ?.let { getString(R.string.inbox_from, it) }.orEmpty()
         val body = message.optString("body").takeIf { !message.isNull("body") }.orEmpty()
         when (message.optString("kind")) {
-            "reminder" -> announce(getString(R.string.inbox_reminder), body, null)
+            "reminder" -> announce(getString(R.string.inbox_reminder), body, null, essential = true)
             "ring" -> ring(from)
             "status" -> { // how a job you gave the laptop is going
                 val status = JSONObject(body)
@@ -881,25 +899,37 @@ class PetService : Service() {
         return Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
 
-    /** A notification you can tap (to open `open`), plus the pet saying it if it isn't busy. */
-    private fun announce(title: String, text: String, open: Intent?) {
+    /**
+     * A notification you can tap (to open `open`), plus the pet saying it if it isn't busy.
+     * B2 · 14: a clear title, one useful sentence and one relevant action. In quiet mode
+     * only reminders interrupt; everything else arrives silently, grouped.
+     */
+    private fun announce(title: String, text: String, open: Intent?, essential: Boolean = false) {
+        val quiet = Config(this).quiet && !essential
         val tap = open?.let {
             PendingIntent.getActivity(
                 this, nextNotification, it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
         }
-        val notification = NotificationCompat.Builder(this, INBOX_CHANNEL)
+        val notification = NotificationCompat.Builder(this, if (quiet) QUIET_CHANNEL else INBOX_CHANNEL)
             .setSmallIcon(R.drawable.ic_butler)
+            .setColor(Ui.ACCENT)
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(if (quiet) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .apply { tap?.let(::setContentIntent) }
+            .apply {
+                if (quiet) setGroup(QUIET_GROUP)
+                tap?.let {
+                    setContentIntent(it)
+                    addAction(0, getString(R.string.notify_open), it)
+                }
+            }
             .build()
         runCatching { getSystemService(NotificationManager::class.java).notify(nextNotification++, notification) }
-        if (!busy) {
+        if (!busy && !quiet) {
             pet.setState("attention")
             bubbleTurn++
             bubble.result("$title: $text")
@@ -934,6 +964,8 @@ class PetService : Service() {
         private const val CHANNEL = "pet"
         private const val INBOX_CHANNEL = "inbox"
         private const val QUIET_CHANNEL = "updates"
+        private const val QUIET_GROUP = "butler-updates"
+        private const val PREFS_EVERY_MS = 10 * 60_000L
         private const val MENU_WIDTH_DP = 280
         private const val LAPTOP_QUIET_MS = 15 * 60_000L
         private const val INBOX_EVERY_MS = 20_000L
