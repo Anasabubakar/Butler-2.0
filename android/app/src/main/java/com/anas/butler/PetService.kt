@@ -93,6 +93,7 @@ class PetService : Service() {
         val dp = resources.displayMetrics.density
 
         pet = ButlerSpriteView(ui).apply {
+            reduceMotion = Ui.reducedMotion(this@PetService)
             onTap = { toggle() }
             onHold = { askButler(talk = false) } // hold: straight to typing a command
             // Drag it anywhere; it stays where you drop it, and remembers the spot.
@@ -344,6 +345,7 @@ class PetService : Service() {
     }
 
     private fun toggle() {
+        pet.reduceMotion = Ui.reducedMotion(this) // the setting may have changed since
         if (Ringer.ringing) return stopRinging()
         if (operating) {
             stopOperating = true
