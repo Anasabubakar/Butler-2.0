@@ -391,3 +391,29 @@ body.dragging-note { cursor: grabbing; user-select: none; }
   .conn-tools li { flex-direction: column; align-items: stretch; }
   .conn-tools select { width: 100%; }
 }
+
+/* --- Recipes: saved instructions, run by name (uses the Connections panel's styles) ---- */
+
+.recipe-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.recipe-out { padding: 10px 12px; border-radius: 10px; background: var(--chip); white-space: pre-wrap; overflow-wrap: anywhere; }
+.recipe-out[hidden] { display: none; }
+.recipe-details { margin: 6px 0 0; font: inherit; font-size: 13px; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.recipe-actions { display: flex; gap: 8px; flex: none; }
+.recipe-actions .ghost { margin-left: 0; }
+.recipe-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.conn textarea {
+  width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--text); font: inherit; font-size: 15px; resize: vertical;
+}
+.recipe-form fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.recipe-form legend { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.recipe-form .recipe-check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 15px; }
+.recipe-form .recipe-check input { width: auto; }
+.recipe-ideas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.recipe-ideas .conn-tag { margin: 0; border: 1px solid var(--line); cursor: pointer; font: inherit; font-size: 13px; color: var(--text); }
+.conn-card.waiting { border-color: var(--b2-vermilion); }
+
+@media (max-width: 760px) {
+  .recipe-actions { width: 100%; }
+  .recipe-actions button { flex: 1; }
+}
