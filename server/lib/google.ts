@@ -1,5 +1,6 @@
 // Your Google account, signed in once from the library website: Butler adds
-// calendar events, finds people in your contacts and sends email as you.
+// calendar events, finds people in your contacts, sends email as you and notices new
+// email that should start one of your recipes.
 import { encodeBase64, encodeBase64Url } from "jsr:@std/encoding@1.0.10";
 import { sql } from "./db.ts";
 
@@ -243,4 +244,66 @@ export async function sendEmail(email: Email) {
     method: "POST",
     body: JSON.stringify({ raw: encodeBase64Url(new TextEncoder().encode(mime(email))) }),
   });
+}
+
+// --- new email ------------------------------------------------------------------------------
+
+export interface Arrived {
+  id: string;
+  at: Date;
+  from: string;
+  subject: string;
+  text: string; // the plain text, or Gmail's snippet when there is none
+}
+
+interface Part {
+  mimeType?: string;
+  body?: { data?: string };
+  parts?: Part[];
+  headers?: { name: string; value: string }[];
+}
+
+/** The first text/plain part of a message, decoded. */
+export function plainText(part: Part | undefined): string {
+  if (!part) return "";
+  if (part.mimeType === "text/plain" && part.body?.data) {
+    const b64 = part.body.data.replace(/-/g, "+").replace(/_/g, "/");
+    try {
+      return new TextDecoder().decode(Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0)));
+    } catch {
+      return "";
+    }
+  }
+  for (const p of part.parts ?? []) {
+    const found = plainText(p);
+    if (found) return found;
+  }
+  return "";
+}
+
+/**
+ * Emails matching a Gmail search (like "from:mybank.com") that arrived after `after`,
+ * oldest first, at most `max`. Says plainly when Google needs connecting again.
+ */
+export async function emailsSince(query: string, after: Date, max = 5): Promise<Arrived[]> {
+  const q = `${query} after:${Math.floor(after.getTime() / 1000)}`;
+  let list: { messages?: { id: string }[] };
+  try {
+    list = await google(`${GMAIL()}/gmail/v1/users/me/messages?${new URLSearchParams({ q, maxResults: "20" })}`);
+  } catch (e) {
+    if (/\b403\b/.test(String(e))) throw new Error("Butler can't read your email yet: press Connect Google on the website again");
+    throw e;
+  }
+  const found: Arrived[] = [];
+  for (const { id } of list.messages ?? []) {
+    const m = await google<{ id: string; internalDate: string; snippet?: string; payload?: Part }>(
+      `${GMAIL()}/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=full`,
+    );
+    const at = new Date(Number(m.internalDate));
+    if (!(at > after)) continue; // Gmail's after: is to the second; this is exact
+    const head = (name: string) => m.payload?.headers?.find((h) => h.name.toLowerCase() === name)?.value ?? "";
+    const text = plainText(m.payload).trim() || (m.snippet ?? "");
+    found.push({ id: m.id, at, from: head("from"), subject: head("subject"), text: text.slice(0, 3000) });
+  }
+  return found.sort((a, b) => a.at.getTime() - b.at.getTime()).slice(0, max);
 }
