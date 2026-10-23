@@ -416,3 +416,7 @@ body.dragging-note { cursor: grabbing; user-select: none; }
 .recipe-when { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .recipe-when[hidden] { display: none; }
 .recipe-when input[type="time"] { width: auto; }
+.recipe-link { margin: 8px 0; font-size: 14px; }
+.recipe-link summary { cursor: pointer; color: var(--muted); }
+.recipe-link > div { display: grid; gap: 8px; margin-top: 8px; }
+.recipe-link input { font-family: ui-monospace, monospace; font-size: 13px; }
