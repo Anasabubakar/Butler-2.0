@@ -1,19 +1,41 @@
 <resources>
-    <style name="Theme.Butler" parent="Theme.Material3.DayNight.NoActionBar" />
+    <!-- Butler 2.0 on light: paper page, white surfaces, ink text and ink controls (B2 · 06).
+         Dark mode is in values-night. Vermilion stays a small accent, never a whole button. -->
+    <style name="Theme.Butler" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/b2_ink</item>
+        <item name="colorOnPrimary">@color/b2_white</item>
+        <item name="colorPrimaryContainer">@color/b2_paper</item>
+        <item name="colorOnPrimaryContainer">@color/b2_ink</item>
+        <item name="colorSecondary">@color/b2_ink</item>
+        <item name="colorOnSecondary">@color/b2_white</item>
+        <item name="colorSecondaryContainer">@color/b2_line</item>
+        <item name="colorOnSecondaryContainer">@color/b2_ink</item>
+        <item name="colorTertiary">@color/b2_vermilion</item>
+        <item name="android:colorBackground">@color/b2_paper</item>
+        <item name="colorSurface">@color/b2_white</item>
+        <item name="colorOnSurface">@color/b2_ink</item>
+        <item name="colorOnSurfaceVariant">@color/b2_muted</item>
+        <item name="colorOutline">@color/b2_line</item>
+        <item name="colorError">@color/b2_action_red</item>
+        <item name="android:statusBarColor">@color/b2_paper</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
 
-    <!-- Small dark sheet over whatever app you're in, in the same zinc colours as the pet's menu. -->
+    <!-- Small dark sheet over whatever app you're in: ink and charcoal, like the pet's bubble. -->
     <style name="Theme.Butler.Sheet" parent="Theme.Material3.Dark.Dialog">
-        <item name="colorPrimary">#E4462D</item>
-        <item name="colorOnPrimary">#111111</item>
-        <item name="colorSecondaryContainer">#27272A</item>
-        <item name="colorOnSecondaryContainer">#FAFAFA</item>
-        <item name="colorSurface">#09090B</item>
-        <item name="colorOnSurface">#FAFAFA</item>
-        <item name="colorOnSurfaceVariant">#A1A1AA</item>
-        <item name="colorOutline">#3F3F46</item>
-        <item name="android:textColorPrimary">#FAFAFA</item>
-        <item name="android:textColorSecondary">#A1A1AA</item>
-        <item name="android:textColorHint">#71717A</item>
+        <item name="colorPrimary">@color/b2_white</item>
+        <item name="colorOnPrimary">@color/b2_ink</item>
+        <item name="colorSecondaryContainer">#262523</item>
+        <item name="colorOnSecondaryContainer">@color/b2_white</item>
+        <item name="colorTertiary">@color/b2_vermilion</item>
+        <item name="colorSurface">@color/b2_ink</item>
+        <item name="colorOnSurface">@color/b2_white</item>
+        <item name="colorOnSurfaceVariant">@color/b2_dark_muted</item>
+        <item name="colorOutline">@color/b2_dark_line</item>
+        <item name="colorError">@color/b2_dark_failed</item>
+        <item name="android:textColorPrimary">@color/b2_white</item>
+        <item name="android:textColorSecondary">@color/b2_dark_muted</item>
+        <item name="android:textColorHint">#8A8680</item>
         <item name="android:windowBackground">@drawable/sheet_background</item>
         <item name="android:windowAnimationStyle">@style/Butler.SheetAnimation</item>
         <item name="android:windowCloseOnTouchOutside">true</item>

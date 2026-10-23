@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Butler 2.0 on dark: ink page, charcoal surfaces, white controls. The accent stays vermilion. -->
+    <style name="Theme.Butler" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/b2_white</item>
+        <item name="colorOnPrimary">@color/b2_ink</item>
+        <item name="colorPrimaryContainer">@color/b2_dark_surface</item>
+        <item name="colorOnPrimaryContainer">@color/b2_white</item>
+        <item name="colorSecondary">@color/b2_white</item>
+        <item name="colorOnSecondary">@color/b2_ink</item>
+        <item name="colorSecondaryContainer">@color/b2_dark_line</item>
+        <item name="colorOnSecondaryContainer">@color/b2_white</item>
+        <item name="colorTertiary">@color/b2_vermilion</item>
+        <item name="android:colorBackground">@color/b2_ink</item>
+        <item name="colorSurface">@color/b2_dark_surface</item>
+        <item name="colorOnSurface">@color/b2_white</item>
+        <item name="colorOnSurfaceVariant">@color/b2_dark_muted</item>
+        <item name="colorOutline">@color/b2_dark_line</item>
+        <item name="colorError">@color/b2_dark_failed</item>
+        <item name="android:statusBarColor">@color/b2_ink</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

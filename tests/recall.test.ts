@@ -51,7 +51,7 @@ test("the model sees each item numbered, with when and where it was saved", () =
 });
 
 test("an empty library search says so without asking the model", async () => {
-  assert.deepEqual(await recall("that jollof video", []), { say: "I couldn't find anything like that in your library." });
+  assert.deepEqual(await recall("that jollof video", []), { say: "Nothing like that in your library yet. Try different words?" });
 });
 
 test("the answer lists the items it used, and opens the first when asked", async () => {

@@ -6,6 +6,16 @@
     <meta name="color-scheme" content="light dark" />
     <title>Butler 2.0 · Library</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script>
+      // Theme and motion from Settings, applied before the first paint so nothing flashes.
+      (function () {
+        var root = document.documentElement, theme = "system", motion = "system";
+        try { theme = localStorage.getItem("butler.theme") || "system"; motion = localStorage.getItem("butler.motion") || "system"; } catch (e) {}
+        var dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+        root.dataset.theme = dark ? "dark" : "light";
+        if (motion === "reduce") root.dataset.motion = "reduce";
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

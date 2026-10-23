@@ -23,5 +23,5 @@ test("streaks across a month end and some lengths get a cheer", () => {
   assert.equal(streak(["2026-09-29", "2026-09-30", "2026-10-01"], "2026-10-01"), 3);
   assert.equal(streakWorthCheering(7), true);
   assert.equal(streakWorthCheering(8), false);
-  assert.match(streakNote(7), /^🔥 7 days in a row/);
+  assert.match(streakNote(7), /^7 days in a row/);
 });

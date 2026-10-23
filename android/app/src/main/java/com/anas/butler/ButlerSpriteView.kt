@@ -75,8 +75,9 @@ class ButlerSpriteView @JvmOverloads constructor(
         const val SHAKE_MS = 700f
         const val BADGE_MS = 1800f
         const val ACCENT = Ui.ACCENT
-        const val OK = 0xFF4ADE80.toInt()
-        const val DANGER = 0xFFF87171.toInt()
+        // B2: complete is ink with a white tick; failed is action red with a white mark. No green.
+        const val OK = 0xFF111111.toInt()
+        const val DANGER = Ui.ACTION
     }
 
     init {
@@ -179,7 +180,7 @@ class ButlerSpriteView @JvmOverloads constructor(
                 effectPaint.color = if (effect == Effect.DONE) OK else DANGER
                 effectPaint.alpha = (255 * fade).toInt()
                 canvas.drawCircle(x, y, size, effectPaint)
-                effectPaint.color = 0xFF18181B.toInt()
+                effectPaint.color = Ui.TEXT
                 effectPaint.alpha = (255 * fade).toInt()
                 effectPaint.strokeWidth = 2.2f * dp * grow
                 effectPaint.strokeCap = Paint.Cap.ROUND

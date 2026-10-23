@@ -213,7 +213,7 @@ export default class ButlerPetExtension extends Extension {
         });
 
         this._menu = new St.BoxLayout({vertical: true, style_class: 'butler-menu', visible: false});
-        this._menu.add_child(new St.Label({text: 'What should I do?', style_class: 'butler-menu-title'}));
+        this._menu.add_child(new St.Label({text: 'What needs handling?', style_class: 'butler-menu-title'}));
         for (const [label, run] of [
             ['Save this', () => this._saveThis()],
             ['Copy this', () => this._copyThis()],
@@ -264,7 +264,7 @@ export default class ButlerPetExtension extends Extension {
         Main.layoutManager.addTopChrome(this._banner);
 
         // Ask Butler: always at the top of the menu. Click it, type what you want, press Enter.
-        this._ask = new St.Entry({hint_text: 'Ask me anything…', style_class: 'butler-ask', can_focus: true, x_expand: true});
+        this._ask = new St.Entry({hint_text: 'Tell Butler what to do…', style_class: 'butler-ask', can_focus: true, x_expand: true});
         // Typing only reaches the box once Butler holds the keyboard, so take it on click.
         this._ask.clutter_text.connect('button-press-event', () => {
             this._openAsk();
@@ -428,6 +428,8 @@ export default class ButlerPetExtension extends Extension {
         this._show('peek.png');
         this._face.remove_all_transitions();
         this._face.translation_y = -PEEK_TOP;
+        if (!St.Settings.get().enable_animations)
+            return this._place(false); // reduced motion: no idle loop (B2 · 07)
         this._face.ease({
             translation_y: -PEEK_TOP + 2,
             duration: 1600,
@@ -478,7 +480,8 @@ export default class ButlerPetExtension extends Extension {
             return;
         const {x, y, height} = this._target(monitor);
         if (animate) {
-            this._pet.ease({x, y, height, duration: 380, mode: Clutter.AnimationMode.EASE_OUT_BACK});
+            // B2 · 07 summon: pull up from the edge in 260 ms and settle without a bounce.
+            this._pet.ease({x, y, height, duration: 260, mode: Clutter.AnimationMode.EASE_OUT_CUBIC});
         } else {
             this._pet.set_position(x, y);
             this._pet.height = height;
@@ -648,10 +651,10 @@ export default class ButlerPetExtension extends Extension {
         try {
             const done = await action();
             this._play('success');
-            this._bubble.result(done || 'Done.', true);
+            this._bubble.result(done || 'Complete.', true);
         } catch (e) {
             this._play('error');
-            this._bubble.result(`Couldn't do that: ${e.message}`, false);
+            this._bubble.result(`That didn't go through: ${e.message}`, false);
         }
         await this._hold(this._bubble.text.length * 50);
         if (!this._pet)
@@ -793,7 +796,7 @@ export default class ButlerPetExtension extends Extension {
      * (read from the address bar) or the selected text anywhere else.
      */
     _saveThis() {
-        this._work('Grabbing it…', async () => {
+        this._work('Saving this page…', async () => {
             const config = loadConfig();
             if (!config)
                 throw new Error('set your save URL and token in ~/.config/butler/pet.json');
@@ -837,7 +840,7 @@ export default class ButlerPetExtension extends Extension {
 
     /** Analyze this (mode=analyze) or Solve this (mode=solve): Butler looks at the window and answers. */
     _look(mode) {
-        this._work({solve: 'Working it out…', translate: 'Translating…'}[mode] ?? 'Having a look…', async () => {
+        this._work({solve: 'Working it out…', translate: 'Translating…'}[mode] ?? 'Looking at your screen…', async () => {
             const config = loadConfig();
             if (!config)
                 throw new Error('set your save URL and token in ~/.config/butler/pet.json');
@@ -872,7 +875,7 @@ export default class ButlerPetExtension extends Extension {
 
     /** Sends what you typed, plus a screenshot of the window you're on, and does what Butler decides. */
     _askButler(text) {
-        this._work('On it…', async () => {
+        this._work('Working…', async () => {
             const config = this._config();
             const shot = await this._snapWindow().catch(() => null);
             return this._doCommand(config, {text}, shot);
@@ -889,7 +892,7 @@ export default class ButlerPetExtension extends Extension {
             const shot = await this._snapWindow().catch(() => null);
             const wav = await this._record();
             this._play('think');
-            this._bubble.progress('On it…');
+            this._bubble.progress('Working…');
             return this._doCommand(config, {}, shot, [{field: 'audio', name: 'voice.wav', mime: 'audio/wav', bytes: wav}]);
         }, 'summon');
     }
@@ -918,7 +921,7 @@ export default class ButlerPetExtension extends Extension {
                 this._noteTapped = this._stopRecording = null;
                 resolve();
             };
-            this._bubble.working('Listening… tap me when you\'re done', () => this._stopRecording?.(), 'Done');
+            this._bubble.working('Listening… tap me when you\'re done', () => this._stopRecording?.(), 'Done', 'Microphone on');
         });
         proc.send_signal(2); // like Ctrl+C, so the recorder finishes the file properly
         await new Promise(resolve => proc.wait_async(null, () => resolve()));
@@ -937,7 +940,7 @@ export default class ButlerPetExtension extends Extension {
         const result = await this._send(config, '/api/command',
             {device: 'laptop', kind: 'laptop', tz: timeZone(), ...fields}, shot, files);
         if (result.heard)
-            this._bubble.progress(`“${result.heard}”\n\nOn it…`);
+            this._bubble.progress(`“${result.heard}”\n\nWorking…`);
         if (result.message)
             return this._handoff(result.message, shot, result.say);
         if (result.goal)
@@ -947,13 +950,13 @@ export default class ButlerPetExtension extends Extension {
         if (result.confirm) {
             this._say(result.say);
             if (!await this._confirm())
-                return 'Okay, not sent.';
+                return 'Not sent. Nothing left your laptop.';
             this._bubble.working('Sending…');
             return (await this._send(config, '/api/command/confirm', {confirm: result.confirm})).say;
         }
         if (result.send) {
             const {sent_to: to} = await this._sendContent(config, result.send, shot);
-            return result.say || `Sent to ${to.join(', ')}`;
+            return result.say || `Sent to ${to.join(', ')}.`;
         }
         return result.say;
     }
@@ -978,7 +981,7 @@ export default class ButlerPetExtension extends Extension {
                 const step = await this._send(config, '/api/screen/step',
                     {goal, done: JSON.stringify(done), kind: 'laptop'}, shot);
                 if (step.do === 'done')
-                    return step.say || 'Done.';
+                    return step.say || 'Complete.';
                 if (step.do === 'stop')
                     return step.say || "I couldn't finish that.";
                 if (this._operating.stop)
@@ -1194,7 +1197,7 @@ export default class ButlerPetExtension extends Extension {
     /** What a job from your phone is doing, shown in the bubble here too, like on the phone. */
     _remoteStatus(state, text) {
         if (state === 'started' || state === 'working') {
-            this._remoteLine = state === 'started' ? `From your phone: ${text}` : text;
+            this._remoteLine = text;
             this._showRemote();
             return;
         }
@@ -1204,7 +1207,7 @@ export default class ButlerPetExtension extends Extension {
             this._bubble.hide();
         if (state === 'locked')
             return; // it has already said so in a notification
-        const title = {done: 'Done', failed: "Couldn't finish", stopped: 'Stopped'}[state] ?? 'Remote control';
+        const title = {done: 'Complete', failed: 'Failed', stopped: 'Stopped'}[state] ?? 'Remote control';
         this._announce(title, text, null, state === 'done');
     }
 
@@ -1215,7 +1218,7 @@ export default class ButlerPetExtension extends Extension {
         if (this._bubble.working)
             this._bubble.progress(this._remoteLine);
         else
-            this._bubble.working(this._remoteLine, () => this._remote?.stop());
+            this._bubble.working(this._remoteLine, () => this._remote?.stop(), 'Stop', 'From your phone • Working');
     }
 
     /** The bar across the top while Butler is in control; null hides it. Esc stops the job while it shows. */
@@ -1293,7 +1296,7 @@ export default class ButlerPetExtension extends Extension {
                 const step = await this._send(config, '/api/screen/step',
                     {goal, done: JSON.stringify(done), kind: 'laptop', limit: String(REMOTE_STEPS)}, shot);
                 if (step.do === 'done')
-                    return {ok: true, say: step.say || 'Done.'};
+                    return {ok: true, say: step.say || 'Complete.'};
                 if (step.do === 'stop')
                     return {ok: false, say: step.say || "I couldn't finish that."};
                 if (RISKY.test(`${step.say} ${step.text ?? ''}`) && step.do !== 'scroll' && step.do !== 'wait')
@@ -1468,12 +1471,12 @@ export default class ButlerPetExtension extends Extension {
         if (this._ringing)
             return;
         this._ringing = true;
-        Main.notify('Butler: I\'m here!', `Ringing your laptop${from}. Tap the pet to stop.`);
+        Main.notify('Here, sir.', `Butler is ringing this laptop${from}. Tap the pet to stop.`);
         this._spawn(['pactl', 'set-sink-mute', '@DEFAULT_SINK@', '0']);
         if (this._pet && !this._busy) {
             this._unpeek();
             this._play('summon');
-            this._bubble.working('I\'m here! Tap me to stop.', () => this._stopRinging());
+            this._bubble.working('Here, sir. Tap me to stop the ringing.', () => this._stopRinging(), 'Stop', null);
         }
         const until = Date.now() + 60000;
         while (this._ringing && this._pet && Date.now() < until) {
@@ -1575,9 +1578,9 @@ export default class ButlerPetExtension extends Extension {
         case 'clip':
             this._history?.addText(message.body ?? '', 'phone');
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, message.body ?? '');
-            return this._announce(`Copied${from}`, `${(message.body ?? '').slice(0, 200)}\n\n(Ready to paste.)`);
+            return this._announce(`On your clipboard${from}`, `${(message.body ?? '').slice(0, 200)}\n\n(Ready to paste.)`);
         case 'link':
-            return this._announce(`Link${from}`, `${message.url}\n\n(Tap to open it.)`,
+            return this._announce(`A link${from}`, `${message.url}\n\n(Tap to open it.)`,
                 () => Gio.AppInfo.launch_default_for_uri(message.url, null));
         case 'file': {
             const path = await this._download(config, message.item_id);
@@ -1585,7 +1588,7 @@ export default class ButlerPetExtension extends Extension {
                 () => Gio.AppInfo.launch_default_for_uri(GLib.filename_to_uri(path, null), null));
         }
         default:
-            return this._announce(`Note${from}`, message.body ?? message.url ?? '');
+            return this._announce(`A note${from}`, message.body ?? message.url ?? '');
         }
     }
 
