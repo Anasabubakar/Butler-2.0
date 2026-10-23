@@ -481,6 +481,33 @@ async function startOnEvent(recipe: recipes.Recipe, event: string): Promise<bool
   return true;
 }
 
+/** An email, written out for a recipe to read. */
+const emailEvent = (e: google.Arrived) =>
+  `A new email arrived.\nFrom: ${e.from}\nSubject: ${e.subject}\nAt: ${e.at.toISOString()}\n\n${e.text}`;
+
+let checkingEmail = false;
+
+/** Starts the recipes whose Gmail search matches email that came in since the last check. */
+async function recipesOnEmail() {
+  if (checkingEmail || !google.googleConfigured() || !geminiReady()) return;
+  checkingEmail = true;
+  try {
+    const watchers = await recipes.emailWatchers();
+    if (!watchers.length || !(await google.account())) return;
+    for (const recipe of watchers) {
+      try {
+        const arrived = await google.emailsSince(recipe.email_query!, new Date(recipe.email_after));
+        for (const email of arrived) await startOnEvent(recipe, emailEvent(email));
+        await recipes.emailChecked(recipe.id, arrived.at(-1)?.at ?? null, null);
+      } catch (e) {
+        await recipes.emailChecked(recipe.id, null, (e as Error).message.slice(0, 300));
+      }
+    }
+  } finally {
+    checkingEmail = false;
+  }
+}
+
 /**
  * Runs a recipe. If it's done in time you get the result (and a yes/no if it wants to change
  * something); otherwise it carries on and every device gets the result as a note, with any
@@ -1329,6 +1356,7 @@ if (import.meta.main) {
   setInterval(() => briefIfDue().catch((e) => console.error("brief:", e)), 5 * 60_000);
   setInterval(() => recapIfDue().catch((e) => console.error("recap:", e)), 5 * 60_000);
   setInterval(() => recipesIfDue().catch((e) => console.error("recipes:", e)), 60_000);
+  setInterval(() => recipesOnEmail().catch((e) => console.error("recipe email:", e)), 2 * 60_000);
   setInterval(() => watchPrices().catch((e) => console.error("prices:", e)), 30 * 60_000);
   setInterval(() => rescueLinks().catch((e) => console.error("links:", e)), 10 * 60_000);
   if (geminiReady()) console.log("AI providers, in order:", aiProviders().join(", "));
