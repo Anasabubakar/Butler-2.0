@@ -938,6 +938,73 @@ app.delete("/api/mcp/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+// --- recipes and steps waiting for your yes (managed on the website) ------------------------
+
+app.use("/api/recipes", requireSession);
+app.use("/api/recipes/*", requireSession);
+app.use("/api/approvals/*", requireSession);
+
+/** What's waiting for your yes, from Ask Butler or a recipe, newest first. */
+function waiting() {
+  const now = Date.now();
+  return [...pendingTools].filter(([, p]) => p.expires > now).reverse().map(([id, p]) => ({
+    id, from: p.from, tool: p.offer.key, details: showArgs(p.args), expires: new Date(p.expires).toISOString(),
+  }));
+}
+
+app.get("/api/recipes", async (c) => c.json({
+  recipes: await recipes.list(),
+  connections: (await mcp.list()).map((conn) => conn.name),
+  waiting: waiting(),
+}));
+
+async function saveRecipe(c: Context, id: string | null) {
+  const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+  const str = (k: string) => (typeof body[k] === "string" ? body[k] as string : "");
+  const connections = Array.isArray(body.connections) ? body.connections.filter((x): x is string => typeof x === "string") : [];
+  try {
+    return c.json(await recipes.save(id, str("name"), str("instructions"), connections));
+  } catch (e) {
+    return c.json({ error: (e as Error).message.slice(0, 300) }, 400);
+  }
+}
+
+app.post("/api/recipes", (c) => saveRecipe(c, null));
+
+app.put("/api/recipes/:id", (c) => {
+  const id = c.req.param("id");
+  return UUID_RE.test(id) ? saveRecipe(c, id) : c.json({ error: "not found" }, 404);
+});
+
+app.delete("/api/recipes/:id", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  await recipes.remove(id);
+  return c.json({ ok: true });
+});
+
+// Try a recipe from the website. A step that changes things comes back as `confirm`.
+app.post("/api/recipes/:id/run", async (c) => {
+  const id = c.req.param("id");
+  const recipe = UUID_RE.test(id) ? await recipes.byId(id) : null;
+  if (!recipe) return c.json({ error: "not found" }, 404);
+  if (!geminiReady()) return c.json({ error: "no AI model: set GEMINI_API_KEY on the server" }, 503);
+  return c.json(await startRecipe(recipe, "", await ownerZone()));
+});
+
+// Your yes (or no) to a step waiting for it.
+app.post("/api/approvals/:id", async (c) => {
+  const id = c.req.param("id");
+  const { yes } = await c.req.json().catch(() => ({})) as { yes?: unknown };
+  const pending = pendingTools.get(id);
+  pendingTools.delete(id);
+  if (!pending || pending.expires < Date.now()) return c.json({ error: "that expired, ask again" }, 410);
+  if (yes !== true) return c.json({ say: "Okay, skipped." });
+  const offer = (await mcp.offers()).find((o) => o.key === pending.offer.key);
+  if (!offer) return c.json({ say: `${pending.offer.key} has been switched off or removed, so I didn't use it.` });
+  return c.json({ say: await useTool(offer, pending.args, pending.said, true) });
+});
+
 app.use("/api/google/*", requireSession);
 
 app.get("/api/google/status", async (c) => {
