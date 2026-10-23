@@ -174,6 +174,12 @@ class PetBubble(context: Context) : LinearLayout(context) {
         mark.visibility = View.GONE
     }
 
+    /** Sets the top line as given, for updates that already name the device and state ("My laptop • Complete"). */
+    fun heading(text: String?) {
+        where.text = text
+        where.visibility = if (text.isNullOrBlank()) View.GONE else View.VISIBLE
+    }
+
     private fun setWhere(device: String?, state: Int) {
         where.text = device?.let { context.getString(R.string.bubble_where, it, context.getString(state)) }
         where.visibility = if (device != null) View.VISIBLE else View.GONE
