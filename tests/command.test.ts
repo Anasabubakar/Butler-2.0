@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calendarUrl, localIso, parseWhen, plan, safeZone } from "../server/lib/command.ts";
+import { calendarUrl, localIso, parseWhen, plan, safeZone, shortArgs } from "../server/lib/command.ts";
 
 test("local time carries the zone's offset", () => {
   const now = new Date("2026-10-20T10:40:05Z");
@@ -46,6 +46,56 @@ test("the planner tells Gemini the time and devices, and reads its plan", async 
     assert.equal(got.content, null); // an empty content is treated as missing
     assert.match(prompt, /Tuesday 2026-10-20T11:40:00\+01:00 \(Africa\/Lagos\)/);
     assert.match(prompt, /laptop \(laptop\)/);
+  } finally {
+    Deno.env.delete("GEMINI_API_KEY");
+    await server.shutdown();
+  }
+});
+
+test("a tool's arguments are described in a few words", () => {
+  assert.equal(shortArgs({
+    type: "object",
+    properties: { city: { type: "string", description: "Which city" }, units: { enum: ["c", "f"] } },
+    required: ["city"],
+  }), 'city: string (required) - Which city; units: "c" | "f"');
+  assert.equal(shortArgs({ type: "object" }), "none");
+});
+
+test("the planner offers connected tools and reads a tool choice", async () => {
+  let prompt = "";
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+    prompt = (await req.json()).contents[0].parts.at(-1).text;
+    const text = JSON.stringify({ action: "tool", reply: "Checking.", tool: "Zapier/weather", args: { city: "Kano" } });
+    return Response.json({ candidates: [{ content: { parts: [{ text }] } }] });
+  });
+  Deno.env.set("GEMINI_URL", `http://localhost:${server.addr.port}`);
+  Deno.env.set("GEMINI_API_KEY", "test-key");
+  try {
+    const got = await plan("weather in Kano?", {
+      device: "android-pixel", timeZone: "Africa/Lagos", devices: [],
+      tools: [{ key: "Zapier/weather", description: "Today's weather", args: "city: string (required)" }],
+    }, null);
+    assert.equal(got.action, "tool");
+    assert.equal(got.tool, "Zapier/weather");
+    assert.deepEqual(got.args, { city: "Kano" });
+    assert.match(prompt, /"Zapier\/weather": Today's weather Arguments: city: string \(required\)/);
+  } finally {
+    Deno.env.delete("GEMINI_API_KEY");
+    await server.shutdown();
+  }
+});
+
+test("without tools, the planner doesn't mention them", async () => {
+  let prompt = "";
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+    prompt = (await req.json()).contents[0].parts.at(-1).text;
+    return Response.json({ candidates: [{ content: { parts: [{ text: '{"action":"answer","reply":"Hi."}' }] } }] });
+  });
+  Deno.env.set("GEMINI_URL", `http://localhost:${server.addr.port}`);
+  Deno.env.set("GEMINI_API_KEY", "test-key");
+  try {
+    await plan("hi", { device: "phone", timeZone: "UTC", devices: [] }, null);
+    assert.doesNotMatch(prompt, /"tool": use one/);
   } finally {
     Deno.env.delete("GEMINI_API_KEY");
     await server.shutdown();
