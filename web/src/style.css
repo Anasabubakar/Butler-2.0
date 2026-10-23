@@ -330,3 +330,60 @@ body.dragging-note { cursor: grabbing; user-select: none; }
 
 /* B2 · 06: a visible 2 px focus ring on everything you can tab to. */
 :focus-visible { outline: 2px solid var(--b2-accent); outline-offset: 2px; }
+
+/* --- Connections: MCP servers whose tools Ask Butler can use ------------------------- */
+
+.conn {
+  width: min(720px, calc(100% - 32px)); max-height: calc(100vh - 48px); padding: 0;
+  border: 1px solid var(--line); border-radius: var(--b2-radius-card, 16px);
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow);
+}
+.conn::backdrop { background: rgb(9 9 11 / 60%); }
+.conn-bar {
+  position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.conn-bar h2 { margin: 0; font-size: 20px; }
+.conn-body { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.conn-body p { margin: 0; }
+.conn .small { font-size: 13px; }
+.conn-error { color: var(--b2-action-red); }
+@media (prefers-color-scheme: dark) { .conn-error { color: var(--b2-vermilion); } }
+
+.conn-add { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
+.conn-add label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.conn-add label:nth-child(2) { grid-column: 1 / -1; }
+.conn input, .conn select {
+  width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--text); font: inherit; font-size: 15px;
+}
+.conn-add input[hidden] { display: none; }
+.conn-primary {
+  padding: 10px 16px; border: 0; border-radius: 10px; font-weight: 600;
+  background: var(--b2-action); color: var(--b2-on-action, #fff);
+}
+.conn-primary:disabled { opacity: .6; }
+.conn-add .muted { grid-column: 1 / -1; }
+
+.conn-card { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.conn-card h3 { margin: 0; font-size: 16px; }
+.conn-head { display: flex; align-items: center; gap: 8px; }
+.conn-head > div { flex: 1; min-width: 0; }
+.conn-head .ghost { margin-left: 0; }
+.conn-tools, .conn-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.conn-tools li { display: flex; align-items: center; gap: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+.conn-tools li > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.conn-tools select { width: auto; flex: none; }
+.conn-tag { margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 12px; background: var(--chip); color: var(--muted); }
+.conn-log li { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.conn-log li > span:nth-child(2) { flex: 1; }
+.conn-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); }
+.conn-dot.failed { background: var(--b2-vermilion); }
+
+@media (max-width: 760px) {
+  .conn-add { grid-template-columns: 1fr; }
+  .conn-head { flex-wrap: wrap; }
+  .conn-head > div { flex-basis: 100%; }
+  .conn-tools li { flex-direction: column; align-items: stretch; }
+  .conn-tools select { width: 100%; }
+}
