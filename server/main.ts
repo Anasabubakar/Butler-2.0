@@ -461,6 +461,53 @@ async function recipesIfDue(now = new Date()) {
   }
 }
 
+// Events (a new email, a POST to a recipe's secret link) start recipes in the background.
+const eventLimit = new recipes.EventLimit();
+
+/** Starts a recipe because something happened; false when it has run too often lately. */
+async function startOnEvent(recipe: recipes.Recipe, event: string): Promise<boolean> {
+  if (!eventLimit.allow(recipe.id)) {
+    console.log(`recipe: ${recipe.name} started too often, skipped an event`);
+    return false;
+  }
+  console.log(`recipe: running ${recipe.name} on an event`);
+  const timeZone = await ownerZone();
+  await recipes.ran(recipe.id).catch(() => {});
+  const job = recipes.run(recipe, {
+    said: "", event, now: localIso(new Date(), timeZone), timeZone, offers: await toolOffers(),
+    use: (offer, args) => mcp.use(offer, args, false),
+  });
+  noteWhenDone(recipe, job, "");
+  return true;
+}
+
+/** An email, written out for a recipe to read. */
+const emailEvent = (e: google.Arrived) =>
+  `A new email arrived.\nFrom: ${e.from}\nSubject: ${e.subject}\nAt: ${e.at.toISOString()}\n\n${e.text}`;
+
+let checkingEmail = false;
+
+/** Starts the recipes whose Gmail search matches email that came in since the last check. */
+async function recipesOnEmail() {
+  if (checkingEmail || !google.googleConfigured() || !geminiReady()) return;
+  checkingEmail = true;
+  try {
+    const watchers = await recipes.emailWatchers();
+    if (!watchers.length || !(await google.account())) return;
+    for (const recipe of watchers) {
+      try {
+        const arrived = await google.emailsSince(recipe.email_query!, new Date(recipe.email_after));
+        for (const email of arrived) await startOnEvent(recipe, emailEvent(email));
+        await recipes.emailChecked(recipe.id, arrived.at(-1)?.at ?? null, null);
+      } catch (e) {
+        await recipes.emailChecked(recipe.id, null, (e as Error).message.slice(0, 300));
+      }
+    }
+  } finally {
+    checkingEmail = false;
+  }
+}
+
 /**
  * Runs a recipe. If it's done in time you get the result (and a yes/no if it wants to change
  * something); otherwise it carries on and every device gets the result as a note, with any
@@ -1016,7 +1063,7 @@ async function saveRecipe(c: Context, id: string | null) {
     run_days: Array.isArray(body.run_days) ? body.run_days.map(Number) : [],
   };
   try {
-    return c.json(await recipes.save(id, str("name"), str("instructions"), connections, schedule));
+    return c.json(await recipes.save(id, str("name"), str("instructions"), connections, schedule, str("email_query") || null));
   } catch (e) {
     return c.json({ error: (e as Error).message.slice(0, 300) }, 400);
   }
@@ -1043,6 +1090,47 @@ app.post("/api/recipes/:id/run", async (c) => {
   if (!recipe) return c.json({ error: "not found" }, 404);
   if (!geminiReady()) return c.json({ error: "no AI model: set GEMINI_API_KEY on the server" }, 503);
   return c.json(await startRecipe(recipe, "", await ownerZone()));
+});
+
+// A recipe's secret link: anything that can send a POST (Zapier, IFTTT, Tasker, a script)
+// can start it, and what it sends is given to the recipe as data.
+const hookUrl = (c: Context, token: string) => `${publicBase(c)}/api/hooks/${token}`;
+
+app.post("/api/recipes/:id/hook", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  if (!vaultReady()) return c.json({ error: "the server needs BUTLER_VAULT_KEY set first" }, 503);
+  try {
+    return c.json({ url: hookUrl(c, await recipes.makeHook(id)) });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 404);
+  }
+});
+
+app.get("/api/recipes/:id/hook", async (c) => {
+  const id = c.req.param("id");
+  const token = UUID_RE.test(id) ? await recipes.hookToken(id).catch(() => null) : null;
+  return c.json({ url: token ? hookUrl(c, token) : null });
+});
+
+app.delete("/api/recipes/:id/hook", async (c) => {
+  const id = c.req.param("id");
+  if (UUID_RE.test(id)) await recipes.dropHook(id);
+  return c.json({ ok: true });
+});
+
+const MAX_EVENT_BYTES = 16_000;
+
+// The secret link itself: no sign-in, the token is the key. It answers at once and the
+// recipe runs in the background, with its result sent to your devices as a note.
+app.post("/api/hooks/:token", async (c) => {
+  const recipe = await recipes.byHook(c.req.param("token")).catch(() => null);
+  if (!recipe) return c.json({ error: "not found" }, 404);
+  if (Number(c.req.header("content-length") ?? 0) > MAX_EVENT_BYTES) return c.json({ error: "too big" }, 413);
+  const sent = (await c.req.text().catch(() => "")).slice(0, MAX_EVENT_BYTES);
+  if (!geminiReady()) return c.json({ error: "no AI model on the server" }, 503);
+  const started = await startOnEvent(recipe, `Something was sent to this recipe's link:\n${sent || "(nothing)"}`);
+  return started ? c.json({ ok: true, recipe: recipe.name }, 202) : c.json({ error: "started too often, try later" }, 429);
 });
 
 // Your yes (or no) to a step waiting for it.
@@ -1309,6 +1397,7 @@ if (import.meta.main) {
   setInterval(() => briefIfDue().catch((e) => console.error("brief:", e)), 5 * 60_000);
   setInterval(() => recapIfDue().catch((e) => console.error("recap:", e)), 5 * 60_000);
   setInterval(() => recipesIfDue().catch((e) => console.error("recipes:", e)), 60_000);
+  setInterval(() => recipesOnEmail().catch((e) => console.error("recipe email:", e)), 2 * 60_000);
   setInterval(() => watchPrices().catch((e) => console.error("prices:", e)), 30 * 60_000);
   setInterval(() => rescueLinks().catch((e) => console.error("links:", e)), 10 * 60_000);
   if (geminiReady()) console.log("AI providers, in order:", aiProviders().join(", "));

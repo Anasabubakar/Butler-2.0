@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { decodeBase64 } from "jsr:@std/encoding@1.0.10/base64";
-import { consentUrl, mime } from "../server/lib/google.ts";
+import { consentUrl, mime, plainText } from "../server/lib/google.ts";
 
 const to = { name: "David Okafor", email: "david@example.com" };
 
@@ -41,4 +41,22 @@ test("the consent page asks for offline access with every scope", () => {
     Deno.env.delete("GOOGLE_CLIENT_ID");
     Deno.env.delete("PUBLIC_URL");
   }
+});
+
+test("the consent page asks to read email, for recipes that start on one", () => {
+  Deno.env.set("GOOGLE_CLIENT_ID", "id");
+  assert.match(new URL(consentUrl("st")).searchParams.get("scope")!, /gmail\.readonly/);
+});
+
+test("an email's plain text is found inside its parts", () => {
+  const data = btoa(String.fromCharCode(...new TextEncoder().encode("Your balance is ₦5,000"))).replace(/\+/g, "-").replace(/\//g, "_");
+  const email = {
+    mimeType: "multipart/alternative",
+    parts: [
+      { mimeType: "text/html", body: { data: "PGI+aGk8L2I+" } },
+      { mimeType: "multipart/mixed", parts: [{ mimeType: "text/plain", body: { data } }] },
+    ],
+  };
+  assert.equal(plainText(email), "Your balance is ₦5,000");
+  assert.equal(plainText({ mimeType: "text/html", body: { data: "PGI+" } }), "");
 });
