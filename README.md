@@ -147,3 +147,40 @@ Every feature, with its settings, is in **[docs/features.md](docs/features.md)**
 | 🍎 **iPhone / iPad** | 🗺️ Planned | See the [roadmap](#-roadmap) |
 | 🍏 **macOS** | 🗺️ Planned | See the [roadmap](#-roadmap) |
 | 🪟 **Windows** | 🗺️ Planned | See the [roadmap](#-roadmap) |
+
+## 🏁 Quick start
+
+Butler is self-hosted: you run your own copy on a Linux server with Docker. An Oracle Cloud Always Free VM is enough. You need a domain name you can point at it.
+
+```sh
+# 1. Get Docker and the code
+curl -fsSL https://get.docker.com | sudo sh
+git clone https://github.com/Anasabubakar/Butler-2.0.git && cd Butler-2.0/deploy
+
+# 2. Fill in your settings
+cp .env.example .env                 # your domain and a database password
+cp butler.env.example butler.env     # tokens, password hash, AI keys
+openssl rand -hex 32                 # run twice: one for BUTLER_TOKEN, one for SESSION_SECRET
+docker compose run --rm butler run server/hash-password.ts   # paste the result as BUTLER_PASSWORD_HASH
+
+# 3. Start it
+docker compose up -d --build
+```
+
+Open `https://butler.yourdomain.com` and sign in. Caddy gets the HTTPS certificate on its own.
+
+Then install the apps:
+
+- **Android:** download `butler-<version>-android.apk` from the [latest release](https://github.com/Anasabubakar/Butler-2.0/releases/latest), open it, and enter your server's save URL and `BUTLER_TOKEN`. [Full guide →](docs/android.md)
+- **Linux (GNOME):** download `butler-<version>-gnome-extension.zip` from the same release, then `gnome-extensions install butler-*-gnome-extension.zip` and log out and back in. [Full guide →](desktop/gnome/README.md)
+
+The **[self-hosting guide](docs/self-hosting.md)** covers opening ports, automatic deploys from GitHub, running a local AI model instead of a cloud one, connecting Google, backups and restoring.
+
+### AI providers
+
+Butler uses AI for two jobs, set in `butler.env`:
+
+| Job | Options |
+|---|---|
+| **Organizing saves** (titles, summaries, tags, collections) | Anthropic Claude (`ANTHROPIC_API_KEY`), or a free local model through Ollama (`BUTLER_AI=local`, slower on a CPU-only server) |
+| **Talking and seeing** (Ask Butler, video notes, search by meaning, Analyze/Solve/Translate) | Google Gemini (`GEMINI_API_KEY`), falling back to OpenRouter, Groq or OpenAI keys in the order of `BUTLER_AI_ORDER` |
