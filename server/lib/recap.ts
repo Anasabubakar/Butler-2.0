@@ -19,13 +19,13 @@ const counted = (list: { name: string; n: number }[]) => list.map((c) => `${c.na
 
 /** The recap as a short plain note. */
 export function compose(w: Week): string {
-  if (!w.total) return "Your week in Butler: nothing saved this week. Share something to Butler and it shows up here.";
-  const lines = [`Your week in Butler: you saved ${w.total} thing${w.total === 1 ? "" : "s"}.`];
+  if (!w.total) return "your week in Butler: nothing saved this week 🥀 share something to Butler and it shows up here.";
+  const lines = [`your week in Butler: you saved ${w.total} thing${w.total === 1 ? "" : "s"}.`];
   if (w.categories.length) lines.push("", `By topic: ${counted(w.categories)}.`);
   if (w.platforms.length) lines.push(`From: ${counted(w.platforms)}.`);
   if (w.tags.length) lines.push(`Top tags: ${w.tags.join(", ")}.`);
   if (w.highlights.length) {
-    lines.push("", "Worth another look:");
+    lines.push("", "worth another look:");
     for (const h of w.highlights) lines.push(`• ${h.title}`, ...(h.link ? [`  ${h.link}`] : []));
   }
   return lines.join("\n");

@@ -11,13 +11,13 @@ test("the recap groups the week and lists a few worth another look", () => {
     highlights: [{ title: "Smoky party jollof", link: "https://www.tiktok.com/@chef/video/1" }, { title: "A note", link: null }],
   });
   assert.equal(text, [
-    "Your week in Butler: you saved 12 things.",
+    "your week in Butler: you saved 12 things.",
     "",
     "By topic: Food 5, Tech 3.",
     "From: tiktok 7.",
     "Top tags: jollof, budget.",
     "",
-    "Worth another look:",
+    "worth another look:",
     "• Smoky party jollof",
     "  https://www.tiktok.com/@chef/video/1",
     "• A note",
