@@ -836,6 +836,16 @@ app.delete("/api/device/items/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+// A saved picture or file, for the phone to keep a copy of offline.
+app.get("/api/device/files/:id", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.notFound();
+  const item = await db.getItem(id);
+  if (!item?.file_path) return c.notFound();
+  return fileResponse(item);
+});
+
 // The phone app opens the library inside itself: its device token buys a website session,
 // handed back for the app to put in its own browser's cookies.
 app.post("/api/device-session", async (c) => {
