@@ -30,6 +30,7 @@ import * as spending from "./lib/spending.ts";
 import * as streaks from "./lib/streaks.ts";
 import * as laptop from "./lib/laptop.ts";
 import * as prefs from "./lib/prefs.ts";
+import { addressed } from "./lib/persona.ts";
 import * as mcp from "./lib/mcp.ts";
 import * as recipes from "./lib/recipes.ts";
 import { vaultReady } from "./lib/vault.ts";
@@ -793,7 +794,7 @@ app.post("/api/command/confirm", async (c) => {
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
-  return c.json({ say: `sent to ${pending.email.to.name}, sir.` });
+  return c.json({ say: `${addressed(`sent to ${pending.email.to.name}`)}.` });
 });
 
 // The screen helper: the next single step towards a goal, from a screenshot.
