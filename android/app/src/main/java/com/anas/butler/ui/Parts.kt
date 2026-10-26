@@ -175,7 +175,7 @@ fun ago(iso: String?): String {
 
 /** A big number with a word under it, for the stat tiles. */
 @Composable
-fun Stat(number: String, label: String, color: Color = MaterialTheme.colorScheme.onSurface) {
+fun Stat(number: String, label: String, color: Color = LocalContentColor.current) {
     Text(number, fontSize = 30.sp, fontWeight = FontWeight.Bold, color = color)
-    Text(label, style = MaterialTheme.typography.bodySmall, color = LocalB2.current.muted)
+    Text(label, style = MaterialTheme.typography.bodySmall, color = LocalContentColor.current.copy(alpha = 0.7f))
 }

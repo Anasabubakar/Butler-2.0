@@ -32,6 +32,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -104,7 +105,7 @@ fun HomeScreen(online: Boolean, nav: HomeNav) {
                 if (c != null) {
                     item(span = { GridItemSpan(if (cols >= 4) half / 2 else 1) }) {
                         Tile(strong = true, onClick = { nav.library(LibraryStore.Filter()) }, modifier = Modifier.heightIn(min = 108.dp)) {
-                            Stat("${c.total}", "saved", color = LocalB2.current.onTileStrong)
+                            Stat("${c.total}", "saved")
                         }
                     }
                     item(span = { GridItemSpan(if (cols >= 4) half / 2 else 1) }) {
@@ -113,7 +114,7 @@ fun HomeScreen(online: Boolean, nav: HomeNav) {
                     item(span = { GridItemSpan(if (cols >= 4) half / 2 else 1) }) {
                         Tile(Modifier.heightIn(min = 108.dp)) {
                             Stat("${c.waiting}", "waiting to sync",
-                                color = if (c.waiting > 0) LocalB2.current.accent else MaterialTheme.colorScheme.onSurface)
+                                color = if (c.waiting > 0) LocalB2.current.accent else LocalContentColor.current)
                         }
                     }
                     item(span = { GridItemSpan(if (cols >= 4) half / 2 else 1) }) {
