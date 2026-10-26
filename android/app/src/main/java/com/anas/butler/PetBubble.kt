@@ -91,7 +91,8 @@ class PetBubble(context: Context) : LinearLayout(context) {
             gravity = Gravity.CENTER_VERTICAL
             addView(spinner, LayoutParams((16 * dp).toInt(), (16 * dp).toInt()).apply { marginEnd = (10 * dp).toInt() })
             addView(mark, LayoutParams((22 * dp).toInt(), (22 * dp).toInt()).apply { marginEnd = (8 * dp).toInt() })
-            addView(line)
+            // The line takes what's left and shortens with "…", so the buttons always fit.
+            addView(line, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             for (button in listOf(stop, copy, share, close)) {
                 (button.layoutParams as LayoutParams).marginStart = (6 * dp).toInt()
                 button.visibility = View.GONE
