@@ -19,9 +19,13 @@
 }
 
 /* --- the grid ---------------------------------------------------------------------------------- */
-.saves { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 272px), 1fr)); gap: 16px; align-items: start; }
-@media (max-width: 759px) { .saves { grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); gap: 12px; } }
-@media (max-width: 420px) { .saves { grid-template-columns: 1fr; } }
+.saves { display: flex; gap: 16px; align-items: flex-start; }
+.saves__col { flex: 1; min-width: 0; display: grid; gap: 16px; }
+.saves-skeleton { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 272px), 1fr)); gap: 16px; }
+@media (max-width: 759px) {
+  .saves, .saves__col { gap: 12px; }
+  .saves-skeleton { grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); gap: 12px; }
+}
 .saves-more { display: flex; margin: 24px auto 0; }
 
 /* Each collection has its own soft colour. */

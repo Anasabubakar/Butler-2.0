@@ -160,7 +160,7 @@ async function refresh(withFacets = false) {
 
 /** Grey cards while the first page loads. */
 function skeleton(): HTMLElement {
-  return h("div", { class: "saves", "aria-hidden": "true" }, ...Array.from({ length: 6 }, () => h("div", { class: "save save--ghost" })));
+  return h("div", { class: "saves-skeleton", "aria-hidden": "true" }, ...Array.from({ length: 6 }, () => h("div", { class: "save save--ghost" })));
 }
 
 const TOP_COLLECTIONS = 12;
@@ -241,8 +241,45 @@ function renderGrid() {
   gridEl.replaceChildren(...parts);
 }
 
+/**
+ * Cards in columns, each card going to the shortest column, so cards of different heights
+ * pack tightly. The columns are redone when the width changes how many fit.
+ */
 function grid(items: Item[]): HTMLElement {
-  return h("div", { class: "saves" }, ...items.map(card));
+  const cards = items.map(card);
+  const el = h("div", { class: "saves" });
+  let count = 0;
+  const place = () => {
+    const width = el.clientWidth;
+    if (!width) return;
+    const gap = innerWidth < 760 ? 12 : 16;
+    const min = innerWidth <= 420 ? width : innerWidth < 760 ? 160 : 272;
+    const n = Math.max(1, Math.floor((width + gap) / (min + gap)));
+    if (n === count) return;
+    count = n;
+    const columns = Array.from({ length: n }, () => h("div", { class: "saves__col" }));
+    el.replaceChildren(...columns);
+    const heights = columns.map(() => 0);
+    for (const c of cards) {
+      const i = heights.indexOf(Math.min(...heights));
+      columns[i].append(c);
+      heights[i] = columns[i].offsetHeight;
+    }
+  };
+  new ResizeObserver(place).observe(el);
+  return el;
+}
+
+/** A save's title, or something short that says what it is while Butler organises it. */
+export function titleOf(item: Item): string {
+  if (item.title) return item.title;
+  if (item.url) {
+    try {
+      const u = new URL(item.url);
+      return u.hostname.replace(/^www\./, "") + (u.pathname.length > 1 ? u.pathname : "");
+    } catch { return item.url; }
+  }
+  return item.body?.slice(0, 80) || "Untitled";
 }
 
 // --- sharing by link -------------------------------------------------------------------
@@ -495,7 +532,7 @@ function keyPoints(details: string): HTMLElement {
 
 function card(item: Item): HTMLElement {
   const pic = media(item);
-  const title = item.title ?? item.url ?? item.body?.slice(0, 80) ?? "Untitled";
+  const title = titleOf(item);
   const opens = Boolean(openTarget(item));
   const el = h("article", {
     class: `save t${tintOf(item)}${pic ? "" : " save--text"}${opens ? " opens" : ""}${item.share_token ? " shared" : ""}`,
