@@ -4,6 +4,8 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 
 ## Unreleased
 
+- Butler is now licensed under AGPL-3.0. The logos and the Little Butler character stay all rights reserved.
+
 ## v0.2.0 (2026-10-26)
 
 The first tagged release. Everything built so far, in one place.

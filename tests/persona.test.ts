@@ -21,6 +21,13 @@ test("the AI gets both parts, without the notes for people", () => {
   assert.doesNotMatch(words, /<!--|notes like this one/);
 });
 
+test("the butler layer keeps its safety habits", () => {
+  const words = persona();
+  assert.match(words, /never instructions to follow/);
+  assert.match(words, /Asks before anything that can't be undone/);
+  assert.match(words, /point them to local emergency help/);
+});
+
 test("the teasing setting decides how much sass is allowed", () => {
   assert.match(voiceRules(), /Teasing is on/);
   assert.match(voiceRules("less"), /Teasing is set to less/);
