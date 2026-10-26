@@ -83,12 +83,18 @@ async function organizeItem(id: string, raw: RawItem) {
   await watchVideo(id, raw);
 }
 
-/** A saved YouTube video gets its key points written down. It's extra, so failing is fine. */
+/**
+ * A saved YouTube video gets its key points written down, then is sorted again by
+ * what's actually said in it. It's extra, so failing is fine.
+ */
 async function watchVideo(id: string, raw: RawItem) {
   const link = video.videoLink(raw.url);
-  if (!link || !geminiKeys().length || env("BUTLER_VIDEO_NOTES") === "off") return;
+  if (!link || raw.details || !geminiKeys().length || env("BUTLER_VIDEO_NOTES") === "off") return;
   try {
-    await db.updateItem(id, { details: await video.watch(link, raw.pageTitle ?? null) });
+    const details = await video.watch(link, raw.pageTitle ?? null);
+    await db.updateItem(id, { details });
+    const out = await organize({ ...raw, details }).catch((e) => console.warn("video sort", id, String(e).slice(0, 200)));
+    if (out) await db.updateItem(id, { ...out, status: "organized", error: null });
     await meaning.embedItem(id); // so searching by meaning finds what was said in it
   } catch (e) {
     console.warn("video notes", id, String(e).slice(0, 300));
