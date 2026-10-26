@@ -35,7 +35,7 @@
   .app { --side: 76px; }
   .side { align-items: center; padding: 18px 10px; }
   .side__brand .b2-lockup__name { display: none; }
-  .side__link { justify-content: center; width: 48px; padding: 0; }
+  .side__link, .side__link.b2-button { justify-content: center; width: 48px; padding: 0; }
   .side__link > span:not(.badge) { display: none; }
   .side__link .badge { position: absolute; top: 2px; right: 0; margin: 0; min-width: 17px; height: 17px; font-size: 10.5px; }
   .side__foot { border-top: 0; }
@@ -179,6 +179,10 @@ a.row:hover .row__title { text-decoration: underline; text-underline-offset: 3px
 }
 
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex: 1; }
+@media (max-width: 1099px) and (min-width: 760px) {
+  .home-glance { grid-column: span 12; }
+  .home-glance .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
 .stat { display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; padding: 14px 16px; border-radius: var(--radius-tile); background: var(--surface-2); }
 .stat strong { font: 400 34px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .stat span { color: var(--muted); font-size: 13px; }
