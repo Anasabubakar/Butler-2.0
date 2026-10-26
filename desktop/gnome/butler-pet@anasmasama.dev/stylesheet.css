@@ -317,3 +317,23 @@
   font-weight: 700;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
+
+/* The reply box under the bubble's answer: light on ink, like the phone pet's. */
+.butler-bubble-reply {
+  color: #ffffff;
+  background-color: #262523;
+  border: 1px solid #2e2c29;
+  border-radius: 18px;
+  padding: 8px 14px;
+  margin: 8px 8px 0 0;
+  min-width: 260px;
+  caret-color: #ffffff;
+}
+
+.butler-bubble-reply:focus {
+  border-color: #a8a49e;
+}
+
+.butler-bubble-reply StLabel.hint-text {
+  color: #a8a49e;
+}
