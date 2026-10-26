@@ -136,3 +136,14 @@ Every feature, with its settings, is in **[docs/features.md](docs/features.md)**
 </div>
 
 <sub>Screenshots use sample data.</sub>
+
+## 📱 Platforms
+
+| Platform | Status | How |
+|---|---|---|
+| 🌐 **Web** (any browser) | ✅ Ready | The website your server hosts |
+| 🤖 **Android** 8+ | ✅ Ready | Native app with offline library and the floating pet ([guide](docs/android.md)) |
+| 🐧 **Linux** (GNOME 46 to 48) | ✅ Ready | GNOME Shell extension ([guide](desktop/gnome/README.md)) |
+| 🍎 **iPhone / iPad** | 🗺️ Planned | See the [roadmap](#-roadmap) |
+| 🍏 **macOS** | 🗺️ Planned | See the [roadmap](#-roadmap) |
+| 🪟 **Windows** | 🗺️ Planned | See the [roadmap](#-roadmap) |
