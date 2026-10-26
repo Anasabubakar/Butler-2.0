@@ -1,5 +1,6 @@
 // Little celebrations: your 100th save, a 7-day saving streak. Counted, not guessed.
 import { sql } from "./db.ts";
+import { addressed } from "./persona.ts";
 
 const MILESTONES = [10, 25, 50, 100, 250, 500, 1000, 2000, 5000, 10000];
 const STREAKS = [3, 7, 14, 30, 50, 100, 200, 365];
@@ -31,7 +32,7 @@ const ordinal = (n: number) => {
 };
 
 export function milestoneNote(total: number): string {
-  return `that was your ${ordinal(total)} save, sir. ` +
+  return `${addressed(`that was your ${ordinal(total)} save`)}. ` +
     (total >= 100 ? "ask me \"what did I save about…\" when you need something back." : "library's filling up nicely 🔥");
 }
 
