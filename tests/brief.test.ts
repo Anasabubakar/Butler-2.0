@@ -39,5 +39,5 @@ test("the brief lists the day, reminders, yesterday's saves and one old save", (
 test("without Google it says how to add your calendar, and greets for the hour", () => {
   const text = compose({ events: null, reminders: [], savedLastDay: 0, resurface: null },
     new Date("2026-10-21T19:00:00Z"), "Africa/Lagos");
-  assert.equal(text, "Good evening, sir. Your day, in order: Wednesday 21 October.\n\nConnect Google under Devices on the website to see your calendar here.");
+  assert.equal(text, "Good evening, sir. Your day, in order: Wednesday 21 October.\n\nConnect Google under Integrations on the website to see your calendar here.");
 });
