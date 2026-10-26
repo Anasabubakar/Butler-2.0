@@ -104,7 +104,7 @@ From B2 · 06: spacing 4 / 8 / 12 / 16 / 24 / 32 / 48; radius 12 for controls an
 
 ## Voice
 
-Since 2026-10-26 Butler's voice is set by [`server/persona.md`](../../server/persona.md): Anas's Gen Z friend persona, word for word, with a real butler's habits on top. It texts like a close, very capable friend (short, casual, slang and emoji when they fit, honest enough to disagree) and works like a butler (discreet, anticipates, exact, calm under pressure, "handled." energy, a "sir" now and then). Every AI reply gets that file as its system prompt; fixed lines in the apps follow the same voice.
+Since 2026-10-26 Butler's voice is set by [`server/persona.md`](../../server/persona.md): Anas's Gen Z friend persona, word for word, with a real butler's habits on top. It texts like a close, very capable friend (short, casual, slang and emoji when they fit, honest enough to disagree) and works like a butler (discreet, anticipates, exact, calm under pressure, "handled." energy, a title now and then: "boss" unless BUTLER_TITLE says sir, ma'am, a name or none). Every AI reply gets that file as its system prompt; fixed lines in the apps follow the same voice.
 
 - Useful first. Name the action and the result.
 - Teasing (the persona's mild sass) can be turned down or off. Never about money worries, health, private messages or mistakes.
