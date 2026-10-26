@@ -556,7 +556,7 @@ async function startRecipe(recipe: recipes.Recipe, said: string, timeZone: strin
     return { say: `${early.say ? `${early.say}\n\n` : ""}Use ${offer.key}?\n\n${showArgs(args)}`, confirm };
   }
   noteWhenDone(recipe, job, said);
-  return { say: `Still working on ${recipe.name}. I'll send you the result as a note.` };
+  return { say: `still on ${recipe.name}. i'll send the result as a note.` };
 }
 
 // Ask Butler: what you typed or said, plus optionally a screenshot of what you're looking at.
@@ -604,39 +604,39 @@ app.post("/api/command", async (c) => {
   switch (p.action) {
     case "remind": {
       const when = parseWhen(p.when);
-      if (!when) return json({ action: "answer", say: "When should I remind you?" });
+      if (!when) return json({ action: "answer", say: "when should i remind you?" });
       const everywhere = (await inbox.devices()).map((d) => d.name);
       const due = new Date(Math.max(when.getTime(), Date.now()));
       await inbox.send(everywhere.length ? everywhere : [device], {
         from_device: device, kind: "reminder", body: p.text || said, due_at: due.toISOString(),
       });
-      return json({ action: "remind", say: p.reply || "Reminder set, sir." });
+      return json({ action: "remind", say: p.reply || "got you. reminder's set." });
     }
     case "calendar": {
       const start = parseWhen(p.when);
-      if (!start) return json({ action: "answer", say: "When is it?" });
+      if (!start) return json({ action: "answer", say: "when is it?" });
       const parsedEnd = parseWhen(p.end);
       const end = parsedEnd && parsedEnd > start ? parsedEnd : new Date(start.getTime() + 3_600_000);
       const title = p.text || said;
       if (google.googleConfigured() && await google.account()) {
         try {
           await google.addEvent(title, start, end, timeZone);
-          return json({ action: "calendar", say: p.reply || "It's on your calendar." });
+          return json({ action: "calendar", say: p.reply || "it's on your calendar." });
         } catch (e) {
           return c.json({ error: String(e).slice(0, 300) }, 502);
         }
       }
       // Google isn't connected: open the event filled in, and you tap Save.
       return json({
-        action: "calendar", say: "Here's the event. Check it, then tap Save to add it.", open: calendarUrl(title, start, end),
+        action: "calendar", say: "here's the event. check it, then tap Save to add it.", open: calendarUrl(title, start, end),
       });
     }
     case "email": {
       if (!google.googleConfigured() || !(await google.account())) {
-        return json({ action: "answer", say: "I need your Google account for that. Connect it under Integrations on the Butler website, then ask again." });
+        return json({ action: "answer", say: "need your Google account for that. connect it under Integrations on the Butler website, then ask again." });
       }
       const who = (p.person ?? "").trim();
-      if (!who) return json({ action: "answer", say: "Who should I email?" });
+      if (!who) return json({ action: "answer", say: "who should i email?" });
       let people: { name: string; email: string }[];
       try {
         people = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(who)
@@ -646,7 +646,7 @@ app.post("/api/command", async (c) => {
         return c.json({ error: String(e).slice(0, 300) }, 502);
       }
       if (!people.length) {
-        return json({ action: "answer", say: `I couldn't find ${who} in your contacts. Ask again with their email address.` });
+        return json({ action: "answer", say: `couldn't find ${who} in your contacts. ask again with their email address.` });
       }
       const [to, ...others] = people;
       const subject = p.subject || "From Butler";
@@ -658,7 +658,7 @@ app.post("/api/command", async (c) => {
       const also = others.length ? `\n(Also found: ${others.map((o) => `${o.name} <${o.email}>`).join(", ")}.)` : "";
       return json({
         action: "confirm",
-        say: `Ready to send. Check the recipient and attachment first.\nTo: ${to.name} <${to.email}>\nSubject: ${subject}\n\n${body}${attachment ? "\n\nAttachment: screenshot.jpg" : ""}${also}`,
+        say: `ready to send. check who it's going to and the attachment first.\nTo: ${to.name} <${to.email}>\nSubject: ${subject}\n\n${body}${attachment ? "\n\nAttachment: screenshot.jpg" : ""}${also}`,
         confirm,
       });
     }
@@ -672,7 +672,7 @@ app.post("/api/command", async (c) => {
         device, kind: "text", url: null, body: p.text || said, note: null, mime: null, platform: null,
       });
       organizeItem(id, await rawFor((await db.getItem(id))!));
-      return json({ action: "save", say: p.reply || "Saved, sir." });
+      return json({ action: "save", say: p.reply || "saved." });
     }
     case "screen":
       return json({ action: "screen", say: p.reply, goal: p.text || said });
@@ -682,7 +682,7 @@ app.post("/api/command", async (c) => {
     }
     case "spend": {
       if (!p.amount || p.amount <= 0 || !Number.isFinite(p.amount)) {
-        return json({ action: "answer", say: "How much was it? Say it like \"I spent 2,500 on suya\"." });
+        return json({ action: "answer", say: "how much was it? say it like \"I spent 2,500 on suya\"." });
       }
       const spend = {
         amount: Math.round(p.amount * 100) / 100,
@@ -739,7 +739,7 @@ app.post("/api/command", async (c) => {
     }
     case "message": {
       const who = (p.person ?? "").trim();
-      if (!who) return json({ action: "answer", say: "Who should I message?" });
+      if (!who) return json({ action: "answer", say: "who should i message?" });
       let name = who;
       let phone = /^\+?[\d\s()-]{7,}$/.test(who) ? who.replace(/[^\d+]/g, "") : null;
       if (!phone && google.googleConfigured() && await google.account()) {
@@ -754,7 +754,7 @@ app.post("/api/command", async (c) => {
     }
     case "tool": {
       const offer = offers.find((o) => o.key === p.tool);
-      if (!offer) return json({ action: "answer", say: "I couldn't find that tool in your connections." });
+      if (!offer) return json({ action: "answer", say: "couldn't find that tool in your connections." });
       const args = p.args ?? {};
       if (offer.rule === "ask") {
         return json({ action: "confirm", say: `Use ${offer.key}?\n\n${showArgs(args)}`, confirm: holdTool(offer, args, said) });
@@ -763,12 +763,12 @@ app.post("/api/command", async (c) => {
     }
     case "recipe": {
       const recipe = saved.find((r) => r.name.toLowerCase() === (p.recipe ?? "").trim().toLowerCase());
-      if (!recipe) return json({ action: "answer", say: "I couldn't find that recipe." });
+      if (!recipe) return json({ action: "answer", say: "couldn't find that recipe." });
       const done = await startRecipe(recipe, said, timeZone);
       return json(done.confirm ? { action: "confirm", ...done } : { action: "answer", say: done.say });
     }
     default:
-      return json({ action: "answer", say: p.reply || "I can't do that yet. Try saying it another way?" });
+      return json({ action: "answer", say: p.reply || "can't do that one yet. try saying it another way?" });
   }
 });
 
@@ -793,7 +793,7 @@ app.post("/api/command/confirm", async (c) => {
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
-  return c.json({ say: `Sent to ${pending.email.to.name}, sir.` });
+  return c.json({ say: `sent to ${pending.email.to.name}, sir.` });
 });
 
 // The screen helper: the next single step towards a goal, from a screenshot.
@@ -809,7 +809,7 @@ app.post("/api/screen/step", async (c) => {
   } catch { /* none yet */ }
   // A screen task from the phone may take more steps (limit=30); 40 at most.
   const limit = Math.min(Number(got.text("limit")) || MAX_STEPS, 40);
-  if (done.length >= limit) return c.json({ do: "stop", say: `Stopped after ${limit} steps. Over to you from here.` });
+  if (done.length >= limit) return c.json({ do: "stop", say: `stopped after ${limit} steps. your turn from here.` });
   try {
     return c.json(await nextStep(got.picture, goal, done, got.text("kind") === "phone" ? "phone" : "laptop"));
   } catch (e) {
@@ -1204,7 +1204,7 @@ app.post("/api/approvals/:id", async (c) => {
   const pending = pendingTools.get(id);
   pendingTools.delete(id);
   if (!pending || pending.expires < Date.now()) return c.json({ error: "that expired, ask again" }, 410);
-  if (yes !== true) return c.json({ say: "Okay, skipped." });
+  if (yes !== true) return c.json({ say: "okay, skipped." });
   const offer = (await mcp.offers()).find((o) => o.key === pending.offer.key);
   if (!offer) return c.json({ say: `${pending.offer.key} has been switched off or removed, so I didn't use it.` });
   return c.json({ say: await useTool(offer, pending.args, pending.said, true) });
