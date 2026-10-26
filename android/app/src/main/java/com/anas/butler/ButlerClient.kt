@@ -22,11 +22,21 @@ class ButlerClient(private val config: Config) {
 
     private val base get() = config.saveUrl.trimEnd('/').removeSuffix("/api/save")
 
-    /** What Butler decided to do with what you typed or said. */
-    suspend fun command(text: String, screenshot: ByteArray?): JSONObject = JSONObject(
+    /**
+     * What Butler decided to do with what you typed or said. `replyTo` is what Butler said that
+     * you're answering (from the pet's bubble); `item` is the save you're talking about.
+     */
+    suspend fun command(text: String, screenshot: ByteArray?, replyTo: String? = null, item: String? = null): JSONObject = JSONObject(
         post(
             "/api/command",
-            mapOf("device" to config.deviceName, "kind" to "phone", "text" to text, "tz" to TimeZone.getDefault().id),
+            buildMap {
+                put("device", config.deviceName)
+                put("kind", "phone")
+                put("text", text)
+                put("tz", TimeZone.getDefault().id)
+                replyTo?.let { put("reply_to", it.take(4000)) }
+                item?.let { put("item", it) }
+            },
             screenshot?.let { Attachment("screenshot.jpg", it, "image/jpeg") },
         ),
     )
