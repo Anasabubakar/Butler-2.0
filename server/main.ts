@@ -53,6 +53,9 @@ const VOICE_TYPES = ["audio/wav", "audio/x-wav", "audio/ogg", "audio/webm", "aud
 const MAX_VOICE_BYTES = 4 * 1024 * 1024;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** How much sass Butler's replies get (Settings → Teasing); the default if the database is unreachable. */
+const teasing = async () => (await prefs.load().catch(() => prefs.DEFAULTS)).teasing;
+
 for (const [name, value] of [["BUTLER_TOKEN", TOKEN], ["BUTLER_PASSWORD_HASH", PASSWORD_HASH], ["SESSION_SECRET", SESSION_SECRET]]) {
   if (!value) console.warn(`warning: ${name} is not set, so that kind of sign-in will always be refused`);
 }
@@ -225,7 +228,7 @@ app.post("/api/screen/look", async (c) => {
   const mode = got.text("mode") as LookMode | null;
   if (!mode || !LOOK_MODES.includes(mode)) return c.json({ error: "mode must be analyze or solve" }, 400);
   try {
-    return c.json({ answer: await look(got.picture, mode, got.text("question")) });
+    return c.json({ answer: await look(got.picture, mode, got.text("question"), await teasing()) });
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
@@ -350,7 +353,7 @@ app.post("/api/laptop/plan", async (c) => {
     if (Array.isArray(parsed)) folders = parsed.map((f) => String(f).slice(0, 200)).slice(0, 300);
   } catch { /* no folders */ }
   try {
-    return c.json(await laptop.planJob(command, folders));
+    return c.json(await laptop.planJob(command, folders, await teasing()));
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
@@ -434,7 +437,7 @@ const showArgs = (args: Record<string, unknown>) =>
 async function useTool(offer: mcp.Offer, args: Record<string, unknown>, said: string, asked: boolean): Promise<string> {
   try {
     const result = await mcp.use(offer, args, asked);
-    return await explain(said, offer.key, result).catch(() => result.slice(0, 600));
+    return await explain(said, offer.key, result, await teasing()).catch(() => result.slice(0, 600));
   } catch (e) {
     return `${offer.key} didn't work: ${(e as Error).message}`;
   }
@@ -477,7 +480,7 @@ async function recipesIfDue(now = new Date()) {
   for (const recipe of due) {
     console.log(`recipe: running ${recipe.name} on schedule`);
     await recipes.ran(recipe.id).catch(() => {});
-    const job = recipes.run(recipe, { said: "", now: local, timeZone, offers, use: (offer, args) => mcp.use(offer, args, false) });
+    const job = recipes.run(recipe, { said: "", now: local, timeZone, offers, teasing: await teasing(), use: (offer, args) => mcp.use(offer, args, false) });
     noteWhenDone(recipe, job, "");
   }
 }
@@ -495,7 +498,7 @@ async function startOnEvent(recipe: recipes.Recipe, event: string): Promise<bool
   const timeZone = await ownerZone();
   await recipes.ran(recipe.id).catch(() => {});
   const job = recipes.run(recipe, {
-    said: "", event, now: localIso(new Date(), timeZone), timeZone, offers: await toolOffers(),
+    said: "", event, now: localIso(new Date(), timeZone), timeZone, offers: await toolOffers(), teasing: await teasing(),
     use: (offer, args) => mcp.use(offer, args, false),
   });
   noteWhenDone(recipe, job, "");
@@ -536,7 +539,7 @@ async function recipesOnEmail() {
  */
 async function startRecipe(recipe: recipes.Recipe, said: string, timeZone: string): Promise<{ say: string; confirm?: string }> {
   const job = recipes.run(recipe, {
-    said, now: localIso(new Date(), timeZone), timeZone, offers: await toolOffers(),
+    said, now: localIso(new Date(), timeZone), timeZone, offers: await toolOffers(), teasing: await teasing(),
     use: (offer, args) => mcp.use(offer, args, false),
   });
   await recipes.ran(recipe.id).catch(() => {});
@@ -589,7 +592,7 @@ app.post("/api/command", async (c) => {
   let p;
   try {
     p = await plan(typed, {
-      device, timeZone, devices: await inbox.devices(), tools, teasing: (await prefs.load()).teasing,
+      device, timeZone, devices: await inbox.devices(), tools, teasing: await teasing(),
       recipes: saved.map((r) => ({ name: r.name, about: r.instructions.slice(0, 120) })),
     }, picture, voice);
   } catch (e) {
@@ -729,7 +732,7 @@ app.post("/api/command", async (c) => {
     case "recall": {
       try {
         const found = await findInLibrary(p.text || said);
-        return json({ action: "answer", ...await recall(said, found, env("PUBLIC_URL")) });
+        return json({ action: "answer", ...await recall(said, found, env("PUBLIC_URL"), await teasing()) });
       } catch (e) {
         return c.json({ error: String(e).slice(0, 300) }, 502);
       }
