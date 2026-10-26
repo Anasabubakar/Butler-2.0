@@ -371,7 +371,7 @@ class PetService : Service() {
 
     private fun openLibrary() {
         closeMenu()
-        startActivity(Intent(this, LibraryActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        startActivity(Intent(this, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     // --- clipboard sync ------------------------------------------------------------------
