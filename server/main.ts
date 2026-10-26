@@ -230,7 +230,12 @@ app.post("/api/screen/look", async (c) => {
   const mode = got.text("mode") as LookMode | null;
   if (!mode || !LOOK_MODES.includes(mode)) return c.json({ error: "mode must be analyze or solve" }, 400);
   try {
-    return c.json({ answer: await look(got.picture, mode, got.text("question"), await teasing()) });
+    const answer = await look(got.picture, mode, got.text("question"), await teasing());
+    // Kept in the conversation, so "and the next one?" on the pet's reply box makes sense.
+    const asked = { analyze: "explain what's on my screen", solve: "solve what's on my screen", translate: "translate what's on my screen" }[mode];
+    memory.addTurn("owner", got.text("question") ?? asked, null)
+      .then(() => memory.addTurn("butler", answer, null)).catch((e) => console.error("chat", String(e).slice(0, 200)));
+    return c.json({ answer });
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
