@@ -91,7 +91,8 @@ class PetBubble(context: Context) : LinearLayout(context) {
             gravity = Gravity.CENTER_VERTICAL
             addView(spinner, LayoutParams((16 * dp).toInt(), (16 * dp).toInt()).apply { marginEnd = (10 * dp).toInt() })
             addView(mark, LayoutParams((22 * dp).toInt(), (22 * dp).toInt()).apply { marginEnd = (8 * dp).toInt() })
-            addView(line)
+            // The line takes what's left and shortens with "…", so the buttons always fit.
+            addView(line, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             for (button in listOf(stop, copy, share, close)) {
                 (button.layoutParams as LayoutParams).marginStart = (6 * dp).toInt()
                 button.visibility = View.GONE
@@ -103,6 +104,13 @@ class PetBubble(context: Context) : LinearLayout(context) {
         addView(body, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = (6 * dp).toInt() })
         line.setOnClickListener { toggleExpanded() }
         body.setOnClickListener { toggleExpanded() }
+    }
+
+    // Never wider than the screen (less a margin each side), so Copy, Share and close stay on it.
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        var cap = resources.displayMetrics.widthPixels - (16 * dp).toInt()
+        if (MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED) cap = minOf(cap, MeasureSpec.getSize(widthMeasureSpec))
+        super.onMeasure(MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST), heightMeasureSpec)
     }
 
     /**
