@@ -214,7 +214,7 @@ private fun SearchTile(nav: HomeNav) {
 
 /** Type or paste a link or a note, or pick pictures. Saved here at once, sent when online. */
 @Composable
-private fun QuickSave(online: Boolean) {
+fun QuickSave(online: Boolean) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     var text by rememberSaveable { mutableStateOf("") }
