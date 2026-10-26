@@ -132,6 +132,15 @@ export async function collections(old: readonly string[], limit = 80): Promise<s
   return rows.map((r) => r.category);
 }
 
+/** Saves still in one of the old buckets, oldest first, after `after` (a created_at). */
+export function toResort(old: readonly string[], after: string | null, limit: number) {
+  return sql<(Item & { cursor: string })[]>`
+    select ${COLUMNS}, date_trunc('milliseconds', created_at)::text as cursor from items
+    where status = 'organized' and (category is null or lower(category) = any(${[...old]}))
+      ${after ? sql`and date_trunc('milliseconds', created_at) > ${after}::timestamptz` : sql``}
+    order by created_at limit ${limit}`;
+}
+
 /** Items left pending by a crash or restart. */
 export function stalePending() {
   return sql<Item[]>`select ${COLUMNS} from items where status = 'pending' and created_at < now() - interval '2 minutes'`;
