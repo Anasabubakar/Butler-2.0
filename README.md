@@ -143,6 +143,10 @@ If you connected Google before backups existed, press the Google button to disco
 
 To restore on a new server: set Butler up as above but start only the database (`docker compose up -d db`). Download the newest `butler-*.sql.gz` from Drive into `deploy/`, run `gunzip -c butler-*.sql.gz | docker compose exec -T db psql -U butler butler`, then `docker compose up -d`. Put the files from Drive's `files` folder back in `deploy/data/files`, turning each `__` in a name back into a `/`.
 
+### Collections by topic
+
+Each save goes in a collection named for what it's actually about, not where it came from: a GitHub repo for a CRM run by AI agents lands in **AI CRM**, not "GitHub" or "tech". To work that out Butler reads the link's page, a repo's description and README, and for YouTube what's said in the video (the save is sorted again once the video has been watched). Collections that already exist are reused, so similar saves end up together; the broader field (ai, cooking) goes in the tags. Saves from before this are sorted again in the background, a few a minute, oldest first; only their collection and tags change. Set `BUTLER_RESORT=off` to skip that.
+
 ### Find similar and search by meaning
 
 With `GEMINI_API_KEY` set, every organized item also gets an embedding (numbers that capture what it's about). On the website, the **≈** button on a card shows the items closest to it, and searches add a **Close in meaning** row, so "saving money" finds "budget tips" without the exact words. Items saved before this existed are filled in when the server starts.
