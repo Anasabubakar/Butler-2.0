@@ -318,7 +318,7 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
-/* The reply box under the bubble's answer: light on ink, like the phone pet's. */
+/* The reply box under the bubble's answer: a dark box on the ink card, like the phone pet's. */
 .butler-bubble-reply {
   color: #ffffff;
   background-color: #262523;
