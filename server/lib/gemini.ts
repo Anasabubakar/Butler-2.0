@@ -92,6 +92,8 @@ export interface AskOptions {
   timeoutMs?: number;
   /** Fewer tokens per video frame, so long videos fit and cost less. */
   lowDetail?: boolean;
+  /** Standing instructions, sent as the system prompt: who Butler is and how it sounds. */
+  system?: string;
 }
 
 type Attachment = Picture | VideoLink;
@@ -167,6 +169,7 @@ async function askOneGemini<T>(
         headers: { "content-type": "application/json", "x-goog-api-key": key },
         body: JSON.stringify({
           contents: [{ role: "user", parts }],
+          ...(options.system && { systemInstruction: { parts: [{ text: options.system }] } }),
           generationConfig: {
             temperature: 0,
             responseMimeType: "application/json",
@@ -212,7 +215,10 @@ async function askBackup<T>(
       model,
       temperature: 0,
       response_format: { type: "json_object" },
-      messages: [{ role: "system", content: "Answer with one JSON object only." }, { role: "user", content }],
+      messages: [
+        { role: "system", content: [options.system, "Answer with one JSON object only."].filter(Boolean).join("\n\n") },
+        { role: "user", content },
+      ],
     }),
     signal: AbortSignal.timeout(options.timeoutMs ?? 45_000),
   });
