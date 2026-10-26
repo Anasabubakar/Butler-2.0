@@ -50,6 +50,7 @@ private val KINDS = listOf("link", "image", "video", "text", "file")
 fun LibraryScreen(
     start: LibraryStore.Filter,
     focusSearch: Boolean,
+    showBack: Boolean,
     onBack: () -> Unit,
     onItem: (String) -> Unit,
 ) {
@@ -65,8 +66,8 @@ fun LibraryScreen(
     LaunchedEffect(Unit) { if (focusSearch) runCatching { focus.requestFocus() } }
 
     Column(Modifier.fillMaxSize()) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, end = 16.dp, top = 8.dp)) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = if (showBack) 4.dp else 16.dp, end = 16.dp, top = 8.dp)) {
+            if (showBack) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
             OutlinedTextField(
                 value = search, onValueChange = { search = it },
                 placeholder = { Text("Search your library") },
