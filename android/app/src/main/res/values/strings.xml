@@ -35,8 +35,8 @@
     <string name="pet_hide">Hide Butler</string>
     <string name="pet_grabbing">Saving this…</string>
     <string name="pet_finding_share">Finding the Share button…</string>
-    <string name="pet_saved_link">saved. link's in your library with its source.</string>
-    <string name="pet_saved_screenshot">saved. screenshot's in your library.</string>
+    <string name="pet_saved_link">saved. link\'s in your library with its source.</string>
+    <string name="pet_saved_screenshot">saved. screenshot\'s in your library.</string>
     <string name="pet_copying">Copying…</string>
     <string name="pet_copied">Copied.</string>
     <string name="pet_select_first">select something first</string>
