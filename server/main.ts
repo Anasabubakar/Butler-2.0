@@ -1004,6 +1004,52 @@ app.put("/api/prefs", async (c) => {
   return c.json(await prefs.save(body as Record<string, unknown>));
 });
 
+// --- what Butler remembers about you: see it, add to it, forget it -----------------------------
+
+app.get("/api/memory", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "sign in" }, 401);
+  return c.json({ learning: (await prefs.load()).memory, memories: await memory.memories() });
+});
+app.post("/api/memory", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "sign in" }, 401);
+  const { text } = await c.req.json<{ text?: unknown }>().catch(() => ({ text: undefined }));
+  const added = await memory.remember([text], "told");
+  if (!added.length) {
+    return c.json({ error: "Butler didn't keep that: it's empty, too long, already known, or looks like a password or a card or account number." }, 400);
+  }
+  return c.json({ ok: true });
+});
+app.delete("/api/memory/:id", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "sign in" }, 401);
+  const id = c.req.param("id");
+  return UUID_RE.test(id) && await memory.forget(id) ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
+});
+app.delete("/api/memory", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "sign in" }, 401);
+  await memory.forgetAll();
+  return c.json({ ok: true });
+});
+
+// The conversation (or one save's, with ?item=): read it, start afresh, or delete it.
+const chatOf = (c: Context) => {
+  const item = c.req.query("item");
+  return item && UUID_RE.test(item) ? item : null;
+};
+app.get("/api/chat", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "sign in" }, 401);
+  return c.json(await memory.recentTurns(chatOf(c), 60));
+});
+app.post("/api/chat/new", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "sign in" }, 401);
+  await memory.newChat(chatOf(c));
+  return c.json({ ok: true });
+});
+app.delete("/api/chat", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "sign in" }, 401);
+  await memory.clearChat(chatOf(c));
+  return c.json({ ok: true });
+});
+
 app.use("/api/items/*", requireSession);
 app.use("/api/items", requireSession);
 app.use("/api/facets", requireSession);
