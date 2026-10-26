@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { organize } from "../server/lib/organize.ts";
+import { organize, tidyCategory } from "../server/lib/organize.ts";
 
 test("local model: pulls once, sends the image, queues requests and tidies the answer", async () => {
   const calls: { path: string; body: Record<string, unknown> }[] = [];
@@ -23,7 +23,7 @@ test("local model: pulls once, sends the image, queues requests and tidies the a
       organize({ ...item, image: { data: "aGk=", mediaType: "image/png" } }),
       organize(item),
     ]);
-    assert.deepEqual(a, { title: "Jollof rice", summary: "A recipe.", tags: ["food", "rice"], category: "food" });
+    assert.deepEqual(a, { title: "Jollof rice", summary: "A recipe.", tags: ["food", "rice"], category: "Food" });
     assert.deepEqual(calls.filter((c) => c.path === "/api/pull").length, 1);
     assert.deepEqual(maxActive, 1);
     const chat = calls.find((c) => c.path === "/api/chat")!.body as { messages: { images?: string[] }[]; format: unknown };
@@ -76,11 +76,44 @@ test("local mode: screenshots go to Gemini when there's a key", async () => {
       kind: "image", platform: "instagram", url: null, body: null, note: null,
       image: { data: "aGk=", mediaType: "image/jpeg" },
     });
-    assert.deepEqual(out, { title: "A reel", summary: "A saved reel.", tags: ["reel"], category: "funny" });
+    assert.deepEqual(out, { title: "A reel", summary: "A saved reel.", tags: ["reel"], category: "Funny" });
     assert.equal(gemini, 1);
   } finally {
     Deno.env.delete("BUTLER_AI");
     Deno.env.delete("GEMINI_API_KEY");
+    await server.shutdown();
+  }
+});
+
+test("collections keep one spelling and never come back empty", () => {
+  assert.equal(tidyCategory("ai crm", ["AI CRM", "Nigerian Recipes"]), "AI CRM");
+  assert.equal(tidyCategory(' "Strength  Training". '), "Strength Training");
+  assert.equal(tidyCategory("salary negotiation"), "Salary Negotiation");
+  assert.equal(tidyCategory("React UI"), "React UI");
+  assert.equal(tidyCategory("  "), "Other");
+});
+
+test("the model is told to name the real topic, reuse collections and use what the page says", async () => {
+  let prompt = "";
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+    if (new URL(req.url).pathname === "/api/pull") return Response.json({ status: "success" });
+    prompt = (await req.json()).messages[0].content;
+    const answer = { title: "Twenty", summary: "An AI CRM.", tags: ["ai", "crm"], category: "ai crm" };
+    return Response.json({ message: { content: JSON.stringify(answer) } });
+  });
+  Deno.env.set("BUTLER_AI", "local");
+  Deno.env.set("OLLAMA_URL", `http://localhost:${server.addr.port}`);
+  try {
+    const out = await organize({
+      kind: "link", platform: "github", url: "https://github.com/twentyhq/twenty", body: null, note: null,
+      pageText: "README: A CRM where AI agents do the busywork.", collections: ["AI CRM", "Nigerian Recipes"],
+    });
+    assert.equal(out.category, "AI CRM");
+    assert.match(prompt, /README: A CRM where AI agents/);
+    assert.match(prompt, /"AI CRM", "Nigerian Recipes"/);
+    assert.match(prompt, /Never name the platform/);
+  } finally {
+    Deno.env.delete("BUTLER_AI");
     await server.shutdown();
   }
 });
