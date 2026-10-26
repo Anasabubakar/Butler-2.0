@@ -59,7 +59,9 @@ export async function migrate(dir: string) {
   }
 }
 
-export async function insertItem(row: Pick<Item, "device" | "kind" | "url" | "body" | "note" | "mime" | "platform">) {
+export async function insertItem(
+  row: Pick<Item, "device" | "kind" | "url" | "body" | "note" | "mime" | "platform"> & { client_id?: string | null },
+) {
   const [item] = await sql<{ id: string }[]>`insert into items ${sql(row)} returning id`;
   return item.id;
 }
