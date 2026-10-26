@@ -3,7 +3,7 @@
 import { deviceTitle } from "./devices";
 import { type Facet, type Item, label, media, openItem, openTarget, tintOf } from "./library";
 import { href, ringPhone, shell } from "./shell";
-import { ago, api, button, h, icon, status } from "./ui";
+import { ago, api, button, fill, h, icon, status } from "./ui";
 
 interface Device { name: string; kind: "phone" | "laptop"; last_seen: string }
 interface RecipeRow { id: string; name: string; schedule: string; run_at: string | null; email_query: string | null; has_hook: boolean; last_run_at: string | null }
@@ -85,7 +85,7 @@ export async function renderHome(app: HTMLElement) {
     : empty("Nothing saved yet. On your phone, use Share → Save to Butler from any app."));
 
   const waiting = recipes?.waiting.length ?? 0;
-  inbox.replaceChildren(
+  fill(inbox,
     waiting ? h("a", { class: "home-waiting", href: href("inbox") }, icon("alert"),
       h("span", {}, `${waiting} ${waiting === 1 ? "step waits" : "steps wait"} for your yes`), icon("chevron")) : null,
     sent.length

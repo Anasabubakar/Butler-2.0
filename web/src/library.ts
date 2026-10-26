@@ -1,7 +1,7 @@
 // The library: every save as a card in a Bento grid, with search (by words and by meaning),
 // collection filters, and each card's actions: find similar, share, remind me later, delete.
 import { href, head, shell } from "./shell";
-import { ago, api, button, h, icon, iconButton, SignedOut, toast } from "./ui";
+import { ago, api, button, fill, h, icon, iconButton, SignedOut, toast } from "./ui";
 
 export interface Item {
   id: string;
@@ -189,7 +189,7 @@ function renderFilters() {
     ? h("button", { type: "button", class: "pill pill--dashed", onclick: () => { showAllCollections = true; renderFilters(); } },
       `${hidden.length} more`)
     : null;
-  filtersEl.replaceChildren(
+  fill(filtersEl,
     h("div", { class: "pills pills--wrap", role: "group", "aria-label": "Collections" },
       h("button", { type: "button", class: "pill", "aria-pressed": String(!state.filter), onclick: () => { state.filter = null; refresh(); } },
         "All", total ? h("span", { class: "count" }, String(total)) : null),
@@ -503,7 +503,7 @@ function card(item: Item): HTMLElement {
   });
 
   const where = label(item.platform ?? item.kind);
-  el.append(
+  fill(el,
     pic ? h("div", { class: "save__media" }, pic, h("span", { class: "save__badge" }, where)) : null,
     h("div", { class: "save__body" },
       h("div", { class: "save__top" },
