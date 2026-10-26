@@ -56,6 +56,10 @@ class AskActivity : AppCompatActivity() {
     private lateinit var news: TextView
     private var busy = false
     private var laptop = false
+    /** What Butler said that you're answering, until it's been sent along once. */
+    private var replyTo: String? = null
+    /** The save you're asking about, when you came from the library. */
+    private var item: String? = null
 
     private val listen = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val heard = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
@@ -94,6 +98,15 @@ class AskActivity : AppCompatActivity() {
         val where = findViewById<MaterialButtonToggleGroup>(R.id.ask_where)
         where.addOnButtonCheckedListener { _, id, checked -> if (checked) setLaptop(id == R.id.ask_laptop) }
         if (intent.getBooleanExtra(EXTRA_LAPTOP, false)) where.check(R.id.ask_laptop) else setLaptop(false)
+        replyTo = intent.getStringExtra(EXTRA_REPLY_TO)?.takeIf { it.isNotBlank() }
+        item = intent.getStringExtra(EXTRA_ITEM)?.takeIf { it.isNotBlank() }
+        findViewById<TextView>(R.id.ask_context).apply {
+            val about = item?.let { getString(R.string.ask_about_save, intent.getStringExtra(EXTRA_ITEM_TITLE).orEmpty()) }
+            val answering = replyTo?.let { getString(R.string.ask_replying_to, it.trim().replace(Regex("\\s+"), " ")) }
+            text = about ?: answering
+            visibility = if (text.isNullOrBlank()) View.GONE else View.VISIBLE
+        }
+        if (item != null) where.visibility = View.GONE // a save is talked about here, not on the laptop
         findViewById<Button>(R.id.ask_stop).setOnClickListener { stopLaptop(off = false) }
         findViewById<Button>(R.id.ask_off).setOnClickListener {
             AlertDialog.Builder(this)
@@ -209,8 +222,11 @@ class AskActivity : AppCompatActivity() {
         setBusy(true)
         val shot = intent.getStringExtra(EXTRA_SHOT)?.let(::File)?.takeIf { it.exists() }?.readBytes()
         lifecycleScope.launch {
-            val message = runCatching { act(ButlerClient(Config(this@AskActivity)).command(text, shot), shot) }
-                .getOrElse { getString(R.string.pet_failed, it.message ?: it.toString()) }
+            val message = runCatching {
+                val result = ButlerClient(Config(this@AskActivity)).command(text, shot, replyTo, item)
+                replyTo = null // Butler has it in the conversation now
+                act(result, shot)
+            }.getOrElse { getString(R.string.pet_failed, it.message ?: it.toString()) }
             setBusy(false)
             reply(message)
             input.text.clear()
@@ -364,20 +380,35 @@ class AskActivity : AppCompatActivity() {
         private const val EXTRA_SHOT = "shot"
         private const val EXTRA_LINK = "link"
         private const val EXTRA_TALK = "talk"
+        private const val EXTRA_REPLY_TO = "reply_to"
+        private const val EXTRA_ITEM = "item"
+        private const val EXTRA_ITEM_TITLE = "item_title"
         const val EXTRA_LAPTOP = "laptop"
 
         /**
          * Opens the sheet over the current app, with a screenshot file and the page's link if
-         * there is one. `laptop` starts it switched to My laptop.
+         * there is one. `laptop` starts it switched to My laptop. `replyTo` is what Butler said
+         * that you're answering, from the pet's bubble.
          */
-        fun open(context: Context, shot: File?, link: String?, talk: Boolean, laptop: Boolean = false) {
+        fun open(context: Context, shot: File?, link: String?, talk: Boolean, laptop: Boolean = false, replyTo: String? = null) {
             context.startActivity(
                 Intent(context, AskActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
                     .putExtra(EXTRA_SHOT, shot?.absolutePath)
                     .putExtra(EXTRA_LINK, link)
                     .putExtra(EXTRA_TALK, talk)
-                    .putExtra(EXTRA_LAPTOP, laptop),
+                    .putExtra(EXTRA_LAPTOP, laptop)
+                    .putExtra(EXTRA_REPLY_TO, replyTo),
+            )
+        }
+
+        /** Opens the sheet to ask about (or give orders about) one save in your library. */
+        fun aboutSave(context: Context, id: String, title: String) {
+            context.startActivity(
+                Intent(context, AskActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra(EXTRA_ITEM, id)
+                    .putExtra(EXTRA_ITEM_TITLE, title),
             )
         }
     }
