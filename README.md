@@ -61,3 +61,54 @@ Most "save for later" apps are a pile you never open again. Butler is different 
 1. **It does the sorting.** Share a TikTok, a GitHub repo, a screenshot or a recipe link and Butler reads it, writes a title and summary, and files it under what it is actually about. Search by meaning, not just by words, or just ask: *"what was that jollof recipe I saved?"*
 2. **It lives on your devices.** Little Butler peeks from the edge of your phone and laptop screens. Tap it to save, copy, analyze or translate what you're looking at, send it to your other device, or tell it what to do in plain words.
 3. **It's yours.** Butler runs on one small server you own (a free cloud VM works). Your saves, files and accounts never sit in someone else's database.
+
+## 🚀 Features
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### 📥 Save and find
+- **Share → Save to Butler** from any Android app, or tap the pet on the laptop
+- AI **titles, summaries, tags and topic collections**
+- **Search by meaning** and **find similar**
+- **Ask your library** questions, with sources
+- **Video notes**: key points from YouTube videos
+- **Price watch**, **dead-link rescue**, **share a note** by secret link
+
+</td>
+<td width="50%" valign="top">
+
+### 🐾 A pet on every screen
+- **Little Butler** peeks from the screen edge on Android and GNOME
+- **Save, Copy, Analyze, Solve, Translate** whatever is on screen
+- **Ask Butler** by typing or talking
+- Taps, swipes and types for you, step by step, and **stops before paying, sending or deleting**
+- Works **offline** on Android and syncs later
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### 🔁 Devices that talk
+- **Send to laptop / phone**: links, text, screenshots, files
+- **Clipboard sync** both ways, plus **clipboard history** on the laptop
+- **Ring my phone** (even on silent) and ring my laptop
+- **Control the laptop from the phone**, with a secret word and a kill switch
+
+</td>
+<td width="50%" valign="top">
+
+### ⚡ Automate
+- **Connections (MCP)**: Zapier, Notion, GitHub or your own server
+- **Recipes** you run by name, **on a schedule**, **on new email**, or **from a webhook**
+- Anything that sends, changes or deletes **waits for your yes**
+- **Morning brief**, **weekly recap**, reminders, focus timer, spending log
+- **Google Calendar, Gmail and Drive backups**
+
+</td>
+</tr>
+</table>
+
+Every feature, with its settings, is in **[docs/features.md](docs/features.md)**.
