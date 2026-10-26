@@ -1,16 +1,16 @@
 // Preferences that follow you to every device (Figma B2 · 16 Settings & preferences).
 // Per-device switches (voice replies, microphone, wake listening) stay on each device.
-import { TEASING, type Teasing } from "./command.ts";
+import { TEASING, type Teasing } from "./persona.ts";
 import * as settings from "./settings.ts";
 
 export interface Prefs {
-  /** Occasional dry remarks between tasks. Off unless you turn it on. */
+  /** How much of the persona's sass and light roasting you get. On unless you turn it down. */
   teasing: Teasing;
   /** Silence non-essential cues and interruptions on every device. */
   quiet: boolean;
 }
 
-export const DEFAULTS: Prefs = { teasing: "off", quiet: false };
+export const DEFAULTS: Prefs = { teasing: "on", quiet: false };
 
 export async function load(): Promise<Prefs> {
   const teasing = await settings.get("pref_teasing");
