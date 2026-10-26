@@ -265,3 +265,20 @@ p { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 0ms !important; }
 }
+
+/* --- dialogs ----------------------------------------------------------------------------------- */
+.modal {
+  width: min(100% - 32px, 620px); max-height: min(100dvh - 48px, 860px); padding: 0; overflow: hidden;
+  border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); color: var(--text);
+  box-shadow: var(--shadow-2); animation: modal-in var(--base) var(--ease);
+}
+.modal[open] { display: flex; flex-direction: column; }
+.modal::backdrop { background: rgb(0 0 0 / 40%); backdrop-filter: blur(2px); }
+.modal__head { display: flex; align-items: center; gap: 12px; padding: 18px 18px 12px 24px; }
+.modal__head h2 { flex: 1; font-size: 18px; }
+.modal__body { display: grid; gap: 14px; padding: 0 24px 24px; overflow-y: auto; }
+@keyframes modal-in { from { opacity: 0; transform: translateY(10px) scale(.98); } }
+@media (max-width: 759px) {
+  .modal { width: 100%; max-width: 100%; margin: auto 0 0; max-height: 92dvh; border-radius: 24px 24px 0 0; border-bottom: 0; }
+  .modal__body { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+}
