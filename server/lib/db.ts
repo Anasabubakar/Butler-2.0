@@ -107,6 +107,15 @@ export async function itemIdByClientId(clientId: string): Promise<string | undef
   return row?.id;
 }
 
+/** Items changed after `after` (micros since 1970, then id), oldest change first, each with its own cursor. */
+export function changedSince(after: { micros: bigint; id: string }, limit: number) {
+  return sql<(Item & { cursor_micros: string })[]>`
+    select ${COLUMNS}, (extract(epoch from updated_at) * 1000000)::bigint::text as cursor_micros from items
+    where ((extract(epoch from updated_at) * 1000000)::bigint, id) > (${after.micros.toString()}::bigint, ${after.id}::uuid)
+    order by updated_at, id
+    limit ${limit}`;
+}
+
 export async function deleteItem(id: string): Promise<Item | undefined> {
   const [item] = await sql<Item[]>`delete from items where id = ${id} returning ${COLUMNS}`;
   return item;
