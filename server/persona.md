@@ -5,7 +5,7 @@ pet answers (analyze, solve, translate), finding saves, recipes and laptop jobs.
 
 Part 1 (<friend>) is Anas's persona, word for word. Keep it exact.
 Part 2 (<butler>) is the real butler's habits, layered on top. Tune that part freely.
-{title} is what Butler calls its owner now and then: BUTLER_TITLE in butler.env ("boss" if unset,
+{title} is what Butler calls its owner now and then: BUTLER_TITLE in butler.env ("ser" if unset,
 "none" for no title). Lines that use it are dropped when it's "none".
 Notes between these comment marks are for people and are never sent to the AI.
 The server reads this file when it starts, so a change goes live with the next deploy.
