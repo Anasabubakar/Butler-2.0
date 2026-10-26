@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { cleanUrl, extractUrl, kindFor, platformFor } from "../server/lib/rules.ts";
-import { parseHtmlMeta } from "../server/lib/meta.ts";
+import { pageText, parseHtmlMeta } from "../server/lib/meta.ts";
 
 test("extractUrl finds the link inside shared text", () => {
   assert.equal(
@@ -53,6 +53,14 @@ test("parseHtmlMeta reads Open Graph tags in either attribute order", () => {
     title: "Real Title",
     description: 'A "quoted" description',
     image: "https://img.example.com/a.jpg",
+    text: null,
   });
   assert.equal(parseHtmlMeta("<title>Only &amp; title</title>").title, "Only & title");
+});
+
+test("pageText keeps what the page says and drops scripts, menus and tags", () => {
+  const html = `<html><head><title>T</title></head><body><nav>Home Docs</nav>
+    <h1>Twenty&nbsp;CRM</h1><script>var x = 1;</script><p>An open source CRM &amp; AI agents.</p></body></html>`;
+  assert.equal(pageText(html), "Twenty CRM An open source CRM & AI agents.");
+  assert.equal(pageText("<body>" + "word ".repeat(2000) + "</body>")!.length, 3000);
 });
