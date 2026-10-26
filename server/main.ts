@@ -876,7 +876,7 @@ app.post("/api/command/confirm", async (c) => {
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
-  return c.json({ say: `${addressed(`sent to ${pending.email.to.name}`)}.` });
+  return said(`${addressed(`sent to ${pending.email.to.name}`)}.`);
 });
 
 // The screen helper: the next single step towards a goal, from a screenshot.
