@@ -840,6 +840,10 @@ app.get("/api/me", (c) => c.json({ ok: true }));
 app.use("/api/devices", requireSession);
 app.get("/api/devices", async (c) => c.json(await inbox.devices()));
 
+// The website's Inbox: notes, reminders, links and files Butler and your devices sent.
+app.use("/api/messages", requireSession);
+app.get("/api/messages", async (c) => c.json(await inbox.recent()));
+
 // Preferences every device shares. Devices read them with the token; you change them on the website.
 app.get("/api/prefs", async (c) => {
   if (!(await signedIn(c))) return c.json({ error: "sign in" }, 401);
