@@ -46,3 +46,7 @@ Read [`AGENTS.md`](AGENTS.md) before touching anything visual. In short: logos c
 ## Releases
 
 Releases are cut from `main` by the **Release** workflow (Actions → Release → Run workflow, with a version like `v0.3.0`). It builds the Android APK and the GNOME extension, tags the commit, and publishes the notes for that version from [`CHANGELOG.md`](CHANGELOG.md). Add your change under **Unreleased** there.
+
+## License
+
+By sending a pull request, you agree that your contribution is licensed under the [AGPL-3.0](LICENSE), like the rest of Butler.

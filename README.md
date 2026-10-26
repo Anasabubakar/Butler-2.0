@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Anasabubakar/Butler-2.0/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Anasabubakar/Butler-2.0/ci.yml?branch=main&style=for-the-badge&label=CI&logo=githubactions&logoColor=white"></a>
   <a href="https://github.com/Anasabubakar/Butler-2.0/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Anasabubakar/Butler-2.0?style=for-the-badge&color=6D28D9&logo=github"></a>
-  <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-to_be_decided-lightgrey?style=for-the-badge"></a>
+  <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=for-the-badge"></a>
   <a href="CONTRIBUTING.md"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-16A34A?style=for-the-badge"></a>
 </p>
 
@@ -267,7 +267,9 @@ Bug reports, device test results and pull requests are all welcome. Start with *
 
 ## License
 
-**To be decided.** Butler isn't under an open-source license yet, so for now all rights are reserved. A license will be added before the repository goes public.
+Butler's code is free software under the [GNU Affero General Public License v3.0](LICENSE). You can use, change and share it. If you run a changed Butler as a service for other people, you have to share your changes with them too.
+
+The Butler 2.0 logos in `design/brand/` and the Little Butler character in `design/little-butler/` are not covered by that license. They stay © Anas Abubakar, all rights reserved. You can use them unchanged to run or talk about Butler, but not for your own product or a fork with a different name.
 
 <div align="center">
 <br>
