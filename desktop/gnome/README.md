@@ -32,7 +32,7 @@ Tell it where Butler is, using the same save URL and token as the phone app:
 ```sh
 mkdir -p ~/.config/butler
 cat > ~/.config/butler/pet.json <<'JSON'
-{ "url": "https://butler.anasmasama.dev/api/save", "token": "PASTE-YOUR-BUTLER-TOKEN" }
+{ "url": "https://butler.yourdomain.com/api/save", "token": "PASTE-YOUR-BUTLER-TOKEN" }
 JSON
 chmod 600 ~/.config/butler/pet.json
 ```
