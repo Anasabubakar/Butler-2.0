@@ -1,7 +1,7 @@
 // Home: a Bento dashboard. Ask Butler first, then what's new: recent saves, your inbox,
 // collections, automations and devices, each linking to its own page.
 import { deviceTitle } from "./devices";
-import { type Facet, type Item, label, media, openItem, openTarget, tintOf } from "./library";
+import { type Facet, type Item, label, media, openItem, openTarget, tintOf, titleOf } from "./library";
 import { href, ringPhone, shell } from "./shell";
 import { ago, api, button, fill, h, icon, status } from "./ui";
 
@@ -54,7 +54,7 @@ export async function renderHome(app: HTMLElement) {
         h("div", { class: "pills" }, ...IDEAS.map((idea) =>
           h("button", { type: "button", class: "pill", onclick: () => { input.value = idea; input.focus(); } }, idea))),
       ),
-      h("div", { class: "tile tile--4" }, tileHead("At a glance", "sparkle"), stats),
+      h("div", { class: "tile tile--4 home-glance" }, tileHead("At a glance", "sparkle"), stats),
       h("div", { class: "tile tile--8" }, tileHead("Recently saved", "library", { text: "Library", to: href("library") }), recent),
       h("div", { class: "tile tile--4 tile--butter" }, tileHead("Inbox", "inbox", { text: "Open", to: href("inbox") }), inbox),
       h("div", { class: "tile tile--4" }, tileHead("Collections", "filter", { text: "All", to: href("library") }), collections),
@@ -143,7 +143,7 @@ function empty(text: string): HTMLElement {
 /** A small card for a recent save. */
 function mini(item: Item): HTMLElement {
   const pic = media(item);
-  const title = item.title ?? item.url ?? item.body?.slice(0, 80) ?? "Untitled";
+  const title = titleOf(item);
   const el = h("button", {
     type: "button", class: `mini t${tintOf(item)}`, title: openTarget(item) ? `Open “${title}”` : title,
     onclick: (e) => openItem(item, e.target as Element),
