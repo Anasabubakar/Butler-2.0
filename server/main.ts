@@ -880,9 +880,9 @@ app.post("/api/logout", (c) => {
 /** Makes `target` ring loudly so you can find it, and says what happened. */
 async function ring(target: string, from: string): Promise<string> {
   const to = await inbox.resolveTarget(target, from);
-  if (!to.length) return `I don't know your ${target} yet. Open Butler on it once so it checks in.`;
+  if (!to.length) return `don't know your ${target} yet. open Butler on it once so it checks in.`;
   await inbox.send(to, { from_device: from, kind: "ring" });
-  return `Ringing your ${target}, sir. It can take up to 20 seconds to start.`;
+  return `ringing your ${target}. can take up to 20 seconds to start.`;
 }
 
 // The website's "Ring my phone" button, for when the phone is lost and the laptop pet isn't handy.
