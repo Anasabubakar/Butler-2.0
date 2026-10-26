@@ -87,6 +87,13 @@ fun B2Theme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () 
         B2Extra(B2.White, B2.Ink, B2.White, B2.Line, B2.Muted, B2.Vermilion, B2.ActionRed)
     }
     androidx.compose.runtime.CompositionLocalProvider(LocalB2 provides extra) {
-        MaterialTheme(colorScheme = if (darkTheme) dark else light, shapes = shapes, content = content)
+        val scheme = if (darkTheme) dark else light
+        MaterialTheme(colorScheme = scheme, shapes = shapes) {
+            // Text with no colour of its own takes the page's text colour, not black.
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.material3.LocalContentColor provides scheme.onBackground,
+                content = content,
+            )
+        }
     }
 }
