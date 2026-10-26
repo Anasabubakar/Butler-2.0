@@ -31,13 +31,13 @@ const ordinal = (n: number) => {
 };
 
 export function milestoneNote(total: number): string {
-  return `That was your ${ordinal(total)} save, sir. ` +
-    (total >= 100 ? "Ask me \"what did I save about…\" when you need something back." : "The library is filling up nicely.");
+  return `that was your ${ordinal(total)} save, sir. ` +
+    (total >= 100 ? "ask me \"what did I save about…\" when you need something back." : "library's filling up nicely 🔥");
 }
 
 export function streakNote(n: number): string {
-  return `${n} days in a row of saving, sir. ` +
-    (n >= 30 ? "That's a habit now." : "Save something tomorrow to keep it going.");
+  return `${n} days in a row of saving. ` +
+    (n >= 30 ? "that's a habit now, you're locked in 🔥" : "save something tomorrow to keep it going.");
 }
 
 /** Local dates (in `timeZone`) with at least one save, over the last year. */

@@ -14,7 +14,7 @@ The full rules are in [`design/brand/BRAND.md`](design/brand/BRAND.md). In short
 - The animated pet uses the sprite kit in [`design/little-butler/`](design/little-butler/), not a logo.
 - Website colours, radii and shadows come from [`web/src/theme.css`](web/src/theme.css): calm neutral surfaces, Bento tiles with soft tints, one violet accent, light and dark modes. `tests/theme.test.ts` checks contrast in both modes; keep it passing when you change a colour. Inter for the interface, Instrument Serif for big page titles.
 - Layout: a sidebar on wide screens, an icon rail on tablets, a top bar plus a bottom tab bar on phones. Every page has to work from 320 px up with no sideways scrolling.
-- Voice: quiet, dry, competent; "sir" now and then; no jokes in failures, sensitive tasks or confirmations; never claim something finished before it is.
+- Voice: set by [`server/persona.md`](server/persona.md), Anas's Gen Z persona word for word (never edit that part; `tests/persona.test.ts` checks it) plus a butler layer. Every AI call where Butler writes to Anas passes it as the system prompt (`voiceRules` in `server/lib/persona.ts`). No jokes in failures, sensitive tasks or confirmations; never claim something finished before it is.
 
 ## Git rules for this repository
 

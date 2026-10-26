@@ -20,7 +20,7 @@ test("the brief lists the day, reminders, yesterday's saves and one old save", (
     resurface: { title: "Smoky party jollof", link: "https://www.tiktok.com/@chef/video/1", savedOn: new Date("2026-10-01T10:00:00Z") },
   }, now, "Africa/Lagos");
   assert.equal(text, [
-    "Good morning, sir. Your day, in order: Wednesday 21 October.",
+    "morning, sir. here's your Wednesday 21 October:",
     "",
     "Today:",
     "• 10:00 Standup",
@@ -29,9 +29,9 @@ test("the brief lists the day, reminders, yesterday's saves and one old save", (
     "Reminders:",
     "• 15:00 call the bank",
     "",
-    "You saved 1 thing in the last day.",
+    "you saved 1 thing in the last day.",
     "",
-    "From your library (saved 1 Oct): Smoky party jollof",
+    "from your library (saved 1 Oct): Smoky party jollof",
     "https://www.tiktok.com/@chef/video/1",
   ].join("\n"));
 });
@@ -39,5 +39,5 @@ test("the brief lists the day, reminders, yesterday's saves and one old save", (
 test("without Google it says how to add your calendar, and greets for the hour", () => {
   const text = compose({ events: null, reminders: [], savedLastDay: 0, resurface: null },
     new Date("2026-10-21T19:00:00Z"), "Africa/Lagos");
-  assert.equal(text, "Good evening, sir. Your day, in order: Wednesday 21 October.\n\nConnect Google under Integrations on the website to see your calendar here.");
+  assert.equal(text, "evening, sir. here's your Wednesday 21 October:\n\nconnect Google under Integrations on the website and your calendar shows up here.");
 });

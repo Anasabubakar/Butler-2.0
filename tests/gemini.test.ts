@@ -90,3 +90,30 @@ test("a key that's out of quota passes the question to the next key, then to a b
     await server.shutdown();
   }
 });
+
+test("the persona goes as the system prompt, to Gemini and to the backups", async () => {
+  const systems: string[] = [];
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+    const url = new URL(req.url);
+    if (url.pathname.endsWith("/models")) return Response.json({ models: [{ name: "models/gemini-2.5-flash", supportedGenerationMethods: ["generateContent"] }] });
+    const body = await req.json();
+    if (url.pathname.endsWith("/chat/completions")) {
+      systems.push(body.messages[0].content);
+      return Response.json({ choices: [{ message: { content: '{"answer":"yep"}' } }] });
+    }
+    systems.push(body.systemInstruction?.parts?.[0]?.text ?? "none");
+    return new Response("quota exceeded", { status: 429 });
+  });
+  const at = `http://localhost:${server.addr.port}`;
+  Deno.env.set("GEMINI_URL", `${at}/v1beta-system-test`);
+  Deno.env.set("GROQ_URL", at);
+  Deno.env.set("GEMINI_API_KEY", "full");
+  Deno.env.set("GROQ_API_KEY", "g");
+  try {
+    assert.deepEqual(await askGemini("hi", [], Answer, { system: "You are Butler." }), { answer: "yep" });
+    assert.deepEqual(systems, ["You are Butler.", "You are Butler.\n\nAnswer with one JSON object only."]);
+  } finally {
+    for (const name of ["GEMINI_URL", "GROQ_URL", "GEMINI_API_KEY", "GROQ_API_KEY"]) Deno.env.delete(name);
+    await server.shutdown();
+  }
+});

@@ -220,7 +220,7 @@ fun QuickSave(online: Boolean) {
     var text by rememberSaveable { mutableStateOf("") }
     fun saved(n: Int = 1) = Toast.makeText(
         context,
-        if (online) "Saved, sir." else if (n == 1) "Saved on this phone. It goes up when you're online." else "$n saved on this phone. They go up when you're online.",
+        if (online) "saved." else if (n == 1) "Saved on this phone. It goes up when you're online." else "$n saved on this phone. They go up when you're online.",
         Toast.LENGTH_SHORT,
     ).show()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(20)) { uris ->

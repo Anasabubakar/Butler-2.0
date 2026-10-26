@@ -32,7 +32,7 @@ export async function renderSettings(app: HTMLElement) {
       prefs = await api<Prefs>("/api/prefs", { method: "PUT", body: JSON.stringify(patch) });
     };
     shared.replaceChildren(
-      toggle("Teasing", "Occasional dry remarks between tasks. Never about money, health, private messages or mistakes.",
+      toggle("Teasing", "Light sass and roasting when the moment fits. Never about money, health, private messages or mistakes.",
         prefs.teasing !== "off", (on) => save({ teasing: on ? "on" : "off" }), everywhere),
       toggle("Quiet mode", "Silence non-essential cues and interruptions.", prefs.quiet,
         (on) => save({ quiet: on }), everywhere),

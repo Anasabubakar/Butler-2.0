@@ -651,7 +651,7 @@ export default class ButlerPetExtension extends Extension {
         try {
             const done = await action();
             this._play('success');
-            this._bubble.result(done || 'Complete.', true);
+            this._bubble.result(done || 'done.', true);
         } catch (e) {
             this._play('error');
             this._bubble.result(`That didn't go through: ${e.message}`, false);
@@ -981,7 +981,7 @@ export default class ButlerPetExtension extends Extension {
                 const step = await this._send(config, '/api/screen/step',
                     {goal, done: JSON.stringify(done), kind: 'laptop'}, shot);
                 if (step.do === 'done')
-                    return step.say || 'Complete.';
+                    return step.say || 'done.';
                 if (step.do === 'stop')
                     return step.say || "I couldn't finish that.";
                 if (this._operating.stop)
@@ -1296,7 +1296,7 @@ export default class ButlerPetExtension extends Extension {
                 const step = await this._send(config, '/api/screen/step',
                     {goal, done: JSON.stringify(done), kind: 'laptop', limit: String(REMOTE_STEPS)}, shot);
                 if (step.do === 'done')
-                    return {ok: true, say: step.say || 'Complete.'};
+                    return {ok: true, say: step.say || 'done.'};
                 if (step.do === 'stop')
                     return {ok: false, say: step.say || "I couldn't finish that."};
                 if (RISKY.test(`${step.say} ${step.text ?? ''}`) && step.do !== 'scroll' && step.do !== 'wait')
@@ -1462,7 +1462,7 @@ export default class ButlerPetExtension extends Extension {
     _ringPhone() {
         this._work('Ringing your phone…', async () => {
             await this._send(this._config(), '/api/send', {device: 'laptop', target: 'phone', kind: 'ring'});
-            return 'Your phone will ring within 20 seconds, even on silent.';
+            return 'your phone rings within 20 seconds, even on silent.';
         });
     }
 
@@ -1471,12 +1471,12 @@ export default class ButlerPetExtension extends Extension {
         if (this._ringing)
             return;
         this._ringing = true;
-        Main.notify('Here, sir.', `Butler is ringing this laptop${from}. Tap the pet to stop.`);
+        Main.notify('right here 🙋', `Butler is ringing this laptop${from}. Tap the pet to stop.`);
         this._spawn(['pactl', 'set-sink-mute', '@DEFAULT_SINK@', '0']);
         if (this._pet && !this._busy) {
             this._unpeek();
             this._play('summon');
-            this._bubble.working('Here, sir. Tap me to stop the ringing.', () => this._stopRinging(), 'Stop', null);
+            this._bubble.working('right here. tap me to stop the ringing.', () => this._stopRinging(), 'Stop', null);
         }
         const until = Date.now() + 60000;
         while (this._ringing && this._pet && Date.now() < until) {
