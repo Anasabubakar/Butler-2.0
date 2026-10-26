@@ -33,6 +33,7 @@ import * as prefs from "./lib/prefs.ts";
 import * as mcp from "./lib/mcp.ts";
 import * as recipes from "./lib/recipes.ts";
 import { vaultReady } from "./lib/vault.ts";
+import * as sync from "./lib/sync.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -129,6 +130,10 @@ app.post("/api/save", async (c) => {
 
   const device = field("device");
   if (!device) return c.json({ error: "device is required" }, 400);
+  // Sent again after the answer got lost: it's already here.
+  const clientId = sync.cleanClientId(field("client_id"));
+  const known = clientId ? await db.itemIdByClientId(clientId) : undefined;
+  if (known) return c.json({ id: known, again: true }, 200);
   const text = field("text");
   const note = field("note");
   const rawUrl = field("url") ?? extractUrl(text);
@@ -144,7 +149,7 @@ app.post("/api/save", async (c) => {
   const platform = platformFor(url);
   const body = text && text !== rawUrl ? text : null;
 
-  const id = await db.insertItem({ device, kind, url, body, note, mime, platform });
+  const id = await db.insertItem({ device, kind, url, body, note, mime, platform, client_id: clientId });
 
   if (hasFile) {
     const name = (file.name || "upload").replace(/[^\w.\-]+/g, "_").slice(-100) || "upload";
