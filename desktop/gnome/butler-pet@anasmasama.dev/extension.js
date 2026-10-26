@@ -321,6 +321,15 @@ export default class ButlerPetExtension extends Extension {
             return true;
         };
         this._bubble.onResize = () => this._placeBubble();
+        // The reply box: it takes the keyboard while you type, and Enter asks Butler, answering what it said.
+        this._bubble.onTyping = on => this._replyTyping(on);
+        this._bubble.onReply = (text, said) => {
+            this._pendingReply = {text, said};
+            if (this._bubbleClosed)
+                this._bubbleClosed(); // the answer being shown ends now, then the reply goes
+            else
+                this._replyNow();
+        };
         // Placed again once it's laid out, from the size it really is.
         this._bubble.actor.connect('notify::allocation', () => this._placeBubble(true));
 
@@ -343,6 +352,7 @@ export default class ButlerPetExtension extends Extension {
         this._drag?.grab.dismiss();
         this._drag = null;
         this._closeAsk();
+        this._replyTyping(false);
         this._remote?.stop();
         this._setBanner(null);
         this._remotePanel?.destroy();
@@ -627,7 +637,7 @@ export default class ButlerPetExtension extends Extension {
                 resolve(how);
             };
             const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
-                if (!this._bubble?.expanded)
+                if (!this._bubble?.expanded && !this._bubble?.replying)
                     left -= 250;
                 if (left > 0)
                     return GLib.SOURCE_CONTINUE;
@@ -663,6 +673,32 @@ export default class ButlerPetExtension extends Extension {
         this._busy = false;
         this._goHome();
         this._showRemote();
+        this._replyNow();
+    }
+
+    /** Gives the reply box the keyboard (on) or hands it back to your apps. */
+    _replyTyping(on) {
+        if (on && !this._replyGrab && this._bubble) {
+            this._replyGrab = Main.pushModal(this._bubble.actor);
+            global.stage.set_key_focus(this._bubble.replyEntry);
+        } else if (!on && this._replyGrab) {
+            Main.popModal(this._replyGrab);
+            this._replyGrab = null;
+        }
+    }
+
+    /** Sends a reply typed under the bubble, once nothing else is going on. */
+    _replyNow() {
+        const reply = this._pendingReply;
+        this._pendingReply = null;
+        if (!reply || !this._pet)
+            return;
+        if (this._busy) {
+            this._say("still busy. reply again in a moment.");
+            return;
+        }
+        this._bubble.hide();
+        this._askButler(reply.text, reply.said);
     }
 
     async _press(...keyvals) {
@@ -873,12 +909,15 @@ export default class ButlerPetExtension extends Extension {
             this._ask.text = '';
     }
 
-    /** Sends what you typed, plus a screenshot of the window you're on, and does what Butler decides. */
-    _askButler(text) {
+    /**
+     * Sends what you typed, plus a screenshot of the window you're on, and does what Butler decides.
+     * `replyTo` is what the bubble said, when you typed in its reply box.
+     */
+    _askButler(text, replyTo = null) {
         this._work('Working…', async () => {
             const config = this._config();
             const shot = await this._snapWindow().catch(() => null);
-            return this._doCommand(config, {text}, shot);
+            return this._doCommand(config, replyTo ? {text, reply_to: replyTo.slice(0, 4000)} : {text}, shot);
         }, 'think');
     }
 
@@ -1617,6 +1656,7 @@ export default class ButlerPetExtension extends Extension {
         this._busy = false;
         this._goHome();
         this._showRemote();
+        this._replyNow();
     }
 
     /** Downloads a file sent here into ~/Downloads/Butler and returns its path. */
