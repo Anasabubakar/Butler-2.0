@@ -810,6 +810,21 @@ app.post("/api/login", async (c) => {
   return c.json({ ok: true });
 });
 
+// The phone's offline copy of the library catches up here: items changed after a cursor,
+// a page at a time, and what was deleted. `since` looks back a little; `after` doesn't.
+app.get("/api/device/changes", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const since = c.req.query("since"), after = c.req.query("after");
+  const from = after ? sync.parseCursor(after) : sync.withOverlap(sync.parseCursor(since));
+  const limit = Math.min(Math.max(Number(c.req.query("limit")) || 200, 1), 500);
+  const rows = await db.changedSince(from, limit);
+  const items = rows.map(({ cursor_micros: _, ...item }) => item);
+  const last = rows.at(-1);
+  const next = last ? sync.formatCursor({ micros: BigInt(last.cursor_micros), id: last.id }) : sync.formatCursor(from);
+  const deleted = after || from.micros === 0n ? [] : await db.deletedSince(from.micros);
+  return c.json({ items, deleted, next, more: rows.length === limit });
+});
+
 // The phone app opens the library inside itself: its device token buys a website session,
 // handed back for the app to put in its own browser's cookies.
 app.post("/api/device-session", async (c) => {
