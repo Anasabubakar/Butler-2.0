@@ -124,6 +124,23 @@ export function facets() {
     (select 'tag', t, count(*)::int from items, unnest(tags) as t group by 2 order by 3 desc limit 30)`;
 }
 
+/** The library's collections, biggest first, leaving out the old fixed buckets. */
+export async function collections(old: readonly string[], limit = 80): Promise<string[]> {
+  const rows = await sql<{ category: string }[]>`
+    select category from items where category is not null and not (lower(category) = any(${[...old]}))
+    group by 1 order by count(*) desc, 1 limit ${limit}`;
+  return rows.map((r) => r.category);
+}
+
+/** Saves still in one of the old buckets, oldest first, after `after` (a created_at). */
+export function toResort(old: readonly string[], after: string | null, limit: number) {
+  return sql<(Item & { cursor: string })[]>`
+    select ${COLUMNS}, date_trunc('milliseconds', created_at)::text as cursor from items
+    where status = 'organized' and (category is null or lower(category) = any(${[...old]}))
+      ${after ? sql`and date_trunc('milliseconds', created_at) > ${after}::timestamptz` : sql``}
+    order by created_at limit ${limit}`;
+}
+
 /** Items left pending by a crash or restart. */
 export function stalePending() {
   return sql<Item[]>`select ${COLUMNS} from items where status = 'pending' and created_at < now() - interval '2 minutes'`;
@@ -134,7 +151,7 @@ export function pricesToCheck(limit: number) {
   return sql<{ id: string; url: string; title: string | null; price: string | null; price_first: string | null; price_currency: string | null }[]>`
     select id, url, title, price, price_first, price_currency from items
     where kind = 'link' and url like 'http%' and created_at > now() - interval '180 days'
-      and (price is not null or (price_checked_at is null and category = 'shopping'))
+      and (price is not null or (price_checked_at is null and (category = 'shopping' or 'shopping' = any(tags))))
       and (price_checked_at is null or price_checked_at < now() - interval '12 hours')
     order by price_checked_at nulls first limit ${limit}`;
 }

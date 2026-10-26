@@ -9,7 +9,7 @@ import {
 } from "./lib/auth.ts";
 import * as db from "./lib/db.ts";
 import { fetchMeta } from "./lib/meta.ts";
-import { organize, type RawItem } from "./lib/organize.ts";
+import { OLD_CATEGORIES, organize, type RawItem } from "./lib/organize.ts";
 import { cleanUrl, extractUrl, kindFor, platformFor } from "./lib/rules.ts";
 import { aiProviders, geminiKeys, geminiModels, geminiReady } from "./lib/gemini.ts";
 import { LOOK_MODES, type LookMode, locate, look, MAX_STEPS, nextStep } from "./lib/screen.ts";
@@ -58,14 +58,22 @@ for (const [name, value] of [["BUTLER_TOKEN", TOKEN], ["BUTLER_PASSWORD_HASH", P
 
 // --- organizing ------------------------------------------------------------------
 
+/** Adds what the link's page says, and the library's collections to choose from. */
+async function readUp(raw: RawItem) {
+  const meta = raw.url ? await fetchMeta(raw.url, raw.platform) : null;
+  if (meta) {
+    raw.pageTitle = meta.title;
+    raw.pageDescription = meta.description;
+    raw.pageText = meta.text;
+  }
+  raw.collections = await db.collections(OLD_CATEGORIES).catch(() => []);
+  return meta;
+}
+
 async function organizeItem(id: string, raw: RawItem) {
   try {
-    if (raw.url) {
-      const meta = await fetchMeta(raw.url, raw.platform);
-      raw.pageTitle = meta.title;
-      raw.pageDescription = meta.description;
-      if (meta.image) await db.updateItem(id, { thumbnail: meta.image });
-    }
+    const meta = await readUp(raw);
+    if (meta?.image) await db.updateItem(id, { thumbnail: meta.image });
     const out = await organize(raw);
     await db.updateItem(id, { ...out, status: "organized", error: null });
     await meaning.embedItem(id).catch((e) => console.error("embedding", id, String(e).slice(0, 200)));
@@ -75,12 +83,18 @@ async function organizeItem(id: string, raw: RawItem) {
   await watchVideo(id, raw);
 }
 
-/** A saved YouTube video gets its key points written down. It's extra, so failing is fine. */
+/**
+ * A saved YouTube video gets its key points written down, then is sorted again by
+ * what's actually said in it. It's extra, so failing is fine.
+ */
 async function watchVideo(id: string, raw: RawItem) {
   const link = video.videoLink(raw.url);
-  if (!link || !geminiKeys().length || env("BUTLER_VIDEO_NOTES") === "off") return;
+  if (!link || raw.details || !geminiKeys().length || env("BUTLER_VIDEO_NOTES") === "off") return;
   try {
-    await db.updateItem(id, { details: await video.watch(link, raw.pageTitle ?? null) });
+    const details = await video.watch(link, raw.pageTitle ?? null);
+    await db.updateItem(id, { details });
+    const out = await organize({ ...raw, details }).catch((e) => console.warn("video sort", id, String(e).slice(0, 200)));
+    if (out) await db.updateItem(id, { ...out, status: "organized", error: null });
     await meaning.embedItem(id); // so searching by meaning finds what was said in it
   } catch (e) {
     console.warn("video notes", id, String(e).slice(0, 300));
@@ -88,7 +102,9 @@ async function watchVideo(id: string, raw: RawItem) {
 }
 
 async function rawFor(item: db.Item): Promise<RawItem> {
-  const raw: RawItem = { kind: item.kind, platform: item.platform, url: item.url, body: item.body, note: item.note };
+  const raw: RawItem = {
+    kind: item.kind, platform: item.platform, url: item.url, body: item.body, note: item.note, details: item.details,
+  };
   const visionType = VISION_TYPES.find((t) => t === item.mime);
   if (item.file_path && visionType) {
     const bytes = await Deno.readFile(join(FILES_DIR, item.file_path)).catch(() => null);
@@ -1386,6 +1402,42 @@ async function rescueLinks() {
   }
 }
 
+// --- sorting old saves by topic ---------------------------------------------------------
+// Saves from before collections were named by topic sit in 16 broad buckets (mostly
+// "tech"). They get sorted again a few at a time, oldest first, with what their page
+// or video says. Only the collection and tags change; titles and notes stay.
+
+const RESORT_KEY = "resort_through";
+let resorting = false;
+
+async function resortOld() {
+  if (resorting || env("BUTLER_RESORT") === "off") return;
+  resorting = true;
+  try {
+    const through = await settings.get(RESORT_KEY);
+    if (through === "done") return;
+    const batch = await db.toResort(OLD_CATEGORIES, through, 5);
+    if (!batch.length) {
+      await settings.set(RESORT_KEY, "done");
+      console.log("resort: every old save has a topic now");
+      return;
+    }
+    for (const item of batch) {
+      try {
+        const raw = await rawFor(item);
+        await readUp(raw);
+        const out = await organize(raw);
+        await db.updateItem(item.id, { category: out.category, tags: out.tags });
+      } catch (e) {
+        console.warn("resort", item.id, String(e).slice(0, 200));
+      }
+      await settings.set(RESORT_KEY, item.cursor);
+    }
+  } finally {
+    resorting = false;
+  }
+}
+
 // --- start ---------------------------------------------------------------------------
 
 if (import.meta.main) {
@@ -1400,6 +1452,7 @@ if (import.meta.main) {
   setInterval(() => recipesOnEmail().catch((e) => console.error("recipe email:", e)), 2 * 60_000);
   setInterval(() => watchPrices().catch((e) => console.error("prices:", e)), 30 * 60_000);
   setInterval(() => rescueLinks().catch((e) => console.error("links:", e)), 10 * 60_000);
+  setInterval(() => resortOld().catch((e) => console.error("resort:", e)), 60_000);
   if (geminiReady()) console.log("AI providers, in order:", aiProviders().join(", "));
   if (geminiKeys().length) geminiModels().then((m) => console.log("Gemini models, in order:", m.join(", ")));
   Deno.serve({ port: PORT, hostname: env("HOST", "0.0.0.0") }, app.fetch);
