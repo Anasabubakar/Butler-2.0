@@ -116,6 +116,14 @@ export function changedSince(after: { micros: bigint; id: string }, limit: numbe
     limit ${limit}`;
 }
 
+/** Ids of items deleted at or after `micros`. */
+export async function deletedSince(micros: bigint): Promise<string[]> {
+  const rows = await sql<{ id: string }[]>`
+    select id from deleted_items where (extract(epoch from deleted_at) * 1000000)::bigint >= ${micros.toString()}::bigint
+    order by deleted_at limit 5000`;
+  return rows.map((r) => r.id);
+}
+
 export async function deleteItem(id: string): Promise<Item | undefined> {
   const [item] = await sql<Item[]>`delete from items where id = ${id} returning ${COLUMNS}`;
   return item;
