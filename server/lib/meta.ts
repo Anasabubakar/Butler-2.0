@@ -4,9 +4,11 @@ export interface PageMeta {
   title: string | null;
   description: string | null;
   image: string | null;
+  text?: string | null; // what the page says, so the organizer knows what it's about
 }
 
 const EMPTY: PageMeta = { title: null, description: null, image: null };
+const TEXT_CHARS = 3000;
 
 const OEMBED: Record<string, (url: string) => string> = {
   tiktok: (u) => `https://www.tiktok.com/oembed?url=${encodeURIComponent(u)}`,
@@ -43,12 +45,26 @@ export function metaTag(html: string, key: string): string | null {
   return v ? decode(v) : null;
 }
 
+/** The words a reader would see, without menus, scripts or styles. */
+export function pageText(html: string): string | null {
+  const body = html.match(/<body[^>]*>([\s\S]*)/i)?.[1] ?? html.replace(/<head\b[\s\S]*?<\/head>/i, " ");
+  const text = decode(
+    body
+      .replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[\s\S]*?<\/\1>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/\s+/g, " "),
+  );
+  return text ? text.slice(0, TEXT_CHARS) : null;
+}
+
 export function parseHtmlMeta(html: string): PageMeta {
   const titleTag = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1];
   return {
     title: metaTag(html, "og:title") ?? (titleTag ? decode(titleTag) : null),
     description: metaTag(html, "og:description") ?? metaTag(html, "description"),
     image: metaTag(html, "og:image"),
+    text: pageText(html),
   };
 }
 
