@@ -1,5 +1,5 @@
 // The library: every save as a card in a Bento grid, with search (by words and by meaning),
-// collection filters, and each card's actions: find similar, share, remind me later, delete.
+// collection filters, and each card's actions: ask Butler about it, find similar, share, remind me later, delete.
 import { href, head, shell } from "./shell";
 import { ago, api, button, fill, h, icon, iconButton, SignedOut, toast } from "./ui";
 
@@ -574,6 +574,7 @@ function card(item: Item): HTMLElement {
     h("footer", { class: "save__foot" },
       h("span", { class: "save__meta" }, pic ? ago(item.created_at) : `${where} · ${ago(item.created_at)}`),
       h("span", { class: "save__actions" },
+        iconButton("chat", "Ask Butler about this", () => { location.hash = `#/ask?item=${item.id}`; }),
         iconButton("similar", "Find similar", () => showSimilar(item)),
         iconButton("share", "Share a link to this save", () => shareNote(item)),
         iconButton("remind", "Remind me later", (e) => snooze(item, e.currentTarget as HTMLElement)),

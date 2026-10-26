@@ -211,6 +211,11 @@ class PetService : Service() {
             }
             onCopy = { copyToClipboard(it); progressNote(getString(R.string.pet_copied)) }
             onShare = { shareText(it) }
+            onReply = { said ->
+                bubbleTurn++
+                hideBubble()
+                askButler(talk = false, replyTo = said)
+            }
         }
         panel = LinearLayout(ui).apply {
             orientation = LinearLayout.VERTICAL
@@ -627,8 +632,11 @@ class PetService : Service() {
         }
     }
 
-    /** Ask Butler: takes a screenshot of what you're looking at, then opens the typing (or talking) sheet. */
-    private fun askButler(talk: Boolean) {
+    /**
+     * Ask Butler: takes a screenshot of what you're looking at, then opens the typing (or talking)
+     * sheet. `replyTo` is what the bubble said, when you're answering it.
+     */
+    private fun askButler(talk: Boolean, replyTo: String? = null) {
         if (busy) return
         busy = true
         pet.setState("listen")
@@ -639,7 +647,7 @@ class PetService : Service() {
             val link = HandsService.instance?.browserUrl()
             busy = false
             closeMenu()
-            AskActivity.open(this@PetService, shot, link, talk)
+            AskActivity.open(this@PetService, shot, link, talk, replyTo = replyTo)
         }
     }
 

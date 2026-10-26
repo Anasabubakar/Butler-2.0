@@ -1,7 +1,7 @@
 // B2/PetBubble over the pet's head (Figma B2 · 17), like the phone pet's (PetBubble.kt):
 // where and what state on top ("My laptop • Working"), one short line of what it's doing,
-// and Stop. When it's done: a tick (or a "!"), the first line of the answer, and Copy and ×.
-// Click the line to read all of it.
+// and Stop. When it's done: a tick (or a "!"), the first line of the answer, Copy and ×, and a
+// reply box under it to answer back. Click the line to read all of it.
 import Clutter from 'gi://Clutter';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
@@ -32,6 +32,9 @@ export class Bubble {
         this.onCopy = null;     // Copy pressed, with the whole text
         this.onTap = null;      // the line clicked; return true if that was handled
         this.onResize = null;   // what it says changed, so it can be placed again
+        this.onReply = null;    // you typed a reply and pressed Enter: (what you said, what the bubble said)
+        this.onTyping = null;   // the reply box wants the keyboard (true) or is done with it (false)
+        this._typing = false;
         this._full = '';
         this._expanded = false;
         this._working = false;
@@ -74,6 +77,28 @@ export class Bubble {
         });
         this._body.visible = false;
         this.actor.add_child(this._body);
+
+        // Answer back: a follow-up, a correction, a new order. Butler remembers the conversation.
+        this._reply = new St.Entry({hint_text: 'Reply to Butler…', style_class: 'butler-bubble-reply', can_focus: true, x_expand: true, visible: false});
+        // Typing only reaches the box once the pet holds the keyboard, so take it on click.
+        this._reply.clutter_text.connect('button-press-event', () => {
+            this._setTyping(true);
+            return Clutter.EVENT_PROPAGATE;
+        });
+        this._reply.clutter_text.connect('activate', () => {
+            const text = this._reply.text.trim();
+            this._reply.text = '';
+            this._setTyping(false);
+            if (text)
+                this.onReply?.(text, this._full);
+        });
+        this._reply.clutter_text.connect('key-press-event', (_actor, event) => {
+            if (event.get_key_symbol() !== Clutter.KEY_Escape)
+                return Clutter.EVENT_PROPAGATE;
+            this._setTyping(false);
+            return Clutter.EVENT_STOP;
+        });
+        this.actor.add_child(this._reply);
     }
 
     destroy() {
@@ -88,6 +113,16 @@ export class Bubble {
 
     get working() {
         return this._working;
+    }
+
+    /** True while you're typing a reply, so it doesn't go away under you either. */
+    get replying() {
+        return this._typing;
+    }
+
+    /** The reply box, to give it the keyboard. */
+    get replyEntry() {
+        return this._reply;
     }
 
     /** All of what it says now. */
@@ -112,6 +147,7 @@ export class Bubble {
         this._stop.visible = Boolean(onStop);
         this._copy.visible = false;
         this._close.visible = false;
+        this._showReply(false);
         this._changed();
     }
 
@@ -137,6 +173,7 @@ export class Bubble {
         this._stop.visible = false;
         this._copy.visible = text.length > 40;
         this._close.visible = true;
+        this._showReply(Boolean(this.onReply));
         // Long answers open up straight away; short ones fit on the line.
         if (text.length > 90 || text.includes('\n'))
             this._setExpanded(true);
@@ -158,6 +195,7 @@ export class Bubble {
     }
 
     hide() {
+        this._showReply(false);
         this._working = false;
         this._stopAction = null;
         this._spinner.stop();
@@ -176,6 +214,25 @@ export class Bubble {
         this._mark.visible = false;
         this._setExpanded(false);
         this.actor.show();
+    }
+
+    /** Hands the keyboard back without sending, keeping what you typed. */
+    stopTyping() {
+        this._setTyping(false);
+    }
+
+    _showReply(on) {
+        if (!on)
+            this._setTyping(false);
+        this._reply.text = '';
+        this._reply.visible = on;
+    }
+
+    _setTyping(on) {
+        if (this._typing === on)
+            return;
+        this._typing = on;
+        this.onTyping?.(on);
     }
 
     _tapped() {

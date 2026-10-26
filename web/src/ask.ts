@@ -1,7 +1,10 @@
 // Ask Butler on the website. Chat and voice share one status language; speaker and microphone
 // are separate switches; a laptop task shows its steps and a Stop button the whole time;
 // email waits for your yes. #/ask?q=… (from the Home ask box) asks straight away.
+// Butler remembers the conversation: it shows here when you come back, and New chat starts afresh.
+// #/ask?item=<id> (Ask about this, on a library card) is a chat about that one save.
 import { deviceTitle } from "./devices";
+import { type Item, titleOf } from "./library";
 import { local } from "./local";
 import { href, page } from "./shell";
 import { api, busy, button, h, icon, inlineError, reducedMotion, SignedOut, status, type State, toast } from "./ui";
@@ -15,6 +18,7 @@ interface Reply {
   confirm?: string;
 }
 interface LaptopStatus { device: string; state: string; title: string; text: string; at: string }
+interface Turn { role: "owner" | "butler" | "break"; text: string; created_at: string }
 
 const THIS_DEVICE = "this";
 const WEB_DEVICE = "Website";
@@ -22,6 +26,9 @@ const WEB_DEVICE = "Website";
 export async function renderAsk(app: HTMLElement) {
   const params = new URLSearchParams(location.hash.split("?")[1] ?? "");
   const wanted = params.get("target") ?? THIS_DEVICE;
+  const itemId = params.get("item");
+  const save = itemId ? (await api<Item[]>(`/api/items?ids=${encodeURIComponent(itemId)}`).catch(() => [] as Item[]))[0] ?? null : null;
+  const chat = save ? `?item=${save.id}` : "";
   const devices = await api<Device[]>("/api/devices").catch(() => [] as Device[]);
   const laptops = devices.filter((d) => d.kind === "laptop");
 
@@ -31,9 +38,28 @@ export async function renderAsk(app: HTMLElement) {
   );
   target.value = laptops.some((d) => d.name === wanted) ? wanted : THIS_DEVICE;
 
-  const log = h("div", { class: "ask__log", "aria-live": "polite" },
-    h("p", { class: "ask__hint" }, "Ask about something you saved, set a reminder, add an event, email someone or log a spend."),
-  );
+  const hint = () => h("p", { class: "ask__hint" }, save
+    ? "Ask anything about this save, or tell Butler what to do with it: remind you, add it to your calendar, email it, rename it, send it to a connected app."
+    : "Ask about something you saved, set a reminder, add an event, email someone or log a spend. Butler remembers what you talk about.");
+  const log = h("div", { class: "ask__log", "aria-live": "polite" }, hint());
+  const fresh = button("New chat", {
+    kind: "ghost", small: true, icon: "plus", title: "Start afresh: Butler stops reading the chat so far",
+    onclick: async (e) => {
+      try {
+        await busy(e.currentTarget as HTMLButtonElement, () => api(`/api/chat/new${chat}`, { method: "POST" }));
+        log.replaceChildren(hint());
+        input.focus();
+      } catch (err) {
+        if (!(err instanceof SignedOut)) toast(`Couldn't start a new chat: ${(err as Error).message}`);
+      }
+    },
+  });
+  const about = save
+    ? h("div", { class: "ask__about" },
+      h("span", { class: "ask__about-label" }, "Talking about"),
+      h("strong", {}, titleOf(save)),
+      h("a", { href: href("library") }, "Back to library"))
+    : null;
   const input = h("input", { class: "ask__input", type: "text", placeholder: "Tell Butler what to do…", "aria-label": "Tell Butler what to do", autocomplete: "off" });
   const send = button("", { kind: "primary", type: "submit", icon: "send", label: "Send" });
   const micOn = local.get("mic", "off") === "on";
@@ -60,8 +86,10 @@ export async function renderAsk(app: HTMLElement) {
         h("header", { class: "ask__head" },
           h("img", { src: "/brand/butler-app-icon.svg", alt: "", width: "36", height: "36" }),
           h("h2", {}, "Butler"),
-          target,
+          save ? null : target,
+          fresh,
         ),
+        about,
         log,
         task,
         form,
@@ -94,6 +122,7 @@ export async function renderAsk(app: HTMLElement) {
     form.set("device", WEB_DEVICE);
     form.set("tz", Intl.DateTimeFormat().resolvedOptions().timeZone);
     if (text) form.set("text", text);
+    if (save) form.set("item", save.id);
     if (audio) form.set("audio", new File([audio], "voice.webm", { type: audio.type.split(";")[0] }));
     try {
       const r = await api<Reply>("/api/command", { method: "POST", body: form });
@@ -304,10 +333,17 @@ export async function renderAsk(app: HTMLElement) {
   });
   // Escape stops listening without sending.
   addEventListener("keydown", (e) => { if (e.key === "Escape" && recorder) endListening(false); });
+  // The conversation so far, so you can carry on where you left off.
+  const before = await api<Turn[]>(`/api/chat${chat}`).catch(() => [] as Turn[]);
+  if (before.some((t) => t.role !== "break")) {
+    log.replaceChildren(...before.flatMap((t) =>
+      t.role === "owner" ? [h("p", { class: "ask__mine" }, t.text)] : t.role === "butler" ? [answer({ action: "answer", say: t.text })] : []));
+    scroll();
+  }
   // Asked from the Home page: ask it now, and keep the address clean so a refresh doesn't repeat it.
   const asked = params.get("q")?.trim();
   if (asked) {
-    history.replaceState(null, "", "#/ask");
+    history.replaceState(null, "", `#/ask${save ? `?item=${save.id}` : ""}`);
     run(asked);
   }
 }

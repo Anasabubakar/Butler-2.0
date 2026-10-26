@@ -122,3 +122,31 @@ test("the planner lists saved recipes and reads which one to run", async () => {
     await server.shutdown();
   }
 });
+
+test("the planner sees memories, the conversation and an open save, and says what to remember", async () => {
+  let prompt = "";
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+    prompt = (await req.json()).contents[0].parts.at(-1).text;
+    const text = JSON.stringify({ action: "edit", reply: "Renamed.", subject: "Suya spots", remember: ["Loves suya"], forget: ["2"] });
+    return Response.json({ candidates: [{ content: { parts: [{ text }] } }] });
+  });
+  Deno.env.set("GEMINI_URL", `http://localhost:${server.addr.port}`);
+  Deno.env.set("GEMINI_API_KEY", "test-key");
+  try {
+    const got = await plan("call it suya spots, i love suya", {
+      device: "phone", timeZone: "UTC", devices: [], learn: true,
+      memories: "[1] Lives in Abuja\n[2] Hates suya", history: "[Mon 10:00] owner: what's this?", save: "[1] Best suya in Abuja",
+    }, null);
+    assert.equal(got.action, "edit");
+    assert.deepEqual(got.remember, ["Loves suya"]);
+    assert.deepEqual(got.forget, [2]);
+    assert.match(prompt, /\[2\] Hates suya/);
+    assert.match(prompt, /owner: what's this\?/);
+    assert.match(prompt, /Best suya in Abuja/);
+    assert.match(prompt, /"edit": change this save/);
+    assert.match(prompt, /worth knowing for months/);
+  } finally {
+    Deno.env.delete("GEMINI_API_KEY");
+    await server.shutdown();
+  }
+});

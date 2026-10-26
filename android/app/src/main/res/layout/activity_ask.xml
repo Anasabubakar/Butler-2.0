@@ -40,6 +40,22 @@
             app:iconTint="?attr/colorOnSurfaceVariant" />
     </LinearLayout>
 
+    <!-- What you're answering (from the pet's bubble), or the save you're asking about. -->
+    <TextView
+        android:id="@+id/ask_context"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/ask_chip"
+        android:ellipsize="end"
+        android:maxLines="3"
+        android:paddingStart="12dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp"
+        android:textAppearance="?attr/textAppearanceBodySmall"
+        android:visibility="gone" />
+
     <!-- Who does it: this phone, or the laptop. -->
     <com.google.android.material.button.MaterialButtonToggleGroup
         android:id="@+id/ask_where"

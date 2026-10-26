@@ -15,14 +15,16 @@ import android.widget.TextView
 /**
  * B2/PetBubble, the speech bubble over Little Butler's head (Figma B2 · 17): an ink card with
  * where and what state on top ("My laptop • Working"), one short line of what it's doing,
- * and Stop. When it's done: a tick (or a warning), the first line of the answer, and Copy,
- * Share and close. Tap the line to read all of it.
+ * and Stop. When it's done: a tick (or a warning), the first line of the answer, Copy,
+ * Share and close, and a reply box under it to answer back. Tap the line to read all of it.
  */
 class PetBubble(context: Context) : LinearLayout(context) {
 
     var onCopy: ((String) -> Unit)? = null
     var onShare: ((String) -> Unit)? = null
     var onClose: (() -> Unit)? = null
+    /** The reply box was tapped, with what the bubble says, so you can answer it. */
+    var onReply: ((String) -> Unit)? = null
 
     /** True while you're reading the whole answer, so it doesn't go away under you. */
     var expanded = false
@@ -79,6 +81,23 @@ class PetBubble(context: Context) : LinearLayout(context) {
     private val copy = Ui.iconButton(context, R.drawable.ic_copy, context.getString(R.string.bubble_copy), size = 28) { onCopy?.invoke(full) }
     private val share = Ui.iconButton(context, R.drawable.ic_share, context.getString(R.string.bubble_share), size = 28) { onShare?.invoke(full) }
     private val close = Ui.iconButton(context, R.drawable.ic_close, context.getString(R.string.close), size = 28) { onClose?.invoke() }
+    // Looks like a text box; the typing happens in the Ask sheet, since the pet's window can't hold a keyboard.
+    private val reply = TextView(context).apply {
+        setText(R.string.bubble_reply)
+        setTextColor(Ui.SUBTLE)
+        textSize = 15f
+        gravity = Gravity.CENTER_VERTICAL
+        minHeight = (44 * dp).toInt()
+        background = Ui.rounded(Ui.MUTED, 22 * dp, Ui.BORDER, dp.toInt())
+        setPadding((14 * dp).toInt(), 0, (14 * dp).toInt(), 0)
+        setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_reply, 0, 0, 0)
+        compoundDrawablePadding = (8 * dp).toInt()
+        compoundDrawableTintList = ColorStateList.valueOf(Ui.SUBTLE)
+        isClickable = true
+        contentDescription = context.getString(R.string.bubble_reply)
+        setOnClickListener { onReply?.invoke(full) }
+        visibility = View.GONE
+    }
 
     init {
         orientation = VERTICAL
@@ -102,6 +121,10 @@ class PetBubble(context: Context) : LinearLayout(context) {
         }
         addView(top)
         addView(body, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = (6 * dp).toInt() })
+        addView(reply, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+            topMargin = (8 * dp).toInt()
+            marginEnd = (8 * dp).toInt()
+        })
         line.setOnClickListener { toggleExpanded() }
         body.setOnClickListener { toggleExpanded() }
     }
@@ -126,6 +149,7 @@ class PetBubble(context: Context) : LinearLayout(context) {
         copy.visibility = View.GONE
         share.visibility = View.GONE
         close.visibility = View.GONE
+        reply.visibility = View.GONE
     }
 
     /** Changes what it says it's doing, keeping Stop as it was. The new line slides in. */
@@ -171,6 +195,7 @@ class PetBubble(context: Context) : LinearLayout(context) {
         copy.visibility = if (worthKeeping) View.VISIBLE else View.GONE
         share.visibility = if (worthKeeping) View.VISIBLE else View.GONE
         close.visibility = View.VISIBLE
+        reply.visibility = if (onReply != null) View.VISIBLE else View.GONE
         // Long answers open up straight away; short ones fit on the line.
         if (text.length > 90 || text.contains('\n')) setExpanded(true)
     }

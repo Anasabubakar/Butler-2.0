@@ -1,9 +1,10 @@
 // Settings: every control says where it applies, this browser or all your devices.
 import { applyMotion, applyTheme, local } from "./local";
 import { href, page } from "./shell";
-import { api, busy, button, card, h, inlineError, SignedOut, toast, toggle } from "./ui";
+import { ago, api, busy, button, card, h, iconButton, inlineError, SignedOut, toast, toggle } from "./ui";
 
-interface Prefs { teasing: "on" | "less" | "off"; quiet: boolean }
+interface Prefs { teasing: "on" | "less" | "off"; quiet: boolean; memory: boolean }
+interface Memory { id: string; created_at: string; text: string; source: "learned" | "told" }
 
 export async function renderSettings(app: HTMLElement) {
   const shared = h("div", {}, h("p", { class: "muted" }, "Loading…"));
@@ -23,7 +24,9 @@ export async function renderSettings(app: HTMLElement) {
 
   app.replaceChildren(page("settings", "Settings",
     "Your Butler, your boundaries. Each setting says whether it applies to this browser or to all your devices.",
-    h("div", { class: "settings" }, personality, h("div", { class: "settings-side" }, themeCard(), reachCard(), dataCard())),
+    h("div", { class: "settings" },
+      h("div", { class: "settings-side" }, personality, memoryCard()),
+      h("div", { class: "settings-side" }, themeCard(), reachCard(), dataCard())),
   ));
 
   try {
@@ -36,11 +39,91 @@ export async function renderSettings(app: HTMLElement) {
         prefs.teasing !== "off", (on) => save({ teasing: on ? "on" : "off" }), everywhere),
       toggle("Quiet mode", "Silence non-essential cues and interruptions.", prefs.quiet,
         (on) => save({ quiet: on }), everywhere),
+      toggle("Learn about me", "Butler picks up lasting facts from what you tell it (people, preferences, plans) and uses them in every reply. See and forget them under Memory.",
+        prefs.memory, (on) => save({ memory: on }), everywhere),
     );
   } catch (e) {
     if (e instanceof SignedOut) return;
     shared.replaceChildren(inlineError(`Couldn't load teasing and quiet mode: ${(e as Error).message}. Refresh to try again.`));
   }
+}
+
+/** What Butler remembers about you: every fact, each with Forget, plus adding one and forgetting it all. */
+function memoryCard(): HTMLElement {
+  const list = h("ul", { class: "memory__list" }, h("li", { class: "muted" }, "Loading…"));
+  const input = h("input", { type: "text", placeholder: "e.g. My sister is Aisha", "aria-label": "Something Butler should remember", maxlength: "300" });
+  const add = button("Remember", { kind: "secondary", type: "submit" });
+  const form = h("form", { class: "memory__add" }, input, add);
+
+  async function load() {
+    try {
+      const { memories } = await api<{ memories: Memory[] }>("/api/memory");
+      list.replaceChildren(...(memories.length
+        ? memories.map((m) => {
+          const row = h("li", {},
+            h("span", { class: "memory__text" }, m.text),
+            h("span", { class: "memory__when" }, `${m.source === "told" ? "You told it" : "Learned"} ${ago(m.created_at)}`),
+            iconButton("trash", `Forget “${m.text}”`, async () => {
+              try {
+                await api(`/api/memory/${m.id}`, { method: "DELETE" });
+                row.remove();
+                if (!list.childElementCount) load();
+              } catch (e) {
+                if (!(e instanceof SignedOut)) toast(`Couldn't forget it: ${(e as Error).message}`);
+              }
+            }));
+          return row;
+        })
+        : [h("li", { class: "muted" }, "Nothing yet. Butler learns as you talk to it, or add something here.")]));
+    } catch (e) {
+      if (!(e instanceof SignedOut)) list.replaceChildren(h("li", {}, inlineError(`Couldn't load memories: ${(e as Error).message}`)));
+    }
+  }
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    try {
+      await busy(add, () => api("/api/memory", { method: "POST", body: JSON.stringify({ text }) }));
+      input.value = "";
+      load();
+    } catch (err) {
+      if (!(err instanceof SignedOut)) toast((err as Error).message);
+    }
+  });
+  const forgetAll = button("Forget everything", {
+    kind: "danger", small: true,
+    onclick: async (e) => {
+      if (!confirm("Forget everything Butler has learned about you? This can't be undone.")) return;
+      try {
+        await busy(e.currentTarget as HTMLButtonElement, () => api("/api/memory", { method: "DELETE" }));
+        load();
+      } catch (err) {
+        if (!(err instanceof SignedOut)) toast(`Couldn't forget: ${(err as Error).message}`);
+      }
+    },
+  });
+  const clearChat = button("Delete chat history", {
+    kind: "ghost", small: true,
+    onclick: async (e) => {
+      if (!confirm("Delete your conversation with Butler? Chats about single saves stay with those saves.")) return;
+      try {
+        await busy(e.currentTarget as HTMLButtonElement, () => api("/api/chat", { method: "DELETE" }));
+        toast("Chat history deleted.");
+      } catch (err) {
+        if (!(err instanceof SignedOut)) toast(`Couldn't delete it: ${(err as Error).message}`);
+      }
+    },
+  });
+  load();
+  return h("section", { class: "b2-card memory" },
+    h("h2", {}, "Memory"),
+    h("p", { class: "muted settings-scope" }, "All your devices"),
+    h("p", { class: "muted" }, "Butler reads your last two days of chat and everything below in every reply. It never keeps passwords, codes or card numbers. Older chat is kept for a year but not read."),
+    form,
+    list,
+    h("div", { class: "settings-actions" }, clearChat, forgetAll),
+  );
 }
 
 function themeCard(): HTMLElement {
