@@ -9,7 +9,7 @@ import {
 } from "./lib/auth.ts";
 import * as db from "./lib/db.ts";
 import { fetchMeta } from "./lib/meta.ts";
-import { organize, type RawItem } from "./lib/organize.ts";
+import { OLD_CATEGORIES, organize, type RawItem } from "./lib/organize.ts";
 import { cleanUrl, extractUrl, kindFor, platformFor } from "./lib/rules.ts";
 import { aiProviders, geminiKeys, geminiModels, geminiReady } from "./lib/gemini.ts";
 import { LOOK_MODES, type LookMode, locate, look, MAX_STEPS, nextStep } from "./lib/screen.ts";
@@ -58,14 +58,22 @@ for (const [name, value] of [["BUTLER_TOKEN", TOKEN], ["BUTLER_PASSWORD_HASH", P
 
 // --- organizing ------------------------------------------------------------------
 
+/** Adds what the link's page says, and the library's collections to choose from. */
+async function readUp(raw: RawItem) {
+  const meta = raw.url ? await fetchMeta(raw.url, raw.platform) : null;
+  if (meta) {
+    raw.pageTitle = meta.title;
+    raw.pageDescription = meta.description;
+    raw.pageText = meta.text;
+  }
+  raw.collections = await db.collections(OLD_CATEGORIES).catch(() => []);
+  return meta;
+}
+
 async function organizeItem(id: string, raw: RawItem) {
   try {
-    if (raw.url) {
-      const meta = await fetchMeta(raw.url, raw.platform);
-      raw.pageTitle = meta.title;
-      raw.pageDescription = meta.description;
-      if (meta.image) await db.updateItem(id, { thumbnail: meta.image });
-    }
+    const meta = await readUp(raw);
+    if (meta?.image) await db.updateItem(id, { thumbnail: meta.image });
     const out = await organize(raw);
     await db.updateItem(id, { ...out, status: "organized", error: null });
     await meaning.embedItem(id).catch((e) => console.error("embedding", id, String(e).slice(0, 200)));
