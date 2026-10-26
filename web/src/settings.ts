@@ -51,7 +51,7 @@ export async function renderSettings(app: HTMLElement) {
 /** What Butler remembers about you: every fact, each with Forget, plus adding one and forgetting it all. */
 function memoryCard(): HTMLElement {
   const list = h("ul", { class: "memory__list" }, h("li", { class: "muted" }, "Loading…"));
-  const input = h("input", { type: "text", placeholder: "Something Butler should know, like “My sister is Aisha”", "aria-label": "Something Butler should remember", maxlength: "300" });
+  const input = h("input", { type: "text", placeholder: "e.g. My sister is Aisha", "aria-label": "Something Butler should remember", maxlength: "300" });
   const add = button("Remember", { kind: "secondary", type: "submit" });
   const form = h("form", { class: "memory__add" }, input, add);
 
