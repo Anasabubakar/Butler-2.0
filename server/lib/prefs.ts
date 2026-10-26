@@ -8,16 +8,20 @@ export interface Prefs {
   teasing: Teasing;
   /** Silence non-essential cues and interruptions on every device. */
   quiet: boolean;
+  /** Butler learns lasting facts about you from what you say (you can see and forget them). */
+  memory: boolean;
 }
 
-export const DEFAULTS: Prefs = { teasing: "on", quiet: false };
+export const DEFAULTS: Prefs = { teasing: "on", quiet: false, memory: true };
 
 export async function load(): Promise<Prefs> {
   const teasing = await settings.get("pref_teasing");
   const quiet = await settings.get("pref_quiet");
+  const memory = await settings.get("pref_memory");
   return {
     teasing: TEASING.includes(teasing as Teasing) ? teasing as Teasing : DEFAULTS.teasing,
     quiet: quiet === null ? DEFAULTS.quiet : quiet === "on",
+    memory: memory === null ? DEFAULTS.memory : memory === "on",
   };
 }
 
@@ -27,5 +31,6 @@ export async function save(input: Record<string, unknown>): Promise<Prefs> {
     await settings.set("pref_teasing", input.teasing);
   }
   if (typeof input.quiet === "boolean") await settings.set("pref_quiet", input.quiet ? "on" : "off");
+  if (typeof input.memory === "boolean") await settings.set("pref_memory", input.memory ? "on" : "off");
   return load();
 }
