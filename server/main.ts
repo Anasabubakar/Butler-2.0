@@ -1452,6 +1452,7 @@ if (import.meta.main) {
   setInterval(() => recipesOnEmail().catch((e) => console.error("recipe email:", e)), 2 * 60_000);
   setInterval(() => watchPrices().catch((e) => console.error("prices:", e)), 30 * 60_000);
   setInterval(() => rescueLinks().catch((e) => console.error("links:", e)), 10 * 60_000);
+  setInterval(() => resortOld().catch((e) => console.error("resort:", e)), 60_000);
   if (geminiReady()) console.log("AI providers, in order:", aiProviders().join(", "));
   if (geminiKeys().length) geminiModels().then((m) => console.log("Gemini models, in order:", m.join(", ")));
   Deno.serve({ port: PORT, hostname: env("HOST", "0.0.0.0") }, app.fetch);
