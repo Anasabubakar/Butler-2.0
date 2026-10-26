@@ -41,11 +41,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.anas.butler.AskActivity
+import com.anas.butler.R
 import com.anas.butler.library.Deletes
 import com.anas.butler.library.Item
 import com.anas.butler.library.Outbox
 
-/** One save, in full: what Butler made of it, and what you can do with it here. */
+/** One save, in full: what Butler made of it, and what you can do with it here, asking Butler about it included. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ItemScreen(id: String, online: Boolean, onBack: () -> Unit, onTag: (String) -> Unit, onCategory: (String) -> Unit) {
@@ -109,6 +111,12 @@ fun ItemScreen(id: String, online: Boolean, onBack: () -> Unit, onTag: (String) 
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (item.url != null || item.localFile != null) Button(onClick = { Outbox.open(context, item) }) { Text("Open") }
+                    // Questions or orders about this save; it needs to be on the server first, and you online.
+                    if (online && !item.isLocal) {
+                        OutlinedButton(onClick = { AskActivity.aboutSave(context, item.id, item.label) }) {
+                            Text(context.getString(R.string.item_ask))
+                        }
+                    }
                     OutlinedButton(onClick = { Outbox.share(context, item) }) { Text("Share") }
                     OutlinedButton(onClick = { Outbox.copyText(context, item) }) { Text(if (item.url != null) "Copy link" else "Copy") }
                     if (item.archiveUrl != null) {
