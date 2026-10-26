@@ -96,7 +96,9 @@ async function watchVideo(id: string, raw: RawItem) {
 }
 
 async function rawFor(item: db.Item): Promise<RawItem> {
-  const raw: RawItem = { kind: item.kind, platform: item.platform, url: item.url, body: item.body, note: item.note };
+  const raw: RawItem = {
+    kind: item.kind, platform: item.platform, url: item.url, body: item.body, note: item.note, details: item.details,
+  };
   const visionType = VISION_TYPES.find((t) => t === item.mime);
   if (item.file_path && visionType) {
     const bytes = await Deno.readFile(join(FILES_DIR, item.file_path)).catch(() => null);
