@@ -112,3 +112,27 @@ Most "save for later" apps are a pile you never open again. Butler is different 
 </table>
 
 Every feature, with its settings, is in **[docs/features.md](docs/features.md)**.
+
+## 📸 Screenshots
+
+<div align="center">
+
+<img src="docs/images/phone-dark.png" alt="Butler on a phone in dark mode: home, library, recipes and inbox" width="100%">
+<sub><b>Phone, dark mode</b>: home, library, recipes and inbox</sub>
+
+<br><br>
+
+<img src="docs/images/library-light.png" alt="The library: everything saved, grouped by topic, with search by words or by meaning" width="100%">
+<sub><b>Library</b>: grouped by real topic, searchable by meaning</sub>
+
+<br><br>
+
+<details>
+<summary><b>More: every page in dark mode</b></summary>
+<br>
+<img src="docs/images/pages-dark.png" alt="Recipes, automations, integrations, inbox, Ask Butler, devices, settings and home in dark mode" width="100%">
+</details>
+
+</div>
+
+<sub>Screenshots use sample data.</sub>
