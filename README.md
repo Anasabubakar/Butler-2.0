@@ -184,3 +184,47 @@ Butler uses AI for two jobs, set in `butler.env`:
 |---|---|
 | **Organizing saves** (titles, summaries, tags, collections) | Anthropic Claude (`ANTHROPIC_API_KEY`), or a free local model through Ollama (`BUTLER_AI=local`, slower on a CPU-only server) |
 | **Talking and seeing** (Ask Butler, video notes, search by meaning, Analyze/Solve/Translate) | Google Gemini (`GEMINI_API_KEY`), falling back to OpenRouter, Groq or OpenAI keys in the order of `BUTLER_AI_ORDER` |
+
+## 🏗️ How it works
+
+```mermaid
+flowchart LR
+  subgraph devices[Your devices]
+    A[🤖 Android app<br/>+ floating pet]
+    G[🐧 GNOME pet]
+    W[🌐 Website]
+  end
+  subgraph server[Your server]
+    C[Caddy<br/>HTTPS]
+    S[Butler server<br/>Deno + TypeScript]
+    P[(PostgreSQL)]
+    F[(Saved files)]
+  end
+  A <--> C
+  G <--> C
+  W <--> C
+  C <--> S
+  S <--> P
+  S <--> F
+  S --> AI[AI providers<br/>Gemini · OpenRouter · Groq<br/>OpenAI · Claude · Ollama]
+  S --> GA[Google<br/>Calendar · Gmail · Drive]
+  S --> M[MCP servers<br/>Zapier · Notion · …]
+```
+
+- **Devices never talk to each other directly.** Each one checks in with your server, which holds messages, reminders and clipboard copies until the right device picks them up. That's how a phone in your pocket and a laptop at home stay in step.
+- **Saving is instant; thinking happens later.** A save is stored at once and organized in the background, so a slow AI model never makes you wait.
+- **Anything risky asks first.** Sending email, running a tool that changes something, or acting on your laptop needs your yes. Saved content and tool replies are treated as data, never as instructions.
+
+### Repository layout
+
+| Path | What it is |
+|---|---|
+| [`server/`](server/) | The Butler server (Deno): saves, library API, sign-in, AI, recipes, devices, and serving the website |
+| [`db/migrations/`](db/migrations/) | Postgres schema, applied when the server starts |
+| [`web/`](web/) | The website (Vite + TypeScript), light and dark |
+| [`android/`](android/) | Android app (Kotlin, Jetpack Compose): offline library, Share menu, floating pet |
+| [`desktop/gnome/`](desktop/gnome/) | The GNOME Shell pet extension |
+| [`deploy/`](deploy/) | Docker Compose for a server: Postgres, Butler, Caddy, backups |
+| [`design/`](design/) | Brand guide, logo masters and the Little Butler sprite kit |
+| [`tests/`](tests/) | Unit tests |
+| [`docs/`](docs/) | Guides: [self-hosting](docs/self-hosting.md), [features](docs/features.md), [Android](docs/android.md) |
