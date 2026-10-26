@@ -2,7 +2,7 @@
 
 ## Install
 
-Every push builds a debug APK. Download `butler-debug-apk` from the latest run on the repo's **Actions** tab, install it, open **Butler**, and enter:
+Download the APK from the latest [release](https://github.com/Anasabubakar/Butler-2.0/releases/latest). For the newest build, every push to `main` also builds one: download `butler-debug-apk` from the latest run on the repo's **Actions** tab. Install it, open **Butler**, and enter:
 
 - Save URL: `https://butler.yourdomain.com/api/save`
 - Token: your `BUTLER_TOKEN`
