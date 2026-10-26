@@ -8,7 +8,8 @@ import { renderAsk } from "./ask";
 import { binMarkup, crumpleIntoBin, fasten, glide, hashOf, layout, makeDraggable, type Spot, unfasten } from "./board";
 import { renderDevices } from "./devices";
 import { renderLanding, renderSignIn } from "./landing";
-import { applyMotion, applyTheme, renderSettings } from "./settings";
+import { applyMotion, applyTheme } from "./local";
+import { renderSettings } from "./settings";
 import { topBar } from "./shell";
 import { ago, api, h, icon, SignedOut, toast, whenSignedOut } from "./ui";
 

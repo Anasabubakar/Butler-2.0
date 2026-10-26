@@ -2,7 +2,7 @@
 // Chat and voice share one status language; speaker and microphone are separate switches;
 // a laptop task shows its steps and a Stop button the whole time; email waits for your yes.
 import { deviceTitle } from "./devices";
-import { local } from "./settings";
+import { local } from "./local";
 import { href, page } from "./shell";
 import { api, busy, button, h, icon, inlineError, reducedMotion, SignedOut, status, type State, toast } from "./ui";
 
