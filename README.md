@@ -12,7 +12,7 @@
 <p>
   <a href="https://github.com/Anasabubakar/Butler-2.0/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Anasabubakar/Butler-2.0/ci.yml?branch=main&style=for-the-badge&label=CI&logo=githubactions&logoColor=white"></a>
   <a href="https://github.com/Anasabubakar/Butler-2.0/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Anasabubakar/Butler-2.0?style=for-the-badge&color=6D28D9&logo=github"></a>
-  <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-to_be_decided-lightgrey?style=for-the-badge"></a>
+  <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=for-the-badge"></a>
   <a href="CONTRIBUTING.md"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-16A34A?style=for-the-badge"></a>
 </p>
 
