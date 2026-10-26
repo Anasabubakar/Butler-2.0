@@ -142,7 +142,7 @@ export function pricesToCheck(limit: number) {
   return sql<{ id: string; url: string; title: string | null; price: string | null; price_first: string | null; price_currency: string | null }[]>`
     select id, url, title, price, price_first, price_currency from items
     where kind = 'link' and url like 'http%' and created_at > now() - interval '180 days'
-      and (price is not null or (price_checked_at is null and category = 'shopping'))
+      and (price is not null or (price_checked_at is null and (category = 'shopping' or 'shopping' = any(tags))))
       and (price_checked_at is null or price_checked_at < now() - interval '12 hours')
     order by price_checked_at nulls first limit ${limit}`;
 }
