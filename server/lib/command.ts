@@ -50,7 +50,7 @@ export interface Context {
   memories?: string;
   /** Whether to pick out new lasting facts to remember (Settings → Learn about me). */
   learn?: boolean;
-  /** The one save they're asking about, in full (talk.saveText), when they opened it to ask. */
+  /** The one save they're asking about, in full (recall.saveText), when they opened it to ask. */
   save?: string;
 }
 

@@ -38,6 +38,25 @@ export function describe(item: Item, n: number): string {
   return lines.filter(Boolean).join("\n");
 }
 
+/** One save in full, for talking about it: all Butler knows of it, and what its page says (`page`). */
+export function saveText(item: Item, page: string | null): string {
+  const lines = [
+    `title: ${item.title ?? "(untitled)"}`,
+    `saved ${new Date(item.created_at).toISOString().slice(0, 10)} from ${item.platform ?? item.device}, a ${item.kind}` +
+      (item.category ? `, in their ${item.category} collection` : ""),
+    item.summary ? `your summary: ${item.summary}` : null,
+    item.tags.length ? `tags: ${item.tags.join(", ")}` : null,
+    item.note ? `their note: ${item.note}` : null,
+    item.url ? `link: ${item.url}` : null,
+    item.link_dead ? `the link no longer works${item.archive_url ? `; saved copy: ${item.archive_url}` : ""}` : null,
+    item.price && item.price_currency ? `price now: ${item.price} ${item.price_currency} (was ${item.price_first} when saved)` : null,
+    item.body ? `text:\n${item.body.slice(0, 12_000)}` : null,
+    item.details ? `notes:\n${item.details.slice(0, 6000)}` : null,
+    page ? `what the page says:\n${page.slice(0, 8000)}` : null,
+  ];
+  return lines.filter(Boolean).join("\n");
+}
+
 /** Answers `question` using only `items`, best match first. */
 export async function recall(question: string, items: Item[], publicUrl?: string, teasing?: Teasing): Promise<Recalled> {
   if (!items.length) return { say: "nothing like that in your library yet. try different words?" };
