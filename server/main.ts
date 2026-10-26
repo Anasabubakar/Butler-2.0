@@ -1402,6 +1402,42 @@ async function rescueLinks() {
   }
 }
 
+// --- sorting old saves by topic ---------------------------------------------------------
+// Saves from before collections were named by topic sit in 16 broad buckets (mostly
+// "tech"). They get sorted again a few at a time, oldest first, with what their page
+// or video says. Only the collection and tags change; titles and notes stay.
+
+const RESORT_KEY = "resort_through";
+let resorting = false;
+
+async function resortOld() {
+  if (resorting || env("BUTLER_RESORT") === "off") return;
+  resorting = true;
+  try {
+    const through = await settings.get(RESORT_KEY);
+    if (through === "done") return;
+    const batch = await db.toResort(OLD_CATEGORIES, through, 5);
+    if (!batch.length) {
+      await settings.set(RESORT_KEY, "done");
+      console.log("resort: every old save has a topic now");
+      return;
+    }
+    for (const item of batch) {
+      try {
+        const raw = await rawFor(item);
+        await readUp(raw);
+        const out = await organize(raw);
+        await db.updateItem(item.id, { category: out.category, tags: out.tags });
+      } catch (e) {
+        console.warn("resort", item.id, String(e).slice(0, 200));
+      }
+      await settings.set(RESORT_KEY, item.cursor);
+    }
+  } finally {
+    resorting = false;
+  }
+}
+
 // --- start ---------------------------------------------------------------------------
 
 if (import.meta.main) {
