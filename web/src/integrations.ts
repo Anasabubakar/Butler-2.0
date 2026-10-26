@@ -219,7 +219,7 @@ function toolRow(conn: Connection, tool: Tool): HTMLElement {
 function activity(calls: Call[]): HTMLElement {
   return h("section", { class: "b2-card integ-log" },
     h("h3", {}, "What Butler used lately"),
-    h("ul", { class: "rows" }, ...calls.map((c) =>
+    h("ul", { class: "rows" }, ...calls.slice(0, 8).map((c) =>
       h("li", { class: "row", title: c.result ?? "" },
         h("span", { class: "row__icon" }, icon(c.status === "done" ? "check" : "alert")),
         h("span", { class: "row__text" },
