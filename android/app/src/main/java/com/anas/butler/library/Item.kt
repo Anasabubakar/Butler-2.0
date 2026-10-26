@@ -27,7 +27,7 @@ data class Item(
     val archiveUrl: String?,
     val linkDead: Boolean,
     val localFile: String?,    // a copy of the picture or file on this phone
-    val localState: String?,   // SAVING until it's on the server, DELETING until the server forgets it
+    val localState: String?,   // SAVING until it's on the server, DELETING until the server forgets it, FAILED if refused
 ) {
     val isLocal get() = id.startsWith(LOCAL_PREFIX)
     val waiting get() = localState != null
@@ -47,6 +47,7 @@ data class Item(
         const val LOCAL_PREFIX = "local:"
         const val SAVING = "saving"
         const val DELETING = "deleting"
+        const val FAILED = "failed"
 
         /** An item as the server sends it. */
         fun fromServer(o: JSONObject): Item {
