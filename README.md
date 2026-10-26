@@ -264,3 +264,12 @@ Bug reports, device test results and pull requests are all welcome. Start with *
 ## 🙏 Built with
 
 [Deno](https://deno.com) · [PostgreSQL](https://www.postgresql.org) · [Caddy](https://caddyserver.com) · [Vite](https://vite.dev) · [Jetpack Compose](https://developer.android.com/compose) · [GNOME Shell](https://gjs.guide) · [Model Context Protocol](https://modelcontextprotocol.io) · [Ollama](https://ollama.com) · [Inter](https://rsms.me/inter/) and [Instrument Serif](https://fonts.google.com/specimen/Instrument+Serif)
+
+## License
+
+**To be decided.** Butler isn't under an open-source license yet, so for now all rights are reserved. A license will be added before the repository goes public.
+
+<div align="center">
+<br>
+<sub>Made with care by <a href="https://github.com/Anasabubakar">@Anasabubakar</a> and Little Butler.</sub>
+</div>
