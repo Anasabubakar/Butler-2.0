@@ -185,7 +185,7 @@ Butler uses AI for two jobs, set in `butler.env`:
 | **Organizing saves** (titles, summaries, tags, collections) | Anthropic Claude (`ANTHROPIC_API_KEY`), or a free local model through Ollama (`BUTLER_AI=local`, slower on a CPU-only server) |
 | **Talking and seeing** (Ask Butler, video notes, search by meaning, Analyze/Solve/Translate) | Google Gemini (`GEMINI_API_KEY`), falling back to OpenRouter, Groq or OpenAI keys in the order of `BUTLER_AI_ORDER` |
 
-## 🏗️ How it works
+## 🏗 How it works
 
 ```mermaid
 flowchart LR
@@ -229,7 +229,7 @@ flowchart LR
 | [`tests/`](tests/) | Unit tests |
 | [`docs/`](docs/) | Guides: [self-hosting](docs/self-hosting.md), [features](docs/features.md), [Android](docs/android.md) |
 
-## 🗺️ Roadmap
+## 🗺 Roadmap
 
 - [x] Save from any app, AI organizing, search by meaning
 - [x] Little Butler pet on Android and GNOME
