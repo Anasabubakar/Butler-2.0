@@ -53,3 +53,11 @@
 - **[2026-10-23]** **Connections, recipes and automations.** Plug in any MCP server (Zapier, Notion, GitHub…), save instructions as recipes, and run them on a schedule, on new email, or from a webhook. 🧩
 - **[2026-10-22]** **Control your laptop from your phone**, clipboard history, and AI that falls back across Gemini, OpenRouter, Groq and OpenAI. 💻
 - **[2026-10-20]** Butler 2.0 begins: save from any app, the Little Butler pet on Android and GNOME, morning brief, price watch, clipboard sync and more. 🚀
+
+## ✨ What is Butler?
+
+Most "save for later" apps are a pile you never open again. Butler is different in three ways:
+
+1. **It does the sorting.** Share a TikTok, a GitHub repo, a screenshot or a recipe link and Butler reads it, writes a title and summary, and files it under what it is actually about. Search by meaning, not just by words, or just ask: *"what was that jollof recipe I saved?"*
+2. **It lives on your devices.** Little Butler peeks from the edge of your phone and laptop screens. Tap it to save, copy, analyze or translate what you're looking at, send it to your other device, or tell it what to do in plain words.
+3. **It's yours.** Butler runs on one small server you own (a free cloud VM works). Your saves, files and accounts never sit in someone else's database.
