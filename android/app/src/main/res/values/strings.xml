@@ -154,7 +154,7 @@
     <string name="pref_mic">Microphone</string>
     <string name="pref_mic_help">Allow spoken commands when activated.</string>
     <string name="pref_teasing">Teasing</string>
-    <string name="pref_teasing_help">Occasional dry remarks between tasks.</string>
+    <string name="pref_teasing_help">Light sass and roasting when the moment fits.</string>
     <string name="pref_motion">Reduced motion</string>
     <string name="pref_motion_help">Replace movement with subtle state changes.</string>
     <string name="pref_quiet">Quiet mode</string>
