@@ -106,6 +106,13 @@ class PetBubble(context: Context) : LinearLayout(context) {
         body.setOnClickListener { toggleExpanded() }
     }
 
+    // Never wider than the screen (less a margin each side), so Copy, Share and close stay on it.
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        var cap = resources.displayMetrics.widthPixels - (16 * dp).toInt()
+        if (MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED) cap = minOf(cap, MeasureSpec.getSize(widthMeasureSpec))
+        super.onMeasure(MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST), heightMeasureSpec)
+    }
+
     /**
      * Working on something: spinner, a short line, and Stop if it can be stopped. `device`
      * names where it's happening ("My laptop"), shown with the Working state word.
