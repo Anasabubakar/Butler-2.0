@@ -6,7 +6,7 @@ Thanks for helping. Butler is a small project, so the rules are short.
 
 - **Try it and report what breaks.** Most features have only been tested on one Android phone and one GNOME laptop. An issue that says "on my Pixel 7 with Android 15, X happened" is gold.
 - **Pick an issue** labelled `good first issue` or `help wanted`, and say you're on it so nobody doubles up.
-- **Bring Butler to a new device.** iPhone, macOS and Windows are on the [roadmap](README.md#roadmap). Open an issue first so we can agree on the approach.
+- **Bring Butler to a new device.** iPhone, macOS and Windows are on the [roadmap](README.md#-roadmap). Open an issue first so we can agree on the approach.
 
 ## Set up
 
