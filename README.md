@@ -244,3 +244,19 @@ flowchart LR
 - [ ] Sign in to MCP servers with OAuth
 
 Ideas and votes are welcome in [Issues](https://github.com/Anasabubakar/Butler-2.0/issues).
+
+## 🤝 Contributing
+
+Bug reports, device test results and pull requests are all welcome. Start with **[CONTRIBUTING.md](CONTRIBUTING.md)** for setup, tests and how releases are made. Found a security problem? Please follow **[SECURITY.md](SECURITY.md)** instead of opening an issue.
+
+### Contributors
+
+<a href="https://github.com/Anasabubakar/Butler-2.0/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Anasabubakar/Butler-2.0" alt="Contributors">
+</a>
+
+### Star history
+
+<a href="https://star-history.com/#Anasabubakar/Butler-2.0&Date">
+  <img src="https://api.star-history.com/svg?repos=Anasabubakar/Butler-2.0&type=Date" alt="Star history chart" width="600">
+</a>
