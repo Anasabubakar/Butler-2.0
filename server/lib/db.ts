@@ -124,6 +124,14 @@ export function facets() {
     (select 'tag', t, count(*)::int from items, unnest(tags) as t group by 2 order by 3 desc limit 30)`;
 }
 
+/** The library's collections, biggest first, leaving out the old fixed buckets. */
+export async function collections(old: readonly string[], limit = 80): Promise<string[]> {
+  const rows = await sql<{ category: string }[]>`
+    select category from items where category is not null and not (lower(category) = any(${[...old]}))
+    group by 1 order by count(*) desc, 1 limit ${limit}`;
+  return rows.map((r) => r.category);
+}
+
 /** Items left pending by a crash or restart. */
 export function stalePending() {
   return sql<Item[]>`select ${COLUMNS} from items where status = 'pending' and created_at < now() - interval '2 minutes'`;
