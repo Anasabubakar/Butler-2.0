@@ -15,15 +15,17 @@ You need [Deno](https://deno.com) 2.5+, Node.js 22, Docker (for Postgres), and t
 ```sh
 git clone https://github.com/Anasabubakar/Butler-2.0.git && cd Butler-2.0
 docker run -d --name butler-db -e POSTGRES_PASSWORD=dev -p 5432:5432 postgres:16
-cp deploy/butler.env.example .env.local   # fill in BUTLER_TOKEN, SESSION_SECRET and BUTLER_PASSWORD_HASH
-export DATABASE_URL=postgres://postgres:dev@localhost:5432/postgres
+cp deploy/butler.env.example butler.local.env   # fill in BUTLER_TOKEN, SESSION_SECRET and BUTLER_PASSWORD_HASH
+deno task hash-password                          # prints the hash for BUTLER_PASSWORD_HASH
+echo DATABASE_URL=postgres://postgres:dev@localhost:5432/postgres >> butler.local.env
+set -a && . ./butler.local.env && set +a         # load the settings into this shell
 ```
 
 | What | Command |
 |---|---|
 | Unit tests | `deno test --allow-read --allow-net --allow-env tests/` |
 | Type-check the server | `deno task check` |
-| Server on :8080 | `deno task start` (needs `DATABASE_URL` and the settings in `butler.env.example`) |
+| Server on :8080 | `deno task start` |
 | Website on :5173 | `cd web && npm install && npm run dev` (calls the server on :8080) |
 | Android debug APK | `cd android && ./gradlew assembleDebug` |
 | GNOME pet | see [`desktop/gnome/README.md`](desktop/gnome/README.md) |
