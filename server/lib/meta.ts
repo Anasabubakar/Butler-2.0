@@ -68,8 +68,55 @@ export function parseHtmlMeta(html: string): PageMeta {
   };
 }
 
+/** owner/repo for a link into a GitHub repository, or null. */
+export function githubRepo(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (u.hostname.replace(/^www\./, "") !== "github.com") return null;
+  const [owner, repo] = u.pathname.split("/").filter(Boolean);
+  const reserved = /^(orgs|users|settings|topics|explore|marketplace|features|sponsors|login|search|notifications|trending)$/i;
+  if (!owner || !repo || reserved.test(owner)) return null;
+  return `${owner}/${repo.replace(/\.git$/, "")}`;
+}
+
+/** A repo's own description, topics and the start of its README: what it's really about. */
+async function githubMeta(repo: string): Promise<PageMeta | null> {
+  const api = Deno.env.get("GITHUB_API_URL") ?? "https://api.github.com";
+  const res = await get(`${api}/repos/${repo}`, "application/vnd.github+json");
+  if (!res) return null;
+  let info: { full_name?: string; description?: string | null; topics?: string[]; language?: string | null };
+  try {
+    info = await res.json();
+  } catch {
+    return null;
+  }
+  const readme = await get(`${api}/repos/${repo}/readme`, "application/vnd.github.raw");
+  const words = readme ? (await readme.text()).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : "";
+  const facts = [
+    info.topics?.length && `topics: ${info.topics.join(", ")}`,
+    info.language && `main language: ${info.language}`,
+    words && `README: ${words}`,
+  ].filter(Boolean).join("\n");
+  return {
+    title: info.full_name ?? repo,
+    description: info.description ?? null,
+    image: `https://opengraph.githubassets.com/1/${repo}`,
+    text: facts ? facts.slice(0, TEXT_CHARS) : null,
+  };
+}
+
 export async function fetchMeta(url: string, platform: string | null): Promise<PageMeta> {
   if (!/^https?:\/\//i.test(url)) return EMPTY;
+
+  const repo = githubRepo(url);
+  if (repo) {
+    const meta = await githubMeta(repo);
+    if (meta) return meta;
+  }
 
   const oembed = platform ? OEMBED[platform] : undefined;
   if (oembed) {
