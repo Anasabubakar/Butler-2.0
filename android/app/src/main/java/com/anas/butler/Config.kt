@@ -46,7 +46,7 @@ class Config(context: Context) {
 
     /** Teasing ("on", "less" or "off"), shared by every device. */
     var teasing: String
-        get() = prefs.getString(KEY_TEASING, "off") ?: "off"
+        get() = prefs.getString(KEY_TEASING, "on") ?: "on"
         set(v) = prefs.edit().putString(KEY_TEASING, v).apply()
 
     val isReady: Boolean
