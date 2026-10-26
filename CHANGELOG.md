@@ -5,6 +5,9 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 ## Unreleased
 
 - Butler is now licensed under AGPL-3.0. The logos and the Little Butler character stay all rights reserved.
+- **Butler remembers.** Ask Butler sees the last two days of your conversation, so follow-ups like "and tomorrow?" work, and learns lasting facts about you (people, preferences, plans) for every reply. See, add and forget them in Settings → Memory; switch learning off with Learn about me. Passwords, codes and card numbers are never kept.
+- **Reply to the pet.** Every answer in the phone and laptop pet's bubble has a reply box under it.
+- **Chat about one save.** Ask Butler about this, on each library card and in the phone app's save screen: questions answered from the save's full content, and orders carried out with it (reminders, events, email, connected apps, renaming it).
 
 ## v0.2.0 (2026-10-26)
 
