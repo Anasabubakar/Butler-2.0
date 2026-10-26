@@ -11,7 +11,7 @@
     <string name="one_file">1 file</string>
     <string name="some_failed">%1$d file(s) could not be read</string>
     <string name="settings_title">Settings</string>
-    <string name="settings_welcome">welcome in, sir.</string>
+    <string name="settings_welcome">welcome in.</string>
     <string name="settings_lede">Clear, calm and in your control.</string>
     <string name="settings_connect">Connect this phone</string>
     <string name="settings_connect_help">The address and token from your Butler server. The token stays on this phone.</string>

@@ -34,3 +34,24 @@ test("the teasing setting decides how much sass is allowed", () => {
   assert.match(voiceRules("off"), /never tease or roast them/);
   assert.ok(voiceRules("off").startsWith(persona()));
 });
+
+test("Butler calls you boss unless BUTLER_TITLE says otherwise, and none drops the title", async () => {
+  const { addressed, persona: words } = await import("../server/lib/persona.ts");
+  try {
+    assert.equal(addressed("morning"), "morning, boss");
+    assert.match(words(), /"handled, boss\."/);
+    Deno.env.set("BUTLER_TITLE", "sir");
+    assert.equal(addressed("morning"), "morning, sir");
+    Deno.env.set("BUTLER_TITLE", "none");
+    assert.equal(addressed("morning"), "morning");
+    assert.doesNotMatch(words(), /\{title\}|handled, /);
+  } finally {
+    Deno.env.delete("BUTLER_TITLE");
+  }
+});
+
+test("the butler part doesn't assume who the owner is", () => {
+  const butler = persona().split("<butler>")[1];
+  assert.doesNotMatch(butler, /\bAnas\b|\bsir\b/);
+  assert.match(butler, /Your owner could be anyone/);
+});

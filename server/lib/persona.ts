@@ -7,10 +7,20 @@ export type Teasing = typeof TEASING[number];
 const FILE = new URL("../persona.md", import.meta.url);
 let words: string | undefined;
 
-/** The persona as the AI sees it: server/persona.md without its notes for people. */
+/** What Butler calls its owner now and then (BUTLER_TITLE): "boss" unless set, "" for none. */
+export function title(): string {
+  const set = (Deno.env.get("BUTLER_TITLE") ?? "boss").trim().slice(0, 30);
+  return set.toLowerCase() === "none" ? "" : set;
+}
+
+/** `text` with the owner's title on the end, like "morning, boss", or as it is when there's none. */
+export const addressed = (text: string) => title() ? `${text}, ${title()}` : text;
+
+/** The persona as the AI sees it: server/persona.md without its notes for people, title filled in. */
 export function persona(): string {
   words ??= Deno.readTextFileSync(FILE).replace(/<!--[\s\S]*?-->/g, "").trim();
-  return words;
+  const t = title();
+  return t ? words.replaceAll("{title}", t) : words.split("\n").filter((line) => !line.includes("{title}")).join("\n");
 }
 
 /** Just Anas's part, exactly as written. */
