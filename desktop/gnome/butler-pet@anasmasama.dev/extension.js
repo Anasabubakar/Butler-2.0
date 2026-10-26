@@ -323,6 +323,18 @@ export default class ButlerPetExtension extends Extension {
         this._bubble.onResize = () => this._placeBubble();
         // The reply box: it takes the keyboard while you type, and Enter asks Butler, answering what it said.
         this._bubble.onTyping = on => this._replyTyping(on);
+        // While you're typing a reply, a click anywhere outside the bubble gives the keyboard back.
+        this._bubble.actor.connect('captured-event', (actor, event) => {
+            if (!this._replyGrab || event.type() !== Clutter.EventType.BUTTON_PRESS)
+                return Clutter.EVENT_PROPAGATE;
+            const [x, y] = event.get_coords();
+            const [bx, by] = actor.get_transformed_position();
+            const [w, h] = actor.get_transformed_size();
+            if (x >= bx && x < bx + w && y >= by && y < by + h)
+                return Clutter.EVENT_PROPAGATE;
+            this._bubble.stopTyping();
+            return Clutter.EVENT_STOP;
+        });
         this._bubble.onReply = (text, said) => {
             this._pendingReply = {text, said};
             if (this._bubbleClosed)

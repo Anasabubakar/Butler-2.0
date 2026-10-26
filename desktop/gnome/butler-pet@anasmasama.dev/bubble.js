@@ -216,6 +216,11 @@ export class Bubble {
         this.actor.show();
     }
 
+    /** Hands the keyboard back without sending, keeping what you typed. */
+    stopTyping() {
+        this._setTyping(false);
+    }
+
     _showReply(on) {
         if (!on)
             this._setTyping(false);
