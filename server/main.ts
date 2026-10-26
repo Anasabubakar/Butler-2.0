@@ -825,6 +825,17 @@ app.get("/api/device/changes", async (c) => {
   return c.json({ items, deleted, next, more: rows.length === limit });
 });
 
+app.delete("/api/device/items/:id", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  const item = await db.deleteItem(id);
+  // Already gone (deleted on another device first) is what the phone wanted anyway.
+  if (!item) return c.json({ ok: true, gone: true });
+  if (item.file_path) await Deno.remove(join(FILES_DIR, id), { recursive: true }).catch(() => {});
+  return c.json({ ok: true });
+});
+
 // The phone app opens the library inside itself: its device token buys a website session,
 // handed back for the app to put in its own browser's cookies.
 app.post("/api/device-session", async (c) => {
