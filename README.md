@@ -228,3 +228,19 @@ flowchart LR
 | [`design/`](design/) | Brand guide, logo masters and the Little Butler sprite kit |
 | [`tests/`](tests/) | Unit tests |
 | [`docs/`](docs/) | Guides: [self-hosting](docs/self-hosting.md), [features](docs/features.md), [Android](docs/android.md) |
+
+## 🗺️ Roadmap
+
+- [x] Save from any app, AI organizing, search by meaning
+- [x] Little Butler pet on Android and GNOME
+- [x] Phone and laptop talking: send, clipboard sync, ring, remote control
+- [x] MCP connections, recipes and automations
+- [x] Native offline Android app
+- [ ] One-command installer and a setup page, so self-hosting takes minutes
+- [ ] Signed release APK and an F-Droid listing
+- [ ] Windows and macOS desktop pet
+- [ ] iPhone app (Share extension first; iOS doesn't allow a floating pet over other apps)
+- [ ] "Hey Butler" wake word
+- [ ] Sign in to MCP servers with OAuth
+
+Ideas and votes are welcome in [Issues](https://github.com/Anasabubakar/Butler-2.0/issues).
