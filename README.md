@@ -46,3 +46,10 @@
 </div>
 
 ---
+
+## 🔥 News
+
+- **[2026-10-26]** **v0.2.0**, the first tagged release: a native Android app that works offline, a new Bento-style website in light and dark, collections named by real topic, and Butler's own voice. [Release notes →](CHANGELOG.md#v020-2026-10-26)
+- **[2026-10-23]** **Connections, recipes and automations.** Plug in any MCP server (Zapier, Notion, GitHub…), save instructions as recipes, and run them on a schedule, on new email, or from a webhook. 🧩
+- **[2026-10-22]** **Control your laptop from your phone**, clipboard history, and AI that falls back across Gemini, OpenRouter, Groq and OpenAI. 💻
+- **[2026-10-20]** Butler 2.0 begins: save from any app, the Little Butler pet on Android and GNOME, morning brief, price watch, clipboard sync and more. 🚀
