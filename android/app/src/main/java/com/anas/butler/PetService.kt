@@ -341,7 +341,8 @@ class PetService : Service() {
     private fun placePanel() {
         val screen = resources.displayMetrics
         val gap = (8 * resources.displayMetrics.density).toInt()
-        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+        // Measured as wide as the screen at most, the way it will be shown, so it's placed right.
+        panel.measure(View.MeasureSpec.makeMeasureSpec(screen.widthPixels, View.MeasureSpec.AT_MOST), View.MeasureSpec.UNSPECIFIED)
         val above = petLayout.y + petLayout.height + gap
         panelLayout.y = if (above + panel.measuredHeight <= screen.heightPixels) above
         else (petLayout.y - panel.measuredHeight - gap).coerceAtLeast(0)
