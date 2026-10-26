@@ -7,13 +7,13 @@ export type Teasing = typeof TEASING[number];
 const FILE = new URL("../persona.md", import.meta.url);
 let words: string | undefined;
 
-/** What Butler calls its owner now and then (BUTLER_TITLE): "boss" unless set, "" for none. */
+/** What Butler calls its owner now and then (BUTLER_TITLE): "ser" unless set, "" for none. */
 export function title(): string {
-  const set = (Deno.env.get("BUTLER_TITLE") ?? "boss").trim().slice(0, 30);
+  const set = (Deno.env.get("BUTLER_TITLE") ?? "ser").trim().slice(0, 30);
   return set.toLowerCase() === "none" ? "" : set;
 }
 
-/** `text` with the owner's title on the end, like "morning, boss", or as it is when there's none. */
+/** `text` with the owner's title on the end, like "morning, ser", or as it is when there's none. */
 export const addressed = (text: string) => title() ? `${text}, ${title()}` : text;
 
 /** The persona as the AI sees it: server/persona.md without its notes for people, title filled in. */
