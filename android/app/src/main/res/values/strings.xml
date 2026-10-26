@@ -67,6 +67,9 @@
     <string name="pet_sent_screenshot">Sent a screenshot to your laptop</string>
     <string name="pet_thinking">Working…</string>
     <string name="ask_title">Ask Butler</string>
+    <string name="ask_replying_to">Replying to: %1$s</string>
+    <string name="ask_about_save">About this save: %1$s</string>
+    <string name="item_ask">Ask Butler</string>
     <string name="ask_hint">Tell Butler what to do…</string>
     <string name="ask_talk">Talk</string>
     <string name="ask_go">Send</string>
