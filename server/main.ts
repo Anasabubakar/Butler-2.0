@@ -18,7 +18,7 @@ import { calendarUrl, explain, localIso, parseWhen, plan, safeZone, shortArgs } 
 import * as google from "./lib/google.ts";
 import * as backup from "./lib/backup.ts";
 import * as meaning from "./lib/meaning.ts";
-import { linkFor, recall } from "./lib/recall.ts";
+import { linkFor, recall, saveText } from "./lib/recall.ts";
 import * as brief from "./lib/brief.ts";
 import * as recap from "./lib/recap.ts";
 import * as settings from "./lib/settings.ts";
@@ -35,6 +35,7 @@ import * as mcp from "./lib/mcp.ts";
 import * as recipes from "./lib/recipes.ts";
 import { vaultReady } from "./lib/vault.ts";
 import * as sync from "./lib/sync.ts";
+import * as memory from "./lib/memory.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -578,12 +579,28 @@ app.post("/api/command", async (c) => {
   if (!device || (!typed && !voice)) return c.json({ error: "device and text (or a voice clip) are required" }, 400);
   if (deviceKind) await inbox.checkIn(device, deviceKind);
 
+  // Talking about one save (opened from the library), or the main conversation.
+  const itemId = text("item", 100);
+  const item = itemId ? await db.getItem(UUID_RE.test(itemId) ? itemId : "00000000-0000-0000-0000-000000000000") : undefined;
+  if (itemId && !item) return c.json({ error: "that save is gone" }, 404);
+  const talk = item?.id ?? null;
+
   let picture = null;
   const file = form?.get("file");
   if (file instanceof File && file.size && VISION_TYPES.some((t) => t === file.type)) {
     if (file.size > MAX_VISION_BYTES) return c.json({ error: "screenshot too large" }, 413);
     picture = { data: encodeBase64(new Uint8Array(await file.arrayBuffer())), mediaType: file.type };
   }
+  if (item && !picture) picture = (await rawFor(item)).image ?? null; // a saved picture is seen as it is
+
+  // What Butler said that you're answering (the pet's bubble), if the conversation doesn't have it yet.
+  const replyTo = text("reply_to", 4000);
+  if (replyTo && replyTo !== await memory.lastSaid(talk).catch(() => null)) {
+    await memory.addTurn("butler", replyTo, null, talk).catch((e) => console.error("chat", String(e).slice(0, 200)));
+  }
+  const { teasing: sass, memory: learn } = await prefs.load().catch(() => prefs.DEFAULTS);
+  const turns = await memory.recentTurns(talk).catch(() => [] as memory.Turn[]);
+  const known = await memory.memories().catch(() => [] as memory.Memory[]);
 
   const timeZone = safeZone(text("tz", 100));
   if (timeZone !== "UTC" && timeZone === text("tz", 100)) await settings.set("time_zone", timeZone); // for the morning brief
@@ -593,14 +610,25 @@ app.post("/api/command", async (c) => {
   let p;
   try {
     p = await plan(typed, {
-      device, timeZone, devices: await inbox.devices(), tools, teasing: await teasing(),
+      device, timeZone, devices: await inbox.devices(), tools, teasing: sass,
       recipes: saved.map((r) => ({ name: r.name, about: r.instructions.slice(0, 120) })),
+      history: memory.historyText(turns, timeZone) || undefined, memories: memory.memoryText(known) || undefined,
+      learn, save: item ? saveText(item, await pageOf(item)) : undefined,
     }, picture, voice);
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
   const said = typed ?? p.heard?.trim() ?? "";
-  const json = (body: Record<string, unknown>) => c.json({ heard: voice ? said : undefined, ...body });
+  learnFrom(p.remember, p.forget, known, learn);
+  // Both sides of the conversation are kept, in order, so the next message can follow on.
+  const ownerSaid = memory.addTurn("owner", said || "(a voice message)", device, talk)
+    .catch((e) => console.error("chat", String(e).slice(0, 200)));
+  const json = (body: Record<string, unknown>) => {
+    const say = typeof body.say === "string" ? body.say : "";
+    if (say) ownerSaid.then(() => memory.addTurn("butler", say, null, talk)).catch((e) => console.error("chat", String(e).slice(0, 200)));
+    if (typeof body.confirm === "string") confirmChat.set(body.confirm, talk);
+    return c.json({ heard: voice ? said : undefined, ...body });
+  };
 
   switch (p.action) {
     case "remind": {
@@ -768,23 +796,77 @@ app.post("/api/command", async (c) => {
       const done = await startRecipe(recipe, said, timeZone);
       return json(done.confirm ? { action: "confirm", ...done } : { action: "answer", say: done.say });
     }
+    case "edit": {
+      if (!item) return json({ action: "answer", say: "open the save you want changed in your library, then ask there." });
+      const patch: Partial<db.Item> = {};
+      const was: string[] = [];
+      const change = <K extends "title" | "note" | "category">(key: K, value: string | null | undefined, max: number) => {
+        const v = value?.trim().slice(0, max);
+        if (!v || v === item[key]) return;
+        patch[key] = v;
+        was.push(`${key} was: ${item[key] ?? "(none)"}`);
+      };
+      change("title", p.subject, 200);
+      change("note", p.text, 2000);
+      change("category", p.category, 60);
+      if (p.tags) {
+        const tags = [...new Set(p.tags.map((t) => t.trim().toLowerCase().replace(/^#/, "")).filter(Boolean))].slice(0, 12);
+        if (tags.join() !== item.tags.join()) {
+          patch.tags = tags;
+          was.push(`tags were: ${item.tags.join(", ") || "(none)"}`);
+        }
+      }
+      if (!was.length) return json({ action: "answer", say: p.reply || "nothing to change there. what should be different?" });
+      await db.updateItem(item.id, patch);
+      meaning.embedItem(item.id).catch(() => {});
+      return json({ action: "edit", say: `${p.reply || "updated."}\n\n${was.join("\n")}` });
+    }
     default:
       return json({ action: "answer", say: p.reply || "can't do that one yet. try saying it another way?" });
   }
 });
+
+// Which conversation a yes/no belongs to, so its outcome is kept there too.
+const confirmChat = new Map<string, string | null>();
+
+/** Forgets what a message shows is wrong and keeps what's new. In the background; failing is fine. */
+function learnFrom(facts: string[] | null | undefined, wrong: number[] | null | undefined, known: memory.Memory[], learning: boolean) {
+  (async () => {
+    for (const n of new Set(wrong ?? [])) if (known[n - 1]) await memory.forget(known[n - 1].id);
+    if (facts?.length) await memory.remember(facts, learning ? "learned" : "told");
+  })().catch((e) => console.error("memory", String(e).slice(0, 200)));
+}
+
+// What a saved link's page says, kept for half an hour so a chat about it doesn't fetch it every time.
+const pages = new Map<string, { at: number; text: string | null }>();
+async function pageOf(item: db.Item): Promise<string | null> {
+  if (!item.url?.startsWith("http")) return null;
+  const kept = pages.get(item.id);
+  if (kept && Date.now() - kept.at < 30 * 60_000) return kept.text;
+  const text = await fetchMeta(item.url, item.platform).then((m) => m?.text ?? null, () => null);
+  if (pages.size > 200) pages.clear();
+  pages.set(item.id, { at: Date.now(), text });
+  return text;
+}
 
 // Your yes to an email Ask Butler wrote, or to a tool that changes things.
 app.post("/api/command/confirm", async (c) => {
   if (!(await signedIn(c))) return c.json({ error: "bad token" }, 401);
   const { text } = await deviceForm(c);
   const id = text("confirm", 100) ?? "";
+  const talk = confirmChat.get(id) ?? null;
+  confirmChat.delete(id);
+  const said = (say: string) => {
+    memory.addTurn("butler", say, null, talk).catch((e) => console.error("chat", String(e).slice(0, 200)));
+    return c.json({ say });
+  };
   const tool = pendingTools.get(id);
   pendingTools.delete(id);
   if (tool) {
     if (tool.expires < Date.now()) return c.json({ error: "that expired, ask again" }, 410);
     const offer = (await mcp.offers()).find((o) => o.key === tool.offer.key);
-    if (!offer) return c.json({ say: `${tool.offer.key} has been switched off or removed, so I didn't use it.` });
-    return c.json({ say: await useTool(offer, tool.args, tool.said, true) });
+    if (!offer) return said(`${tool.offer.key} has been switched off or removed, so I didn't use it.`);
+    return said(await useTool(offer, tool.args, tool.said, true));
   }
   const pending = pendingEmails.get(id);
   pendingEmails.delete(id);
