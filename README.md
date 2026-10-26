@@ -225,9 +225,11 @@ base64 -w0 ~/.android/butler.keystore | gh secret set ANDROID_DEBUG_KEYSTORE -R 
 
 Without it, every build has a different key and Android makes you uninstall first. After adding it, uninstall once more and install the next build; from then on updates install over the top.
 
-Opening **Butler** shows your whole library, the same as the website, files included. It signs in with your token, so there's no password. The ⚙ button in the corner opens setup. The pet's menu has **Open library** too.
+Opening **Butler** shows your library as a native app that works with no internet. The phone keeps its own copy of everything you saved (titles, summaries, key points, tags, categories, and the last 40 pictures), so it opens, searches and filters offline. The home screen is a grid of tiles: **Save something** (type or paste a link or note, or pick pictures), how many things you've saved, saved this week, waiting to sync and pictures, then your categories, subjects and recent saves. Tap any save for its summary and key points, with **Open**, **Share**, **Copy** and **Delete**.
 
-Then in TikTok, Instagram, YouTube, Chrome or Gallery: **Share → Save to Butler**, add a note if you like, tap **Save**. If you're offline it uploads when you're back.
+Saves and deletes made offline happen on the phone at once, marked **Waiting to sync**, and go to the server by themselves as soon as there's internet, even with the app closed. A save that's sent twice (the answer got lost on a bad connection) still makes one item. The phone catches up with what changed elsewhere when you open it, when the internet comes back, when you pull down on the screen, and about every 15 minutes in the background. It follows the phone's light or dark mode. The board, recipes and connections are still the website: the tile at the bottom opens it inside the app (needs internet). The ⚙ button opens setup, and the pet's menu has **Open library** too.
+
+Then in TikTok, Instagram, YouTube, Chrome or Gallery: **Share → Save to Butler**, add a note if you like, tap **Save**. It shows in the library straight away and uploads when you're online.
 
 ### Little Butler on your phone
 
