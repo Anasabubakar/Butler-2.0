@@ -20,7 +20,7 @@ test("the brief lists the day, reminders, yesterday's saves and one old save", (
     resurface: { title: "Smoky party jollof", link: "https://www.tiktok.com/@chef/video/1", savedOn: new Date("2026-10-01T10:00:00Z") },
   }, now, "Africa/Lagos");
   assert.equal(text, [
-    "morning, sir. here's your Wednesday 21 October:",
+    "morning, boss. here's your Wednesday 21 October:",
     "",
     "Today:",
     "• 10:00 Standup",
@@ -39,5 +39,5 @@ test("the brief lists the day, reminders, yesterday's saves and one old save", (
 test("without Google it says how to add your calendar, and greets for the hour", () => {
   const text = compose({ events: null, reminders: [], savedLastDay: 0, resurface: null },
     new Date("2026-10-21T19:00:00Z"), "Africa/Lagos");
-  assert.equal(text, "evening, sir. here's your Wednesday 21 October:\n\nconnect Google under Integrations on the website and your calendar shows up here.");
+  assert.equal(text, "evening, boss. here's your Wednesday 21 October:\n\nconnect Google under Integrations on the website and your calendar shows up here.");
 });
