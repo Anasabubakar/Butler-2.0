@@ -1,5 +1,4 @@
-// Settings & preferences (Figma B2 · 16): "Your Butler. Your boundaries."
-// Every control says where it applies: this browser, or all your devices.
+// Settings: every control says where it applies, this browser or all your devices.
 import { applyMotion, applyTheme, local } from "./local";
 import { href, page } from "./shell";
 import { api, busy, button, card, h, inlineError, SignedOut, toast, toggle } from "./ui";
@@ -22,8 +21,8 @@ export async function renderSettings(app: HTMLElement) {
       (on) => { local.set("motion", on ? "reduce" : "system"); applyMotion(); }, thisBrowser),
   );
 
-  app.replaceChildren(page("settings", "Your Butler. Your boundaries.",
-    "Clear, calm and in your control. Each setting says whether it applies to this browser or to all your devices.",
+  app.replaceChildren(page("settings", "Settings",
+    "Your Butler, your boundaries. Each setting says whether it applies to this browser or to all your devices.",
     h("div", { class: "settings" }, personality, h("div", { class: "settings-side" }, themeCard(), reachCard(), dataCard())),
   ));
 
@@ -71,7 +70,7 @@ function reachCard(): HTMLElement {
       row("Wake listening", "Off until you opt in on a device. Butler always shows when it's recording."),
       row("Screen-access permissions", "Asked only when you ask Butler to help with a screen."),
       row("Clipboard sync controls", "On each device, in the pet's menu."),
-      row("Connected accounts", "Google Calendar, Gmail, Contacts and Drive.", { text: "Open Devices", to: href("devices") }),
+      row("Connected accounts", "Google Calendar, Gmail, Contacts and Drive.", { text: "Open Integrations", to: href("integrations") }),
       row("Remote task access", "Switched on and off at the laptop itself, never remotely."),
     ),
   );
@@ -98,7 +97,7 @@ function dataCard(): HTMLElement {
   });
   return h("section", { class: "b2-card" },
     h("h3", {}, "Data export and deletion"),
-    h("p", { class: "muted" }, "Download everything you've saved as a file. To delete a note, throw it in the wastebin or use its delete button; you get a few seconds to undo."),
+    h("p", { class: "muted" }, "Download everything you've saved as a file. To delete a save, use its delete button in the Library; you get a few seconds to undo."),
     h("div", { class: "settings-actions" }, exportButton, signOut),
   );
 }
