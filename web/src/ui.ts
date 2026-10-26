@@ -1,6 +1,5 @@
-// Butler 2.0 building blocks for the website (Figma B2 · 06 Visual language & controls).
-// Components use the B2 names from the brand guide: B2/Button, B2/Field, B2/Card, B2/Status,
-// B2/Device, B2/Toggle. Styles live in b2-components.css and read the --b2-* tokens.
+// Butler's building blocks for the website: buttons, fields, cards, status pills, toggles,
+// tabs and toasts. Styles live in theme.css and read its light and dark tokens.
 
 export class SignedOut extends Error {}
 
@@ -52,7 +51,7 @@ export function ago(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
-/** "Last seen" in words, for devices (B2 · 12). */
+/** "Last seen" in words, for devices. */
 export function lastSeen(iso: string): string {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
   if (s < 90) return "Last seen just now";
@@ -67,7 +66,7 @@ export function lastSeen(iso: string): string {
 export const reducedMotion = () =>
   document.documentElement.dataset.motion === "reduce" || matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// --- icons: one coherent line set, 1.75 px strokes (B2 · 06) ---------------------------------
+// --- icons: one coherent line set, 1.75 px strokes --------------------------------------------
 
 const ICONS: Record<string, string> = {
   search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>',
@@ -94,6 +93,24 @@ const ICONS: Record<string, string> = {
   back: '<path d="M15 6 9 12l6 6"/>',
   download: '<path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/>',
   signout: '<path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l4-4-4-4M14 12H4"/>',
+  home: '<path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1Z"/>',
+  inbox: '<path d="M4 13.5 6.5 5h11l2.5 8.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M4 13.5h4.5l1 2h5l1-2H20"/>',
+  bolt: '<path d="M13 3 5 13.5h6L10 21l8-10.5h-6Z"/>',
+  plug: '<path d="M9 3v4m6-4v4M7 7h10v4a5 5 0 0 1-10 0Zm5 9v5"/>',
+  recipe: '<path d="M12 3.5 13.8 8l4.7.4-3.6 3 1.1 4.6L12 13.6 8 16l1.1-4.6-3.6-3 4.7-.4Z"/><path d="M5 20h14"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2m0 15v2M4.6 4.6 6 6m12 12 1.4 1.4M2.5 12h2m15 0h2M4.6 19.4 6 18M18 6l1.4-1.4"/>',
+  moon: '<path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10Z"/>',
+  more: '<circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/>',
+  chevron: '<path d="m9 6 6 6-6 6"/>',
+  mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4 7 8 6 8-6"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  calendar: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4m6-4v4"/>',
+  play: '<path d="M8 5.5v13l10.5-6.5Z"/>',
+  edit: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16Z"/><path d="m13.5 6.5 4 4"/>',
+  note: '<path d="M6 3.5h8.5L19 8v11.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h5M8.5 13h7M8.5 16.5h5"/>',
+  sparkle: '<path d="M12 3.5c.6 4.2 2.3 5.9 6.5 6.5-4.2.6-5.9 2.3-6.5 6.5-.6-4.2-2.3-5.9-6.5-6.5 4.2-.6 5.9-2.3 6.5-6.5Z"/><path d="M18.5 16.5c.2 1.5.8 2.1 2.3 2.3-1.5.2-2.1.8-2.3 2.3-.2-1.5-.8-2.1-2.3-2.3 1.5-.2 2.1-.8 2.3-2.3Z"/>',
+  filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
 };
 
 export function icon(name: keyof typeof ICONS | string, label?: string): SVGSVGElement {
@@ -113,16 +130,19 @@ export function icon(name: keyof typeof ICONS | string, label?: string): SVGSVGE
   return svg;
 }
 
-// --- B2/Button ---------------------------------------------------------------------------------
+// --- buttons -------------------------------------------------------------------------------------
 
-export type ButtonKind = "primary" | "secondary" | "danger" | "ghost" | "quiet";
+export type ButtonKind = "primary" | "secondary" | "danger" | "ghost" | "quiet" | "accent";
 
 export function button(
   text: string,
-  opts: { kind?: ButtonKind; icon?: string; onclick?: (e: MouseEvent) => unknown; type?: "button" | "submit"; title?: string; label?: string } = {},
+  opts: {
+    kind?: ButtonKind; icon?: string; onclick?: (e: MouseEvent) => unknown; type?: "button" | "submit";
+    title?: string; label?: string; small?: boolean;
+  } = {},
 ): HTMLButtonElement {
   const b = h("button", {
-    class: `b2-button b2-button--${opts.kind ?? "secondary"}`,
+    class: `b2-button b2-button--${opts.kind ?? "secondary"}${opts.small ? " b2-button--small" : ""}`,
     type: opts.type ?? "button",
     title: opts.title,
     "aria-label": opts.label,
@@ -131,7 +151,14 @@ export function button(
   return b;
 }
 
-/** Shows a button as loading (B2 · 06 loading state) while `work` runs. */
+/** A round button with only an icon; `text` is its accessible name and tooltip. */
+export function iconButton(name: string, text: string, onclick: (e: MouseEvent) => unknown): HTMLButtonElement {
+  const b = h("button", { type: "button", class: "icon-button", "aria-label": text, title: text }, icon(name));
+  b.addEventListener("click", (e) => { e.stopPropagation(); onclick(e); });
+  return b;
+}
+
+/** Shows a button as loading while `work` runs. */
 export async function busy<T>(b: HTMLButtonElement, work: () => Promise<T>): Promise<T> {
   b.disabled = true;
   b.setAttribute("aria-busy", "true");
@@ -143,7 +170,7 @@ export async function busy<T>(b: HTMLButtonElement, work: () => Promise<T>): Pro
   }
 }
 
-// --- B2/Field ------------------------------------------------------------------------------------
+// --- fields --------------------------------------------------------------------------------------
 
 export function field(labelText: string, input: HTMLInputElement | HTMLTextAreaElement, hint?: string): HTMLLabelElement {
   input.classList.add("b2-input");
@@ -154,18 +181,18 @@ export function field(labelText: string, input: HTMLInputElement | HTMLTextAreaE
   );
 }
 
-/** An inline error that says how to recover (B2 · 06 Focus and feedback). */
+/** An inline error that says how to recover. */
 export function inlineError(message: string): HTMLElement {
   return h("p", { class: "b2-error", role: "alert" }, icon("alert"), h("span", {}, message));
 }
 
-// --- B2/Card -------------------------------------------------------------------------------------
+// --- cards ---------------------------------------------------------------------------------------
 
 export function card(...children: Child[]): HTMLElement {
   return h("section", { class: "b2-card" }, ...children);
 }
 
-// --- B2/Status: states always pair a label with an icon (B2 · 02, B2 · 13) ---------------------
+// --- status: states always pair a label with an icon ----------------------------------------------
 
 export type State = "connected" | "offline" | "queued" | "working" | "review" | "complete" | "failed" | "stopped";
 
@@ -184,7 +211,24 @@ export function status(state: State, text = STATES[state].text): HTMLElement {
   return h("span", { class: `b2-status b2-status--${state}`, role: "status" }, icon(STATES[state].icon), h("span", {}, text));
 }
 
-// --- B2/Toggle -------------------------------------------------------------------------------------
+// --- tabs: pick one view ---------------------------------------------------------------------------
+
+/** A row of tabs. `pick` runs with the chosen value, now and on every change. */
+export function tabs<T extends string>(
+  label: string, options: { value: T; text: string; count?: number }[], current: T, pick: (value: T) => void,
+): HTMLElement {
+  const row = h("div", { class: "tabs", role: "tablist", "aria-label": label });
+  const draw = (chosen: T) => {
+    row.replaceChildren(...options.map((o) => h("button", {
+      type: "button", class: "tab", role: "tab", "aria-selected": String(o.value === chosen),
+      onclick: () => { draw(o.value); pick(o.value); },
+    }, o.text, o.count !== undefined ? h("span", { class: "count" }, String(o.count)) : null)));
+  };
+  draw(current);
+  return row;
+}
+
+// --- toggle --------------------------------------------------------------------------------------
 
 export function toggle(
   title: string, description: string, on: boolean, change: (on: boolean) => Promise<unknown> | void, scope?: string,
@@ -212,9 +256,9 @@ export function toggle(
   );
 }
 
-// --- the brand lockup used in product headers (B2 · 08, 09) ------------------------------------
+// --- the logo with the product name ----------------------------------------------------------------
 
-/** The app tile beside the product name, as the B2 screens show it in headers. */
+/** The app tile beside the product name. */
 export function lockup(size = 34): HTMLElement {
   return h("span", { class: "b2-lockup" },
     h("img", { class: "b2-lockup__tile", src: "/brand/butler-app-icon.svg", alt: "", width: String(size), height: String(size) }),
