@@ -277,3 +277,25 @@ export function toast(message: string, action?: { text: string; run: () => void 
   setTimeout(() => t.remove(), ms);
   return t;
 }
+
+// --- dialogs ---------------------------------------------------------------------------------------
+
+/** A dialog over the page, centred on a wide screen and rising from the bottom on a phone. */
+export function modal(title: string, ...content: Child[]): HTMLDialogElement {
+  const close = h("button", { type: "button", class: "icon-button", "aria-label": "Close", title: "Close (Esc)" }, icon("close"));
+  const d = h("dialog", { class: "modal", "aria-label": title },
+    h("header", { class: "modal__head" }, h("h2", {}, title), close),
+    h("div", { class: "modal__body" }, ...content),
+  );
+  close.addEventListener("click", () => d.close());
+  d.addEventListener("click", (e) => { if (e.target === d) d.close(); });
+  d.addEventListener("close", () => d.remove());
+  document.body.append(d);
+  d.showModal();
+  return d;
+}
+
+/** Like replaceChildren, skipping the parts that aren't there. */
+export function fill(el: Element, ...children: Child[]) {
+  el.replaceChildren(...children.filter((c): c is Node | string => Boolean(c)));
+}
