@@ -130,6 +130,7 @@
     <string name="bubble_stop">Stop</string>
     <string name="bubble_copy">Copy</string>
     <string name="bubble_share">Share</string>
+    <string name="bubble_reply">Reply to Butler…</string>
     <string name="bubble_laptop">%1$s</string>
     <string name="bubble_where">%1$s • %2$s</string>
     <string name="state_queued">Queued</string>
