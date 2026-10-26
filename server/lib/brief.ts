@@ -4,6 +4,7 @@ import { sql } from "./db.ts";
 import * as google from "./google.ts";
 import { localIso } from "./command.ts";
 import { savedDays, streak } from "./streaks.ts";
+import { addressed } from "./persona.ts";
 
 export interface Parts {
   events: google.Event[] | null; // null: Google isn't connected
@@ -30,7 +31,7 @@ export function compose(p: Parts, now: Date, timeZone: string): string {
   const day = new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "long", day: "numeric", month: "long" }).format(now);
   const hour = Number(localIso(now, timeZone).slice(11, 13));
   const hello = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
-  const lines = [`${hello}, sir. here's your ${day}:`];
+  const lines = [`${addressed(hello)}. here's your ${day}:`];
   if (p.events === null) lines.push("", "connect Google under Integrations on the website and your calendar shows up here.");
   else if (!p.events.length) lines.push("", "nothing on your calendar today.");
   else lines.push("", "Today:", ...p.events.map((e) => `• ${e.allDay ? "All day" : clock(e.start, timeZone)} ${e.title}`));
