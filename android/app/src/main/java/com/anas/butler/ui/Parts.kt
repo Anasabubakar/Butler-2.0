@@ -19,9 +19,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,8 +57,11 @@ fun Tile(
             .border(1.dp, if (strong) Color.Transparent else b2.line, shape)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(16.dp),
-        content = content,
-    )
+    ) {
+        CompositionLocalProvider(LocalContentColor provides if (strong) b2.onTileStrong else MaterialTheme.colorScheme.onSurface) {
+            content()
+        }
+    }
 }
 
 /** The Butler 2.0 app tile, used as the logo (never the wordmark set in a font). */
@@ -170,7 +175,7 @@ fun ago(iso: String?): String {
 
 /** A big number with a word under it, for the stat tiles. */
 @Composable
-fun Stat(number: String, label: String, color: Color = MaterialTheme.colorScheme.onSurface) {
+fun Stat(number: String, label: String, color: Color = LocalContentColor.current) {
     Text(number, fontSize = 30.sp, fontWeight = FontWeight.Bold, color = color)
-    Text(label, style = MaterialTheme.typography.bodySmall, color = LocalB2.current.muted)
+    Text(label, style = MaterialTheme.typography.bodySmall, color = LocalContentColor.current.copy(alpha = 0.7f))
 }

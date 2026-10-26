@@ -35,7 +35,7 @@ object B2 {
 @Immutable
 data class B2Extra(
     val tile: Color,        // bento tiles
-    val tileStrong: Color,  // the one dark (or light) tile that leads
+    val tileStrong: Color,  // the one tile that leads: ink on light, raised charcoal on dark
     val onTileStrong: Color,
     val line: Color,
     val muted: Color,
@@ -82,11 +82,18 @@ private val shapes = Shapes(
 @Composable
 fun B2Theme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     val extra = if (darkTheme) {
-        B2Extra(B2.DarkSurface, B2.White, B2.Ink, B2.DarkLine, B2.DarkMuted, B2.Vermilion, B2.DarkFailed)
+        B2Extra(B2.DarkSurface, Color(0xFF2A2826), B2.White, B2.DarkLine, B2.DarkMuted, B2.Vermilion, B2.DarkFailed)
     } else {
         B2Extra(B2.White, B2.Ink, B2.White, B2.Line, B2.Muted, B2.Vermilion, B2.ActionRed)
     }
     androidx.compose.runtime.CompositionLocalProvider(LocalB2 provides extra) {
-        MaterialTheme(colorScheme = if (darkTheme) dark else light, shapes = shapes, content = content)
+        val scheme = if (darkTheme) dark else light
+        MaterialTheme(colorScheme = scheme, shapes = shapes) {
+            // Text with no colour of its own takes the page's text colour, not black.
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.material3.LocalContentColor provides scheme.onBackground,
+                content = content,
+            )
+        }
     }
 }
