@@ -9,6 +9,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.io.IOException
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
@@ -76,6 +77,27 @@ class ButlerClient(private val config: Config) {
         }
     }
 
+    /** Butler said no: `code` is the HTTP status. Still an IOException, so callers that don't care needn't. */
+    class Refused(val code: Int, message: String) : IOException(message)
+
+    /** A GET with the token, for the parts of the API that answer JSON. */
+    suspend fun get(path: String): String = json("GET", path, null)
+
+    /** A DELETE with the token. */
+    suspend fun delete(path: String): String = json("DELETE", path, null)
+
+    /** Downloads `path` into `out`, replacing it only once the whole file has arrived. */
+    suspend fun downloadTo(path: String, out: File) = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(base + path).header("x-butler-token", config.token).build()
+        client.newCall(request).execute().use { res ->
+            if (!res.isSuccessful) throw Refused(res.code, "Butler answered ${res.code}")
+            out.parentFile?.mkdirs()
+            val part = File(out.path + ".part")
+            part.outputStream().use { res.body!!.byteStream().copyTo(it) }
+            if (!part.renameTo(out)) throw IOException("couldn't keep ${out.name}")
+        }
+    }
+
     /** The preferences every device shares: teasing ("on", "less", "off") and quiet mode. */
     suspend fun prefs(): JSONObject = JSONObject(json("GET", "/api/prefs", null))
 
@@ -88,7 +110,7 @@ class ButlerClient(private val config: Config) {
             .build()
         client.newCall(request).execute().use { res ->
             val text = res.body?.string().orEmpty()
-            if (!res.isSuccessful) throw IOException(if (res.code == 401) "Butler refused the token" else "Butler answered ${res.code}")
+            if (!res.isSuccessful) throw Refused(res.code, if (res.code == 401) "Butler refused the token" else "Butler answered ${res.code}")
             text
         }
     }
