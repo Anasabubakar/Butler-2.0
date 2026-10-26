@@ -101,6 +101,12 @@ export async function getItem(id: string): Promise<Item | undefined> {
   return item;
 }
 
+/** The item a device already saved under its own id, if it did. */
+export async function itemIdByClientId(clientId: string): Promise<string | undefined> {
+  const [row] = await sql<{ id: string }[]>`select id from items where client_id = ${clientId}`;
+  return row?.id;
+}
+
 export async function deleteItem(id: string): Promise<Item | undefined> {
   const [item] = await sql<Item[]>`delete from items where id = ${id} returning ${COLUMNS}`;
   return item;
