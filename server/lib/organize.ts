@@ -96,7 +96,7 @@ function tidy(out: OrganizedItem, collections: string[] = []): OrganizedItem {
 
 /** One clean name per collection, spelled the way the library already spells it. */
 export function tidyCategory(raw: string, collections: string[] = []): string {
-  let name = raw.replace(/["'`#*_]/g, "").replace(/\s+/g, " ").replace(/[.,;:!?-]+$/, "").trim().slice(0, 40).trim();
+  let name = raw.replace(/["'`#*_]/g, "").replace(/\s+/g, " ").trim().replace(/[.,;:!?-]+$/, "").trim().slice(0, 40).trim();
   if (!name) return "Other";
   const same = collections.find((c) => c.toLowerCase() === name.toLowerCase());
   if (same) return same;
