@@ -1,8 +1,8 @@
-// Ask Butler on the website (Figma B2 · 11 AI chat & voice, B2 · 13 Tasks & confirmations).
-// Chat and voice share one status language; speaker and microphone are separate switches;
-// a laptop task shows its steps and a Stop button the whole time; email waits for your yes.
+// Ask Butler on the website. Chat and voice share one status language; speaker and microphone
+// are separate switches; a laptop task shows its steps and a Stop button the whole time;
+// email waits for your yes. #/ask?q=… (from the Home ask box) asks straight away.
 import { deviceTitle } from "./devices";
-import { local } from "./settings";
+import { local } from "./local";
 import { href, page } from "./shell";
 import { api, busy, button, h, icon, inlineError, reducedMotion, SignedOut, status, type State, toast } from "./ui";
 
@@ -20,7 +20,8 @@ const THIS_DEVICE = "this";
 const WEB_DEVICE = "Website";
 
 export async function renderAsk(app: HTMLElement) {
-  const wanted = new URLSearchParams(location.hash.split("?")[1] ?? "").get("target") ?? THIS_DEVICE;
+  const params = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  const wanted = params.get("target") ?? THIS_DEVICE;
   const devices = await api<Device[]>("/api/devices").catch(() => [] as Device[]);
   const laptops = devices.filter((d) => d.kind === "laptop");
 
@@ -34,7 +35,7 @@ export async function renderAsk(app: HTMLElement) {
     h("p", { class: "ask__hint" }, "Ask about something you saved, set a reminder, add an event, email someone or log a spend."),
   );
   const input = h("input", { class: "ask__input", type: "text", placeholder: "Tell Butler what to do…", "aria-label": "Tell Butler what to do", autocomplete: "off" });
-  const send = button("Send", { kind: "quiet", type: "submit" });
+  const send = button("", { kind: "primary", type: "submit", icon: "send", label: "Send" });
   const micOn = local.get("mic", "off") === "on";
   const mic = micOn ? button("", { kind: "quiet", icon: "mic", label: "Speak instead", onclick: () => listen() }) : null;
   const form = h("form", { class: "ask__composer" }, input, mic, send);
@@ -52,13 +53,13 @@ export async function renderAsk(app: HTMLElement) {
   );
   const task = h("div", { class: "ask__task" });
 
-  app.replaceChildren(page("ask", "Say it. Let him handle it.",
-    "Ask in plain words. Answers cite your saves, and anything that sends or runs elsewhere waits for your yes.",
+  app.replaceChildren(page("ask", "Ask Butler",
+    "Say it in plain words. Answers cite your saves, and anything that sends or runs elsewhere waits for your yes.",
     h("div", { class: "ask" },
-      h("section", { class: "ask__chat b2-card b2-card--ink", "aria-label": "Ask Butler" },
+      h("section", { class: "ask__chat b2-card", "aria-label": "Ask Butler" },
         h("header", { class: "ask__head" },
-          h("img", { src: "/brand/butler-app-icon.svg", alt: "", width: "48", height: "48" }),
-          h("h2", {}, "Ask Butler"),
+          h("img", { src: "/brand/butler-app-icon.svg", alt: "", width: "36", height: "36" }),
+          h("h2", {}, "Butler"),
           target,
         ),
         log,
@@ -174,7 +175,7 @@ export async function renderAsk(app: HTMLElement) {
     return el;
   }
 
-  // --- a task on the laptop: steps, honest states, and Stop always visible (B2 · 13) ----------
+  // --- a task on the laptop: steps, honest states, and Stop always visible ----------------------
 
   async function runOnLaptop(device: string, text: string) {
     const label = deviceTitle(laptops.find((d) => d.name === device)!, devices);
@@ -301,6 +302,12 @@ export async function renderAsk(app: HTMLElement) {
     input.value = "";
     run(text);
   });
-  // Escape stops listening without sending (B2 · 17: Escape tucks things away).
+  // Escape stops listening without sending.
   addEventListener("keydown", (e) => { if (e.key === "Escape" && recorder) endListening(false); });
+  // Asked from the Home page: ask it now, and keep the address clean so a refresh doesn't repeat it.
+  const asked = params.get("q")?.trim();
+  if (asked) {
+    history.replaceState(null, "", "#/ask");
+    run(asked);
+  }
 }

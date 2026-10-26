@@ -131,3 +131,31 @@ export async function resolveTarget(target: string, from: string): Promise<strin
   const kind = /phone|android|mobile/.test(t) ? "phone" : /laptop|computer|pc|desktop/.test(t) ? "laptop" : null;
   return all.filter((d) => d.kind === kind && d.name !== from).map((d) => d.name);
 }
+
+/** What the website's Inbox shows: things to read, not copies or commands. */
+const SHOWN = ["reminder", "note", "link", "file"];
+
+export interface Sent {
+  id: string;
+  from_device: string;
+  kind: MessageKind;
+  body: string | null;
+  url: string | null;
+  item_id: string | null;
+  due_at: string;
+  to_devices: string[];
+  delivered: boolean;
+}
+
+/** What was sent lately, newest first, once each even when it went to every device. */
+export function recent(limit = 50) {
+  return sql<Sent[]>`
+    select min(id::text) as id, from_device, kind, body, url, item_id, due_at,
+      array_agg(to_device order by to_device) as to_devices,
+      bool_and(delivered_at is not null) as delivered
+    from messages
+    where kind = any(${SHOWN}::text[])
+    group by from_device, kind, body, url, item_id, due_at
+    order by due_at desc
+    limit ${limit}`;
+}

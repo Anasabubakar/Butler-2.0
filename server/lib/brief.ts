@@ -31,7 +31,7 @@ export function compose(p: Parts, now: Date, timeZone: string): string {
   const hour = Number(localIso(now, timeZone).slice(11, 13));
   const hello = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const lines = [`${hello}, sir. Your day, in order: ${day}.`];
-  if (p.events === null) lines.push("", "Connect Google under Devices on the website to see your calendar here.");
+  if (p.events === null) lines.push("", "Connect Google under Integrations on the website to see your calendar here.");
   else if (!p.events.length) lines.push("", "Nothing on your calendar today.");
   else lines.push("", "Today:", ...p.events.map((e) => `• ${e.allDay ? "All day" : clock(e.start, timeZone)} ${e.title}`));
   if (p.reminders.length) {

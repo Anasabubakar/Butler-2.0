@@ -11,7 +11,7 @@ Everything runs on one machine you own: the database, the server, your files, an
 | `server/` | The Butler server (Deno): device saves, library API, sign-in, files, and serving the website |
 | `server/lib/` | Rules (platform, kind, link cleanup), page metadata, the AI organizer, database and auth |
 | `db/migrations/` | Postgres schema, applied automatically when the server starts |
-| `web/` | The library website: search, browse by collection, platform and tag |
+| `web/` | The website: a Bento home, the library (search, collections), Ask Butler, Recipes, Automations, Integrations, Inbox, Devices and Settings, in light and dark |
 | `android/` | Android app: "Save to Butler" in every app's Share menu, with offline queueing, and Little Butler peeking from the corner |
 | `deploy/` | Docker Compose setup for a VPS: Postgres, the server, HTTPS (Caddy), nightly backups |
 | `tests/` | Unit tests |
@@ -167,7 +167,7 @@ Every Sunday at 18:00 your time, Butler sends a note with what you saved that we
 
 ### Price watch
 
-Save a product page (Jumia, Konga, Amazon and most shops) and Butler reads its price from the page's structured data, the same data Google Shopping uses, then checks it twice a day. If it drops by 5% or more, every device gets a "📉 Price drop" note with the link, and the sticky note shows the new price next to the old one. Shops that don't publish a price that way, or that block bots, aren't watched; Butler never guesses a price from the page text. Set `BUTLER_PRICE_WATCH=off` to stop it.
+Save a product page (Jumia, Konga, Amazon and most shops) and Butler reads its price from the page's structured data, the same data Google Shopping uses, then checks it twice a day. If it drops by 5% or more, every device gets a "📉 Price drop" note with the link, and the save's card shows the new price next to the old one. Shops that don't publish a price that way, or that block bots, aren't watched; Butler never guesses a price from the page text. Set `BUTLER_PRICE_WATCH=off` to stop it.
 
 ### Dead-link rescue
 
@@ -175,7 +175,7 @@ Every public link you save is also saved to the Internet Archive's Wayback Machi
 
 ### Share a note
 
-Press 🔗 on a note to get a secret link to just that note (on the phone it opens the share sheet; on a computer it's copied). Anyone with the link sees a single sticky note with its title, summary and the original link, and WhatsApp or X show a preview. Nothing else in your library is visible. Shared notes wear a "shared" stamp; press 🔗 again and choose **Stop sharing** to kill the link.
+Press the share button on a save in the Library to get a secret link to just that save (on the phone it opens the share sheet; on a computer it's copied). Anyone with the link sees a single sticky note with its title, summary and the original link, and WhatsApp or X show a preview. Nothing else in your library is visible. Shared notes wear a "shared" stamp; press 🔗 again and choose **Stop sharing** to kill the link.
 
 ### Remind me later
 
