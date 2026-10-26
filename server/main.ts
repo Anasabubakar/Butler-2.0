@@ -437,7 +437,7 @@ function noteWhenDone(recipe: recipes.Recipe, job: Promise<recipes.Done>, said: 
     if (done.waiting) {
       const { offer, args } = done.waiting;
       holdTool(offer, args, said || recipe.instructions, recipe.name, 24 * 3_600_000);
-      body += `\n\nIt wants to use ${offer.key}:\n${showArgs(args)}\n\nSay yes or no under Recipes on the Butler website.`;
+      body += `\n\nIt wants to use ${offer.key}:\n${showArgs(args)}\n\nSay yes or no in the Inbox on the Butler website.`;
     }
     return body;
   }, (e: Error) => `${recipe.name} didn't work: ${e.message.slice(0, 200)}`).then(async (body) => {
@@ -511,7 +511,7 @@ async function recipesOnEmail() {
 /**
  * Runs a recipe. If it's done in time you get the result (and a yes/no if it wants to change
  * something); otherwise it carries on and every device gets the result as a note, with any
- * step that needs your yes waiting under Recipes on the website.
+ * step that needs your yes waiting in the Inbox on the website.
  */
 async function startRecipe(recipe: recipes.Recipe, said: string, timeZone: string): Promise<{ say: string; confirm?: string }> {
   const job = recipes.run(recipe, {
@@ -609,7 +609,7 @@ app.post("/api/command", async (c) => {
     }
     case "email": {
       if (!google.googleConfigured() || !(await google.account())) {
-        return json({ action: "answer", say: "I need your Google account for that. Connect it under Devices on the Butler website, then ask again." });
+        return json({ action: "answer", say: "I need your Google account for that. Connect it under Integrations on the Butler website, then ask again." });
       }
       const who = (p.person ?? "").trim();
       if (!who) return json({ action: "answer", say: "Who should I email?" });
