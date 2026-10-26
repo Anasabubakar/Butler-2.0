@@ -33,6 +33,7 @@ import * as prefs from "./lib/prefs.ts";
 import * as mcp from "./lib/mcp.ts";
 import * as recipes from "./lib/recipes.ts";
 import { vaultReady } from "./lib/vault.ts";
+import * as sync from "./lib/sync.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -145,6 +146,10 @@ app.post("/api/save", async (c) => {
 
   const device = field("device");
   if (!device) return c.json({ error: "device is required" }, 400);
+  // Sent again after the answer got lost: it's already here.
+  const clientId = sync.cleanClientId(field("client_id"));
+  const known = clientId ? await db.itemIdByClientId(clientId) : undefined;
+  if (known) return c.json({ id: known, again: true }, 200);
   const text = field("text");
   const note = field("note");
   const rawUrl = field("url") ?? extractUrl(text);
@@ -160,7 +165,7 @@ app.post("/api/save", async (c) => {
   const platform = platformFor(url);
   const body = text && text !== rawUrl ? text : null;
 
-  const id = await db.insertItem({ device, kind, url, body, note, mime, platform });
+  const id = await db.insertItem({ device, kind, url, body, note, mime, platform, client_id: clientId });
 
   if (hasFile) {
     const name = (file.name || "upload").replace(/[^\w.\-]+/g, "_").slice(-100) || "upload";
@@ -819,6 +824,42 @@ app.post("/api/login", async (c) => {
     httpOnly: true, secure: COOKIE_SECURE, sameSite: "Lax", path: "/", maxAge: SESSION_DAYS * 86_400,
   });
   return c.json({ ok: true });
+});
+
+// The phone's offline copy of the library catches up here: items changed after a cursor,
+// a page at a time, and what was deleted. `since` looks back a little; `after` doesn't.
+app.get("/api/device/changes", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const since = c.req.query("since"), after = c.req.query("after");
+  const from = after ? sync.parseCursor(after) : sync.withOverlap(sync.parseCursor(since));
+  const limit = Math.min(Math.max(Number(c.req.query("limit")) || 200, 1), 500);
+  const rows = await db.changedSince(from, limit);
+  const items = rows.map(({ cursor_micros: _, ...item }) => item);
+  const last = rows.at(-1);
+  const next = last ? sync.formatCursor({ micros: BigInt(last.cursor_micros), id: last.id }) : sync.formatCursor(from);
+  const deleted = after || from.micros === 0n ? [] : await db.deletedSince(from.micros);
+  return c.json({ items, deleted, next, more: rows.length === limit });
+});
+
+app.delete("/api/device/items/:id", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  const item = await db.deleteItem(id);
+  // Already gone (deleted on another device first) is what the phone wanted anyway.
+  if (!item) return c.json({ ok: true, gone: true });
+  if (item.file_path) await Deno.remove(join(FILES_DIR, id), { recursive: true }).catch(() => {});
+  return c.json({ ok: true });
+});
+
+// A saved picture or file, for the phone to keep a copy of offline.
+app.get("/api/device/files/:id", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.notFound();
+  const item = await db.getItem(id);
+  if (!item?.file_path) return c.notFound();
+  return fileResponse(item);
 });
 
 // The phone app opens the library inside itself: its device token buys a website session,

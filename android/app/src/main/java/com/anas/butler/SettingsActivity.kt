@@ -47,7 +47,7 @@ class SettingsActivity : AppCompatActivity() {
             if (config.isReady) {
                 loadSharedPrefs()
                 if (first && isTaskRoot) {
-                    startActivity(Intent(this, LibraryActivity::class.java))
+                    startActivity(Intent(this, HomeActivity::class.java))
                     finish()
                 }
             }

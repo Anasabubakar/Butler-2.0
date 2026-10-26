@@ -59,7 +59,9 @@ export async function migrate(dir: string) {
   }
 }
 
-export async function insertItem(row: Pick<Item, "device" | "kind" | "url" | "body" | "note" | "mime" | "platform">) {
+export async function insertItem(
+  row: Pick<Item, "device" | "kind" | "url" | "body" | "note" | "mime" | "platform"> & { client_id?: string | null },
+) {
   const [item] = await sql<{ id: string }[]>`insert into items ${sql(row)} returning id`;
   return item.id;
 }
@@ -97,6 +99,29 @@ export function itemsById(ids: string[]) {
 export async function getItem(id: string): Promise<Item | undefined> {
   const [item] = await sql<Item[]>`select ${COLUMNS} from items where id = ${id}`;
   return item;
+}
+
+/** The item a device already saved under its own id, if it did. */
+export async function itemIdByClientId(clientId: string): Promise<string | undefined> {
+  const [row] = await sql<{ id: string }[]>`select id from items where client_id = ${clientId}`;
+  return row?.id;
+}
+
+/** Items changed after `after` (micros since 1970, then id), oldest change first, each with its own cursor. */
+export function changedSince(after: { micros: bigint; id: string }, limit: number) {
+  return sql<(Item & { client_id: string | null; cursor_micros: string })[]>`
+    select ${COLUMNS}, client_id, (extract(epoch from updated_at) * 1000000)::bigint::text as cursor_micros from items
+    where ((extract(epoch from updated_at) * 1000000)::bigint, id) > (${after.micros.toString()}::bigint, ${after.id}::uuid)
+    order by updated_at, id
+    limit ${limit}`;
+}
+
+/** Ids of items deleted at or after `micros`. */
+export async function deletedSince(micros: bigint): Promise<string[]> {
+  const rows = await sql<{ id: string }[]>`
+    select id from deleted_items where (extract(epoch from deleted_at) * 1000000)::bigint >= ${micros.toString()}::bigint
+    order by deleted_at limit 5000`;
+  return rows.map((r) => r.id);
 }
 
 export async function deleteItem(id: string): Promise<Item | undefined> {
