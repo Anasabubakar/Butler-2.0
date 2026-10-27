@@ -208,9 +208,29 @@ export class RemoteControl {
         if (this._job.stop && result.state !== 'done')
             result = {state: 'stopped', text: `Stopped: ${rest}`};
         this._log({event: result.state, command: rest, result: result.text.slice(0, 500)});
+        const job = this._job.id;
         this._job = null;
         this._host.banner(null);
-        return this._report(config, result.state, result.text);
+        return this._reportEnd(config, result.state, result.text, job);
+    }
+
+    /** How a job ended. Tried again a few times, so a blip in the Wi-Fi doesn't leave your phone guessing. */
+    async _reportEnd(config, state, text, job) {
+        this._host.status?.(state, text);
+        for (const wait of [0, 5, 15, 45]) {
+            if (wait)
+                await new Promise(resolve => GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, wait, () => {
+                    resolve();
+                    return GLib.SOURCE_REMOVE;
+                }));
+            try {
+                return await this._host.send(config, '/api/laptop/status', {device: 'laptop', state, text, job: job ?? ''});
+            } catch (e) {
+                console.warn(`Butler: couldn't tell the phone (${state}): ${e.message}`);
+            }
+        }
+        this._log({event: 'unreported', state, why: "couldn't reach Butler to say how it ended"});
+        return null;
     }
 
     async _run(config, command) {
