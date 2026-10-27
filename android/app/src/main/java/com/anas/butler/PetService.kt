@@ -537,7 +537,13 @@ class PetService : Service() {
         panel.visibility = View.INVISIBLE
         delay(150)
         try {
-            val bitmap = hands.screenshot() ?: throw IllegalStateException(getString(R.string.pet_no_screenshot))
+            var bitmap = hands.screenshot() ?: throw IllegalStateException(getString(R.string.pet_no_screenshot))
+            if (withContext(Dispatchers.Default) { HandsService.isBlank(bitmap) }) {
+                // Once more, after a moment: a black one can be a frame caught mid-change.
+                // Android allows one screenshot about every third of a second.
+                delay(500)
+                bitmap = hands.screenshot() ?: bitmap
+            }
             if (withContext(Dispatchers.Default) { HandsService.isBlank(bitmap) }) throw ScreenHidden(getString(R.string.pet_screen_hidden))
             val dark = withContext(Dispatchers.Default) { HandsService.isMostlyDark(bitmap) }
             val jpeg = withContext(Dispatchers.Default) {
