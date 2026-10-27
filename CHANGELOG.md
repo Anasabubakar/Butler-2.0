@@ -7,6 +7,7 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 - Butler is now licensed under AGPL-3.0. The logos and the Little Butler character stay all rights reserved.
 - **Butler remembers.** Ask Butler sees the last two days of your conversation, so follow-ups like "and tomorrow?" work, and learns lasting facts about you (people, preferences, plans) for every reply. See, add and forget them in Settings → Memory; switch learning off with Learn about me. Passwords, codes and card numbers are never kept.
 - **Reply to the pet.** Every answer in the phone and laptop pet's bubble has a reply box under it.
+- **Send real files between phone and laptop.** Send to phone / Send to laptop now sends the actual file: the photo open in Gallery, files selected in Files on either device, or the file open in a laptop viewer. On the phone the pet presses the app's Share button and picks Butler's new **Send to laptop** for you; on the laptop, right-click → Scripts → Send to phone works too. Files go directly over the same Wi-Fi or hotspot with no internet (encrypted, only your paired laptop), else through your Butler server, resuming after drops. The pet shows a progress bar over its head while files arrive, then where they were saved, with Open folder.
 - **Chat about one save.** Ask Butler about this, on each library card and in the phone app's save screen: questions answered from the save's full content, and orders carried out with it (reminders, events, email, connected apps, renaming it).
 
 ## v0.2.0 (2026-10-26)
