@@ -31,6 +31,8 @@ const EDGE = 40;        // gap from the right edge while peeking
 const HOP_X = 56;       // how far it moves left when it wakes up
 const HOP_Y = 118;      // how far it moves up
 const INBOX_EVERY = 20;  // seconds to wait before checking again when Butler can't be reached
+// Calls that wait on the AI, so they get the patient session.
+const SLOW_PATHS = ['/api/laptop/plan', '/api/screen/step', '/api/screen/locate', '/api/screen/look', '/api/command'];
 const INBOX_WAIT = 25;   // seconds Butler holds each check open, so phone commands arrive at once
 const DOWNLOADS = GLib.build_filenamev([GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD) ?? GLib.get_home_dir(), 'Butler']);
 // Clipboard sync is on while this file exists; the menu button makes and removes it.
@@ -151,6 +153,8 @@ function saveSpot(spot) {
 export default class ButlerPetExtension extends Extension {
     enable() {
         this._session = new Soup.Session({timeout: 30});
+        // Asking the AI can take longer than 30 seconds when it falls back to a backup model.
+        this._slowSession = new Soup.Session({timeout: 150});
         const seat = Clutter.get_default_backend().get_default_seat();
         this._keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
         // Made once and kept: a pointer made at the moment of use drops its first events.
@@ -393,7 +397,8 @@ export default class ButlerPetExtension extends Extension {
         this._pet = this._face = this._menu = this._bubble = this._ask = this._confirmBox = null;
         this._keyboard = this._pointer = null;
         this._session?.abort();
-        this._session = null;
+        this._slowSession?.abort();
+        this._session = this._slowSession = null;
     }
 
     /** pets/clips.json, written by update-sprites.py: frame count, duration, loop and next clip. */
@@ -1718,14 +1723,16 @@ export default class ButlerPetExtension extends Extension {
         const base = config.url.replace(/\/api\/save\/?$/, '');
         const message = Soup.Message.new_from_multipart(`${base}${path}`, form);
         message.request_headers.append('x-butler-token', config.token);
+        const session = SLOW_PATHS.includes(path) ? this._slowSession : this._session;
         return new Promise((resolve, reject) => {
-            this._session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null, (session, result) => {
+            session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null, (session, result) => {
                 let body;
                 try {
                     const bytes = session.send_and_read_finish(result);
                     body = JSON.parse(new TextDecoder().decode(bytes.get_data() ?? new Uint8Array()) || '{}');
                 } catch (e) {
-                    reject(new Error("couldn't reach Butler"));
+                    reject(new Error(e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.TIMED_OUT)
+                        ? 'Butler took too long to answer' : "couldn't reach Butler (is the laptop online?)"));
                     return;
                 }
                 const status = message.get_status();
