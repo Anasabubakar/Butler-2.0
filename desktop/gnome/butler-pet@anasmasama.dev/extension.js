@@ -92,6 +92,47 @@ function screenChanged(a, b) {
     return diff > 1.2;
 }
 
+/**
+ * Whether a screenshot is empty: all see-through or all black. On Wayland some windows
+ * (videos, games, apps drawing with the GPU, fullscreen ones) come out like that.
+ */
+function isBlank(pixbuf) {
+    const tiny = pixbuf.scale_simple(48, 27, GdkPixbuf.InterpType.BILINEAR);
+    const pixels = tiny.get_pixels();
+    const stride = tiny.get_rowstride(), channels = tiny.get_n_channels(), alpha = tiny.get_has_alpha();
+    for (let y = 0; y < 27; y++) {
+        for (let x = 0; x < 48; x++) {
+            const i = y * stride + x * channels;
+            if (alpha && pixels[i + 3] < 8)
+                continue;
+            if ((pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3 >= 12)
+                return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * A screenshot as a JPEG no wider than 1600 pixels. JPEG has no see-through, so see-through
+ * parts (rounded corners, shadows) go on white first instead of turning black.
+ */
+function toJpeg(pixbuf) {
+    let width = pixbuf.get_width(), height = pixbuf.get_height();
+    if (width > 1600) {
+        height = Math.round(height * 1600 / width);
+        width = 1600;
+    }
+    pixbuf = pixbuf.get_has_alpha()
+        ? pixbuf.composite_color_simple(width, height, GdkPixbuf.InterpType.BILINEAR, 255, 8, 0xffffff, 0xffffff)
+        : pixbuf.scale_simple(width, height, GdkPixbuf.InterpType.BILINEAR);
+    const [, jpeg] = pixbuf.save_to_bufferv('jpeg', ['quality'], ['85']);
+    return new GLib.Bytes(jpeg);
+}
+
+/** The picture a Shell.Screenshot wrote into `stream`. */
+const pixbufFrom = stream => GdkPixbuf.Pixbuf.new_from_stream(
+    Gio.MemoryInputStream.new_from_bytes(stream.steal_as_bytes()), null);
+
 /** This laptop's time zone, like Africa/Lagos, so "at 3pm" means your 3pm. */
 function timeZone() {
     const id = GLib.TimeZone.new_local().get_identifier();
@@ -757,7 +798,7 @@ export default class ButlerPetExtension extends Extension {
     /**
      * A screenshot of the focused window, without the pet or its menu, as a JPEG no wider
      * than 1600 pixels (small enough to send quickly), plus where the window is on screen.
-     * Null if there is no window.
+     * Null if there is no window. Throws rather than hand on a black picture.
      */
     async _snapWindow() {
         const window = global.display.focus_window;
@@ -775,16 +816,40 @@ export default class ButlerPetExtension extends Extension {
                 }
             });
         });
-        let pixbuf = GdkPixbuf.Pixbuf.new_from_stream(
-            Gio.MemoryInputStream.new_from_bytes(stream.steal_as_bytes()), null);
-        if (pixbuf.get_width() > 1600) {
-            const height = Math.round(pixbuf.get_height() * 1600 / pixbuf.get_width());
-            pixbuf = pixbuf.scale_simple(1600, height, GdkPixbuf.InterpType.BILINEAR);
-        }
-        const [, jpeg] = pixbuf.save_to_bufferv('jpeg', ['quality'], ['85']);
+        const pixbuf = pixbufFrom(stream);
         // The captured area is exactly what the picture shows, so clicks land where Gemini points.
         const rect = area?.width ? area : window.get_frame_rect();
-        return {jpeg: new GLib.Bytes(jpeg), rect};
+        if (!isBlank(pixbuf))
+            return {jpeg: toJpeg(pixbuf), rect};
+        // Some windows come out empty on their own; the screen as you see it still has them.
+        return {jpeg: await this._snapArea(rect), rect};
+    }
+
+    /** The screen inside `rect` as a JPEG, with the pet and its bubble hidden for a moment. */
+    async _snapArea({x, y, width, height}) {
+        const hidden = [this._pet, this._bubble?.actor, this._menu].filter(actor => actor?.visible);
+        hidden.forEach(actor => actor.hide());
+        await sleep(80); // a frame or two, so they're gone from the screen
+        const stream = Gio.MemoryOutputStream.new_resizable();
+        try {
+            await new Promise((resolve, reject) => {
+                new Shell.Screenshot().screenshot_area(x, y, width, height, stream, (shot, result) => {
+                    try {
+                        shot.screenshot_area_finish(result);
+                        stream.close(null);
+                        resolve();
+                    } catch (e) {
+                        reject(new Error("couldn't take a screenshot"));
+                    }
+                });
+            });
+        } finally {
+            hidden.forEach(actor => actor.show());
+        }
+        const pixbuf = pixbufFrom(stream);
+        if (isBlank(pixbuf))
+            throw new Error('that window came out black in screenshots, so I left the picture out');
+        return toJpeg(pixbuf);
     }
 
     /** Asks Butler where `target` is on the screenshot and clicks it. False if it isn't there. */
@@ -849,7 +914,11 @@ export default class ButlerPetExtension extends Extension {
             if (!config)
                 throw new Error('set your save URL and token in ~/.config/butler/pet.json');
 
-            const shot = await this._snapWindow().catch(() => null);
+            let snapError = null;
+            const shot = await this._snapWindow().catch(e => {
+                snapError = e;
+                return null;
+            });
             let text;
             if (this._inBrowser()) {
                 await this._press(Clutter.KEY_Control_L, Clutter.KEY_l);
@@ -863,7 +932,7 @@ export default class ButlerPetExtension extends Extension {
                 text = await this._copySelection();
             }
             if (!text && !shot)
-                throw new Error('nothing selected to save');
+                throw snapError ?? new Error('nothing selected to save');
 
             const fields = {device: 'laptop'};
             if (text)
@@ -1389,14 +1458,7 @@ export default class ButlerPetExtension extends Extension {
                 }
             });
         });
-        let pixbuf = GdkPixbuf.Pixbuf.new_from_stream(
-            Gio.MemoryInputStream.new_from_bytes(stream.steal_as_bytes()), null);
-        if (pixbuf.get_width() > 1600) {
-            const height = Math.round(pixbuf.get_height() * 1600 / pixbuf.get_width());
-            pixbuf = pixbuf.scale_simple(1600, height, GdkPixbuf.InterpType.BILINEAR);
-        }
-        const [, jpeg] = pixbuf.save_to_bufferv('jpeg', ['quality'], ['85']);
-        return {jpeg: new GLib.Bytes(jpeg), rect: {x: 0, y: 0, width: global.stage.width, height: global.stage.height}};
+        return {jpeg: toJpeg(pixbufFrom(stream)), rect: {x: 0, y: 0, width: global.stage.width, height: global.stage.height}};
     }
 
     // --- clipboard history ---------------------------------------------------------------
