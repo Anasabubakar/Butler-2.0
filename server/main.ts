@@ -14,6 +14,7 @@ import { cleanUrl, extractUrl, kindFor, platformFor } from "./lib/rules.ts";
 import { aiProviders, geminiKeys, geminiModels, geminiReady } from "./lib/gemini.ts";
 import { LOOK_MODES, type LookMode, locate, look, MAX_STEPS, nextStep } from "./lib/screen.ts";
 import * as inbox from "./lib/inbox.ts";
+import * as jobs from "./lib/jobs.ts";
 import { calendarUrl, explain, localIso, parseWhen, plan, safeZone, shortArgs } from "./lib/command.ts";
 import * as google from "./lib/google.ts";
 import * as backup from "./lib/backup.ts";
@@ -268,6 +269,7 @@ app.post("/api/inbox", async (c) => {
   await inbox.checkIn(device, deviceKind);
   // wait=25 holds the request open until something arrives (or 25 seconds pass).
   const wait = Math.min(Number(text("wait", 3)) || 0, 25);
+  await jobs.expire();
   let due = await inbox.takeDue(device);
   if (!due.length && wait > 0) {
     await inbox.waitForMessage(device, wait * 1000, c.req.raw.signal);
@@ -276,6 +278,7 @@ app.post("/api/inbox", async (c) => {
     if (c.req.raw.signal.aborted) return c.json([]);
     due = await inbox.takeDue(device);
   }
+  await jobs.pickedUp(due, device);
   return c.json(due);
 });
 
