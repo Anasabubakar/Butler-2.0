@@ -111,6 +111,28 @@
   background-color: #9c2a1b;
 }
 
+.butler-bubble-track {
+  height: 6px;
+  margin: 6px 6px 2px 2px;
+  border-radius: 3px;
+  background-color: #2e2c29;
+}
+
+.butler-bubble-fill {
+  border-radius: 3px;
+  background-color: #e4462d; /* B2 vermilion, as on the phone */
+}
+
+.butler-bubble-detail {
+  color: #a8a49e;
+  font-size: 9.5pt;
+  padding: 2px 2px 0;
+}
+
+.butler-bubble-action {
+  margin-top: 8px;
+}
+
 .butler-bubble-body {
   color: #e6e3dd;
   width: 290px;

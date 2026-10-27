@@ -2,3 +2,6 @@ node_modules/
 .DS_Store
 .env
 *.local.env
+
+# Python bytecode from the laptop link tests
+__pycache__/

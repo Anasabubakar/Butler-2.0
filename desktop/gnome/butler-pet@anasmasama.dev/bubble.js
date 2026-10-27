@@ -67,6 +67,21 @@ export class Bubble {
             top.add_child(button);
         this.actor.add_child(top);
 
+        // Files on their way: a bar that fills, and how far along under it ("45% · 12 MB of 27 MB").
+        this._track = new St.Widget({style_class: 'butler-bubble-track', x_expand: true, visible: false});
+        this._fill = new St.Widget({style_class: 'butler-bubble-fill'});
+        this._track.add_child(this._fill);
+        this._track.connect('notify::allocation', () => this._sizeFill());
+        this.actor.add_child(this._track);
+        this._detail = new St.Label({style_class: 'butler-bubble-detail', visible: false});
+        this.actor.add_child(this._detail);
+        this._fraction = 0;
+
+        // One thing to do with the result, such as "Open folder".
+        this._action = chip('', 'butler-bubble-action', () => this._actionRun?.());
+        this._action.x_align = Clutter.ActorAlign.START;
+        this.actor.add_child(this._action);
+
         this._body = new St.Label({style_class: 'butler-bubble-body', reactive: true, x_align: Clutter.ActorAlign.START});
         this._body.clutter_text.line_wrap = true;
         this._body.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
@@ -161,6 +176,34 @@ export class Bubble {
         this._changed();
     }
 
+    /**
+     * How far along files are (0 to 1), with the detail line under the bar. Null hides the bar.
+     * Only while working: the result takes it away.
+     */
+    bar(fraction, detail = '') {
+        const on = fraction !== null && fraction !== undefined;
+        this._fraction = on ? Math.min(1, Math.max(0, fraction)) : 0;
+        this._track.visible = on;
+        this._detail.text = detail;
+        this._detail.visible = on && Boolean(detail);
+        this._sizeFill();
+        this._changed();
+    }
+
+    _sizeFill() {
+        const width = this._track.width;
+        if (width > 0)
+            this._fill.set_size(Math.round(width * this._fraction), this._track.height);
+    }
+
+    /** A button under the result, such as "Open folder". Null takes it away. */
+    offer(label, run) {
+        this._actionRun = run;
+        this._action.label = label ?? '';
+        this._action.visible = Boolean(label && run);
+        this._changed();
+    }
+
     /** Finished: a tick or a "!", the answer, and Copy and ×, under "My laptop • Complete" or "• Failed". */
     result(text, ok = true, heading = `My laptop • ${ok ? 'Complete' : 'Failed'}`) {
         this._working = false;
@@ -200,10 +243,15 @@ export class Bubble {
         this._stopAction = null;
         this._spinner.stop();
         this._setExpanded(false);
+        this.bar(null);
+        this.offer(null, null);
         this.actor.hide();
     }
 
     _show(text, spinning) {
+        if (!spinning)
+            this.bar(null);
+        this.offer(null, null);
         this._full = text;
         this._line.text = firstLine(text);
         this._setBody(text);

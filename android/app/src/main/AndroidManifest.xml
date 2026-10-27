@@ -13,6 +13,10 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Clipboard sync and the inbox need Butler awake: asks to be left out of battery limits. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Sending files with no internet: finds your laptop when it calls out on the same Wi-Fi. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <!-- Lets Butler hand WhatsApp and Telegram exactly the apps it opens with a message. -->
     <queries>
@@ -72,6 +76,28 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
                 <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity>
+
+        <!-- "Send to laptop" in every app's Share menu: the real files go to your laptop. -->
+        <activity
+            android:name=".SendActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/send_share_label"
+            android:icon="@mipmap/ic_launcher"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
 

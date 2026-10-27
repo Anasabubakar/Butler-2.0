@@ -191,6 +191,23 @@ class HandsService : AccessibilityService() {
         return null
     }
 
+    /** Scrolls the first list on screen that isn't Butler's own (a share menu's apps) one page on. */
+    fun scrollForward(): Boolean {
+        val roots = windows.mapNotNull { it.root }.ifEmpty { listOfNotNull(rootInActiveWindow) }
+        val list = roots.firstNotNullOfOrNull { findScrollable(it) } ?: return false
+        return list.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+    }
+
+    private fun findScrollable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        if (!node.isVisibleToUser || node.packageName == packageName) return null
+        if (node.isScrollable) return node
+        for (i in 0 until node.childCount) {
+            val found = node.getChild(i)?.let(::findScrollable)
+            if (found != null) return found
+        }
+        return null
+    }
+
     /** The selected text in the app you're looking at, or null if nothing is selected. */
     fun selectedText(): String? {
         val node = findSelection(rootInActiveWindow ?: return null) ?: return null

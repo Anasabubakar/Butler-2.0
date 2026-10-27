@@ -41,6 +41,12 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import com.anas.butler.transfer.Laptop
+import com.anas.butler.transfer.Link
+import com.anas.butler.transfer.Progress
+import com.anas.butler.transfer.Saved
+import com.anas.butler.transfer.Transfers
+import kotlinx.coroutines.Job
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
@@ -81,6 +87,9 @@ class PetService : Service() {
     // so after 15 minutes of silence the pet stops waiting on it.
     private var laptopUntil = 0L
     private val laptopWorking get() = SystemClock.elapsedRealtime() < laptopUntil
+    // Files on their way, to or from the laptop: Stop cancels this.
+    private var transfer: Job? = null
+    private var progressAt = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -248,10 +257,17 @@ class PetService : Service() {
                 if (!laptopWorking || !waited) delay(INBOX_EVERY_MS)
             }
         }
+        // Files the laptop hands over directly on the same Wi-Fi, even with no internet.
+        scope.launch { laptopOffers() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == STOP_RING) stopRinging()
+        if (intent?.action == SEND_FILES && ::pet.isInitialized) {
+            val clip = intent.clipData
+            val uris = List(clip?.itemCount ?: 0) { clip!!.getItemAt(it).uri }.filterNotNull()
+            if (uris.isNotEmpty()) sendFiles(uris)
+        }
         return START_STICKY
     }
 
@@ -639,18 +655,250 @@ class PetService : Service() {
         getString(R.string.pet_answer, answer)
     }
 
-    /** Send to laptop: the page in a browser, else the selected text, else a screenshot. */
-    private fun sendToLaptop() = work(getString(R.string.pet_sending)) {
-        val config = Config(this)
-        if (!config.isReady) throw IllegalStateException(getString(R.string.setup_first))
-        val butler = ButlerClient(config)
+    /**
+     * Send to laptop: the page in a browser, else the selected text, else the real file you're
+     * looking at or picked (the pet presses the app's own Share button and chooses Butler's
+     * "Send to laptop", since Android only hands files over through Share), else a screenshot.
+     */
+    private fun sendToLaptop() {
         val link = HandsService.instance?.browserUrl()
         val selected = HandsService.instance?.selectedText()
-        when {
-            link != null -> butler.send("laptop", "link", url = link).let { getString(R.string.pet_sent_page) }
-            selected != null -> butler.send("laptop", "clip", text = selected).let { getString(R.string.pet_sent_text) }
-            else -> butler.send("laptop", "file", file = ButlerClient.Attachment("screenshot.jpg", snap().jpeg, "image/jpeg"))
-                .let { getString(R.string.pet_sent_screenshot) }
+        if (link == null && selected == null && HandsService.instance != null) return shareForMe()
+        work(getString(R.string.pet_sending)) {
+            val config = Config(this)
+            if (!config.isReady) throw IllegalStateException(getString(R.string.setup_first))
+            val butler = ButlerClient(config)
+            when {
+                link != null -> butler.send("laptop", "link", url = link).let { getString(R.string.pet_sent_page) }
+                selected != null -> butler.send("laptop", "clip", text = selected).let { getString(R.string.pet_sent_text) }
+                else -> sendScreenshot(butler)
+            }
+        }
+    }
+
+    private suspend fun sendScreenshot(butler: ButlerClient): String {
+        butler.send("laptop", "file", file = ButlerClient.Attachment("screenshot.jpg", snap().jpeg, "image/jpeg"))
+        return getString(R.string.pet_sent_screenshot)
+    }
+
+    /**
+     * Presses the Share button of the app you're in (Gallery, Files, Photos…), then Butler's
+     * "Send to laptop" in the share menu, which hands over the real file or files you picked.
+     * If Butler's option isn't in view, the menu stays open for you to tap it. With no Share
+     * button at all, it sends a screenshot instead.
+     */
+    private fun shareForMe() {
+        if (busy) return
+        busy = true
+        closeMenu()
+        pet.setState("work")
+        bubbleTurn++
+        bubble.working(getString(R.string.pet_finding_file), device = getString(R.string.ask_on_phone))
+        showBubble()
+        scope.launch {
+            delay(250) // the menu is out of the way
+            val hands = HandsService.instance
+            if (hands == null || !hands.pressLabelled(HandsService.SHARE)) {
+                busy = false
+                bubbleTurn++
+                hideBubble()
+                work(getString(R.string.pet_sending)) {
+                    val config = Config(this@PetService)
+                    if (!config.isReady) throw IllegalStateException(getString(R.string.setup_first))
+                    sendScreenshot(ButlerClient(config))
+                }
+                return@launch
+            }
+            // Wait for the share menu, then look for "Send to laptop", scrolling its list if need be.
+            val chose = run {
+                repeat(8) { tries ->
+                    delay(if (tries == 0) 900 else 450)
+                    if (hands.pressLabelled(SEND_TARGET)) return@run true
+                    if (tries in 3..6) hands.scrollForward()
+                }
+                false
+            }
+            busy = false
+            if (chose) {
+                bubbleTurn++
+                hideBubble() // the share comes back to the pet, which shows it sending
+            } else {
+                bubbleTurn++
+                bubble.info(getString(R.string.pet_pick_send))
+                showBubble()
+                lingerThenHide(getString(R.string.pet_pick_send))
+            }
+        }
+    }
+
+    // --- real files, to and from the laptop -----------------------------------------------
+
+    /** Sends files picked in another app (from Share → Send to laptop). */
+    private fun sendFiles(uris: List<Uri>) {
+        if (transfer?.isActive == true) return say(getString(R.string.pet_busy_sending))
+        val transfers = Transfers(this)
+        val files = runCatching { transfers.describe(uris) }.getOrElse { e ->
+            return tell(getString(R.string.pet_failed, e.message ?: e.toString()), false, getString(R.string.ask_on_phone))
+        }
+        if (files.isEmpty()) return say(getString(R.string.send_nothing))
+        startTransfer(Progress(false, files.map { it.name }, 0, files.sumOf { it.size }, "", getString(R.string.transfer_laptop))) {
+            val done = transfers.send("laptop", files, ::showTransfer)
+            val via = getString(if (done.via == "wifi") R.string.transfer_wifi else R.string.transfer_server)
+            val peer = if (done.via == "wifi") getString(R.string.transfer_laptop) else done.peer
+            tell(getString(R.string.transfer_sent, filesWord(files.size), peer, via), true, getString(R.string.ask_on_phone))
+        }
+    }
+
+    /** Files the laptop is sending through Butler. */
+    private fun receiveFiles(from: String, body: JSONObject) {
+        val transfers = Transfers(this)
+        val files = body.optJSONArray("files")
+        val names = List(files?.length() ?: 0) { files!!.getJSONObject(it).optString("name", "file") }
+        scope.launch {
+            while (transfer?.isActive == true) delay(1000) // one at a time
+            startTransfer(Progress(true, names, 0, body.optLong("size"), "server", from)) {
+                arrived(transfers.receiveFromServer(body, from, ::showTransfer))
+            }
+        }
+    }
+
+    /**
+     * While this phone is on the same Wi-Fi as the laptop, it keeps asking the laptop (held
+     * open, so it's answered at once) whether it has files to hand over. Works with no internet.
+     */
+    private suspend fun laptopOffers() {
+        var laptop: Laptop? = null
+        var lookedAt = 0L
+        while (scope.isActive) {
+            if (laptop == null) {
+                if (Link.known(this) == null || SystemClock.elapsedRealtime() - lookedAt < LOOK_EVERY_MS && lookedAt != 0L) {
+                    delay(15_000)
+                    continue
+                }
+                lookedAt = SystemClock.elapsedRealtime()
+                laptop = Link.find(this, listenMs = 2500)
+                if (laptop == null) continue
+            }
+            val here = laptop!!
+            val offers = runCatching {
+                withContext(Dispatchers.IO) {
+                    here.http(readSeconds = 40).newCall(here.request("/link/inbox?wait=25").build()).execute().use { res ->
+                        if (!res.isSuccessful) throw java.io.IOException("answered ${res.code}")
+                        org.json.JSONArray(res.body!!.string())
+                    }
+                }
+            }.getOrNull()
+            if (offers == null) {
+                laptop = null // gone from this network: look again in a while
+                continue
+            }
+            for (i in 0 until offers.length()) {
+                val offer = offers.getJSONObject(i)
+                while (transfer?.isActive == true) delay(1000) // one at a time
+                val files = offer.getJSONArray("files")
+                val names = List(files.length()) { files.getJSONObject(it).optString("name", "file") }
+                startTransfer(Progress(true, names, 0, offer.optLong("size"), "wifi", getString(R.string.transfer_laptop))) {
+                    arrived(Transfers(this@PetService).receiveFromLaptop(here, offer, ::showTransfer))
+                }
+                transfer?.join()
+            }
+        }
+    }
+
+    /** Shows files on their way over the pet's head, with Stop, and runs `action`. */
+    private fun startTransfer(first: Progress, action: suspend () -> Unit) {
+        busy = true
+        panelShown = false
+        menu.visibility = View.GONE
+        pet.setState("work")
+        pet.effect(ButlerSpriteView.Effect.WORKING)
+        bubbleTurn++
+        val where = if (first.incoming) getString(R.string.transfer_from, first.peer) else getString(R.string.ask_on_phone)
+        bubble.working(transferLine(first), {
+            transfer?.cancel()
+            bubble.progress(getString(R.string.pet_stopping))
+        })
+        bubble.heading(getString(R.string.bubble_where, where, getString(if (first.incoming) R.string.state_receiving else R.string.state_sending)))
+        bubble.bar(first.fraction, transferDetail(first))
+        showBubble()
+        transfer = scope.launch {
+            try {
+                action()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                tell(getString(R.string.pet_failed, getString(R.string.transfer_stopped)), false, where)
+            } catch (e: Exception) {
+                val why = e.message ?: e.toString()
+                tell(if (first.incoming) getString(R.string.transfer_failed_in, first.peer, why) else getString(R.string.pet_failed, why), false, where)
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    /** A progress update, from whichever thread it came on; at most a few a second. */
+    private fun showTransfer(p: Progress) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - progressAt < 250 && p.done < p.size) return
+        progressAt = now
+        scope.launch {
+            if (!busy || transfer?.isActive != true) return@launch
+            bubble.progress(transferLine(p))
+            bubble.bar(p.fraction, transferDetail(p))
+        }
+    }
+
+    /** Files arrived: where they are, with Open (one file) or Show in Downloads (several). */
+    private fun arrived(saved: Saved) {
+        val text = getString(R.string.transfer_got, filesWord(saved.uris.size), saved.peer)
+        tell(text, true, getString(R.string.ask_on_phone))
+        bubble.heading(getString(R.string.bubble_where, getString(R.string.ask_on_phone), getString(R.string.state_received)))
+        val open = Transfers.openIntent(this, saved).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        bubble.offer(getString(if (saved.uris.size == 1) R.string.transfer_open else R.string.transfer_show)) {
+            runCatching { startActivity(open) }
+            bubbleTurn++
+            hideBubble()
+        }
+        placePanel()
+        notifyArrived(text, open)
+    }
+
+    /** A notification too, for when the phone was in your pocket. */
+    private fun notifyArrived(text: String, open: Intent) {
+        val tap = PendingIntent.getActivity(this, nextNotification, open,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val notification = NotificationCompat.Builder(this, INBOX_CHANNEL)
+            .setSmallIcon(R.drawable.ic_butler)
+            .setColor(Ui.ACCENT)
+            .setContentTitle(getString(R.string.transfer_arrived))
+            .setContentText(text)
+            .setAutoCancel(true)
+            .setContentIntent(tap)
+            .addAction(0, getString(R.string.notify_open), tap)
+            .build()
+        runCatching { getSystemService(NotificationManager::class.java).notify(nextNotification++, notification) }
+    }
+
+    private fun filesWord(n: Int) = resources.getQuantityString(R.plurals.files_count, n, n)
+
+    /** "a.jpg", "a.jpg and b.pdf", "a.jpg, b.pdf and 3 more". */
+    private fun namesText(names: List<String>): String = when {
+        names.isEmpty() -> filesWord(0)
+        names.size == 1 -> names[0]
+        names.size == 2 -> getString(R.string.transfer_and, names[0], names[1])
+        else -> getString(R.string.transfer_and_more, names.take(2).joinToString(", "), names.size - 2)
+    }
+
+    private fun transferLine(p: Progress) = getString(
+        if (p.incoming) R.string.transfer_in_line else R.string.transfer_out_line, filesWord(p.names.size), namesText(p.names),
+    )
+
+    private fun transferDetail(p: Progress): String {
+        val size = { b: Long -> android.text.format.Formatter.formatShortFileSize(this, b) }
+        val base = getString(R.string.transfer_detail, (p.fraction * 100).toInt(), size(p.done), size(p.size))
+        return when (p.via) {
+            "wifi" -> "$base · ${getString(R.string.transfer_wifi)}"
+            "server" -> "$base · ${getString(R.string.transfer_server)}"
+            else -> base
         }
     }
 
@@ -833,6 +1081,8 @@ class PetService : Service() {
             config.quiet = it.optBoolean("quiet", config.quiet)
             config.teasing = it.optString("teasing", config.teasing)
         }
+        // How to reach the laptop directly, kept for when there's no internet.
+        runCatching { Link.learn(this) }
     }
 
     // --- the inbox: reminders and things sent from your laptop -------------------------
@@ -869,6 +1119,7 @@ class PetService : Service() {
                 val url = message.optString("url")
                 announce(getString(R.string.inbox_link, from), url, Intent(Intent.ACTION_VIEW, Uri.parse(url)))
             }
+            "transfer" -> receiveFiles(message.optString("from_device"), JSONObject(body))
             "file" -> {
                 val (bytes, name) = ButlerClient(config).download(message.getString("item_id"))
                 val open = saveDownload(bytes, name)
@@ -1001,6 +1252,11 @@ class PetService : Service() {
         private const val LAPTOP_QUIET_MS = 15 * 60_000L
         private const val INBOX_EVERY_MS = 20_000L
         private const val STOP_RING = "com.anas.butler.STOP_RING"
+        private const val SEND_FILES = "com.anas.butler.SEND_FILES"
+        private const val LOOK_EVERY_MS = 60_000L // how often to look for the laptop on this Wi-Fi
+
+        /** Butler's own entry in an app's share menu. */
+        private val SEND_TARGET = Regex("^send to laptop$", RegexOption.IGNORE_CASE)
         private const val MAX_STEPS = 15
         private const val SYNC_MAX = 20_000 // characters; bigger copies stay on the phone
 
@@ -1044,6 +1300,16 @@ class PetService : Service() {
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, PetService::class.java))
+        }
+
+        /**
+         * Hands files picked in another app to the pet, which sends them to the laptop. The
+         * permission to read them comes along, and lasts while the pet runs.
+         */
+        fun sendFiles(context: Context, uris: List<Uri>) {
+            val clip = ClipData.newRawUri("files", uris[0]).apply { uris.drop(1).forEach { addItem(ClipData.Item(it)) } }
+            context.startForegroundService(Intent(context, PetService::class.java).setAction(SEND_FILES)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply { clipData = clip })
         }
     }
 }

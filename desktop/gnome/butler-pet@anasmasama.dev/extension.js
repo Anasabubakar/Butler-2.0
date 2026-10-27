@@ -16,6 +16,8 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {Bubble} from './bubble.js';
+import {FileLink, fileInWindow, filesOnClipboard, showInFolder} from './filelink.js';
+import {doneText, fraction, progressText} from './filepick.js';
 import {ClipboardHistory} from './history.js';
 import {HistoryPanel} from './historypanel.js';
 import {RemoteControl} from './remote.js';
@@ -44,6 +46,9 @@ const syncLabel = on => `Clipboard sync: ${on ? 'on' : 'off'}`;
 const HISTORY_KEY = '<Super><Shift>v';
 // Terminals paste with Ctrl+Shift+V.
 const TERMINALS = ['terminal', 'ptyxis', 'kitty', 'alacritty', 'wezterm', 'tilix', 'konsole', 'terminator', 'foot', 'ghostty'];
+const FILE_MANAGERS = ['nautilus', 'nemo', 'caja', 'thunar', 'dolphin', 'pcmanfm', 'files'];
+// Files picked with right-click → Scripts → Send to phone (see send-to-phone.sh) land here.
+const SEND_REQUESTS = GLib.build_filenamev([GLib.get_user_cache_dir(), 'butler', 'send']);
 const BROWSERS = ['firefox', 'google-chrome', 'chromium', 'brave-browser', 'microsoft-edge', 'vivaldi', 'opera'];
 
 // Feed pages, where the address bar shows the feed rather than the post you're looking at.
@@ -399,6 +404,12 @@ export default class ButlerPetExtension extends Extension {
         this._sessionId = Main.sessionMode.connect('updated', () => this._lockChanged());
         this._rest();
 
+        // Real files to and from your phone: directly on the same Wi-Fi, else through Butler.
+        this._link = new FileLink(GLib.build_filenamev([this.path, 'link.py']), e => this._linkEvent(e));
+        this._receiving = null; // the incoming files the bubble is showing
+        this._sendingJob = null; // the files Send to phone is sending
+        this._watchSendRequests();
+
         // Checks for reminders and things sent from your phone, holding each check open.
         this._checking = false;
         this._inboxLoop();
@@ -406,6 +417,10 @@ export default class ButlerPetExtension extends Extension {
 
     disable() {
         this._stopRinging();
+        this._requests?.cancel();
+        this._requests = null;
+        this._link?.destroy();
+        this._link = null;
         this._drag?.grab.dismiss();
         this._drag = null;
         this._closeAsk();
@@ -1556,11 +1571,17 @@ export default class ButlerPetExtension extends Extension {
         return this._send(config, '/api/send', {...fields, kind: 'note', text});
     }
 
-    /** Send to phone: the page in a browser, else the selection, else a screenshot. */
+    /**
+     * Send to phone: the files you picked (selected in Files, or open in a viewer or editor),
+     * else the page in a browser, else the selection, else a screenshot.
+     */
     _sendToPhone() {
         this._work('Sending…', async () => {
             const config = this._config();
             const target = {target: 'phone'};
+            const files = await this._pickedFiles();
+            if (files.length)
+                return this._sendFiles(files, 'phone');
             if (this._inBrowser()) {
                 await this._sendContent(config, {...target, content: 'link'});
                 return 'Sent the page to your phone';
@@ -1571,8 +1592,156 @@ export default class ButlerPetExtension extends Extension {
                 return 'Sent to your phone, ready to paste';
             }
             await this._sendContent(config, {...target, content: 'screen'}, await this._snapWindow());
-            return 'Sent a screenshot to your phone';
+            return 'No file picked here, so I sent a screenshot of this window to your phone';
         });
+    }
+
+    // --- real files, to and from your phone ----------------------------------------------
+
+    /**
+     * The files you mean: those selected in a file manager (copied for a moment to read them),
+     * or the file open in the focused viewer or editor. Empty if neither.
+     */
+    async _pickedFiles() {
+        const window = global.display.focus_window;
+        const wmClass = window?.get_wm_class()?.toLowerCase() ?? '';
+        if (FILE_MANAGERS.some(name => wmClass.includes(name))) {
+            const clipboard = St.Clipboard.get_default();
+            const before = await this._readClipboard();
+            clipboard.set_text(St.ClipboardType.CLIPBOARD, '');
+            await this._press(Clutter.KEY_Control_L, Clutter.KEY_c);
+            let files = [];
+            for (let i = 0; i < 6 && !files.length; i++) { // Files takes a moment with many
+                await sleep(120);
+                files = await filesOnClipboard();
+            }
+            if (!files.length && before)
+                clipboard.set_text(St.ClipboardType.CLIPBOARD, before);
+            if (!files.length)
+                throw new Error('select the files you want to send first');
+            return files;
+        }
+        if (this._inBrowser())
+            return [];
+        const open = fileInWindow(window);
+        return open ? [open] : [];
+    }
+
+    /** Sends files and waits, showing how far along they are. Returns what the pet says. */
+    async _sendFiles(paths, target) {
+        if (!this._link)
+            throw new Error("the file link isn't running");
+        const {job, done} = this._link.send(paths, target);
+        this._sendingJob = job;
+        this._bubble.working(paths.length === 1 ? `Sending ${GLib.path_get_basename(paths[0])}…` : `Sending ${paths.length} files…`,
+            () => {
+                this._link?.cancel(job);
+                this._bubble.progress('Stopping…');
+            }, 'Stop', 'My laptop • Sending');
+        try {
+            const end = await done;
+            if (end.event === 'failed')
+                throw new Error(end.error === 'stopped' ? 'you stopped it' : end.error);
+            return doneText(end, GLib.get_home_dir());
+        } finally {
+            this._sendingJob = null;
+        }
+    }
+
+    /** News from link.py: progress for the bubble, files that arrived. */
+    _linkEvent(e) {
+        if (!this._pet)
+            return;
+        if (e.event === 'progress') {
+            const {line, detail} = progressText(e);
+            if (e.job === this._sendingJob || e.job === this._receiving?.job) {
+                this._bubble.progress(line);
+                this._bubble.bar(fraction(e), detail);
+            } else if (e.direction === 'in' && !this._busy && !Main.sessionMode.isLocked) {
+                this._showReceiving(e, line, detail);
+            }
+        } else if ((e.event === 'done' || e.event === 'failed') && e.direction === 'in') {
+            this._received(e);
+        }
+    }
+
+    /** The pet wakes and shows files arriving: names, count and a bar over its head. */
+    _showReceiving(e, line, detail) {
+        this._busy = true;
+        this._receiving = {job: e.job};
+        this._menu.hide();
+        this._unpeek();
+        this._play('work');
+        this._bubble.working(line, () => {
+            this._link?.cancel(e.job);
+            this._bubble.progress('Stopping…');
+        }, 'Stop', `From ${e.peer || 'your phone'} • Receiving`);
+        this._bubble.bar(fraction(e), detail);
+    }
+
+    /** Files arrived (or didn't): says where they are, with Open folder. */
+    async _received(e) {
+        const shown = this._receiving?.job === e.job;
+        const ok = e.event === 'done';
+        const text = ok ? doneText(e, GLib.get_home_dir())
+            : `Files from ${e.peer || 'your phone'} didn't arrive: ${e.error === 'stopped' ? 'you stopped them' : e.error}`;
+        const open = ok ? () => showInFolder(e.paths ?? [], e.folder) : null;
+        if (!shown) {
+            this._announce(ok ? 'Files arrived' : 'Files failed', text, open, ok);
+            return;
+        }
+        this._play(ok ? 'success' : 'error');
+        this._bubble.result(text, ok, `My laptop • ${ok ? 'Received' : 'Failed'}`);
+        if (open) {
+            this._bubble.offer('Open folder', () => {
+                open();
+                this._closeBubble();
+            });
+        }
+        Main.notify(`Butler: ${ok ? 'Files arrived' : 'Files failed'}`, text);
+        await this._hold(20000);
+        this._receiving = null;
+        if (!this._pet)
+            return;
+        this._bubble.hide();
+        this._busy = false;
+        this._goHome();
+        this._showRemote();
+        this._replyNow();
+    }
+
+    /**
+     * Right-click → Scripts → Send to phone in Files writes the picked paths to a small file
+     * in SEND_REQUESTS; the pet sends them.
+     */
+    _watchSendRequests() {
+        GLib.mkdir_with_parents(SEND_REQUESTS, 0o700);
+        const dir = Gio.File.new_for_path(SEND_REQUESTS);
+        this._requests = dir.monitor_directory(Gio.FileMonitorFlags.WATCH_MOVES, null);
+        this._requests.connect('changed', (_monitor, file, _other, type) => {
+            if ((type === Gio.FileMonitorEvent.MOVED_IN || type === Gio.FileMonitorEvent.CHANGES_DONE_HINT ||
+                type === Gio.FileMonitorEvent.RENAMED) && file.get_basename().endsWith('.json'))
+                this._sendRequest(file);
+        });
+    }
+
+    async _sendRequest(file) {
+        let request;
+        try {
+            const [, bytes] = file.load_contents(null);
+            request = JSON.parse(new TextDecoder().decode(bytes));
+            file.delete(null);
+        } catch (e) {
+            return; // half-written, or already taken
+        }
+        const paths = (request.paths ?? []).filter(p => typeof p === 'string');
+        if (!paths.length)
+            return;
+        for (let i = 0; i < 30 && this._busy; i++) // finishing something else first
+            await sleep(1000);
+        if (!this._pet)
+            return;
+        this._work('Sending…', () => this._sendFiles(paths, request.target || 'phone'));
     }
 
     // --- "where's my phone?" (and laptop) --------------------------------------------------
@@ -1660,7 +1829,13 @@ export default class ButlerPetExtension extends Extension {
             return false;
         this._checking = true;
         try {
-            const messages = await this._send(config, '/api/inbox', {device: 'laptop', kind: 'laptop', wait: String(INBOX_WAIT)});
+            const fields = {device: 'laptop', kind: 'laptop', wait: String(INBOX_WAIT)};
+            // How the phone reaches this laptop on the same Wi-Fi; addresses change with the network.
+            if (this._link?.local) {
+                fields.local = JSON.stringify(this._link.local);
+                this._link.refreshAddresses();
+            }
+            const messages = await this._send(config, '/api/inbox', fields);
             // Commands from your phone first: a note's bubble mustn't hold them up, and one thing
             // going wrong (a file that won't download) mustn't lose the rest.
             const first = message => (message.kind === 'stop' || message.kind === 'task' ? 0 : 1);
@@ -1708,6 +1883,14 @@ export default class ButlerPetExtension extends Extension {
         case 'link':
             return this._announce(`A link${from}`, `${message.url}\n\n(Tap to open it.)`,
                 () => Gio.AppInfo.launch_default_for_uri(message.url, null));
+        case 'transfer':
+            // Files coming through Butler: link.py downloads them while they're still arriving.
+            try {
+                this._link?.fetch(JSON.parse(message.body ?? '{}'), message.from_device);
+            } catch (e) {
+                this._announce(`Files${from}`, `couldn't take them: ${e.message}`, null, false);
+            }
+            return;
         case 'file': {
             const path = await this._download(config, message.item_id);
             return this._announce(`File${from}`, `Saved to ${path.replace(GLib.get_home_dir(), '~')}\n\n(Tap to open it.)`,

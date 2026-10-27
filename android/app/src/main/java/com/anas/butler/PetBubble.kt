@@ -81,6 +81,35 @@ class PetBubble(context: Context) : LinearLayout(context) {
     private val copy = Ui.iconButton(context, R.drawable.ic_copy, context.getString(R.string.bubble_copy), size = 28) { onCopy?.invoke(full) }
     private val share = Ui.iconButton(context, R.drawable.ic_share, context.getString(R.string.bubble_share), size = 28) { onShare?.invoke(full) }
     private val close = Ui.iconButton(context, R.drawable.ic_close, context.getString(R.string.close), size = 28) { onClose?.invoke() }
+    // Files on their way: a bar that fills, and how far along under it ("45% · 12 MB of 27 MB").
+    private val bar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
+        max = 1000
+        isIndeterminate = false
+        progressTintList = ColorStateList.valueOf(Ui.ACCENT)
+        progressBackgroundTintList = ColorStateList.valueOf(Ui.MUTED)
+        visibility = View.GONE
+    }
+    private val detail = TextView(context).apply {
+        setTextColor(Ui.SUBTLE)
+        textSize = 12.5f
+        isSingleLine = true
+        ellipsize = TextUtils.TruncateAt.END
+        visibility = View.GONE
+    }
+    // One thing to do with the result, such as "Open" or "Show in Downloads", with a 48 dp target.
+    private var actionRun: (() -> Unit)? = null
+    private val action = TextView(context).apply {
+        setTextColor(Ui.TEXT)
+        textSize = 14f
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+        gravity = Gravity.CENTER
+        minHeight = (40 * dp).toInt()
+        background = Ui.rounded(Ui.MUTED, 20 * dp)
+        setPadding((16 * dp).toInt(), 0, (16 * dp).toInt(), 0)
+        isClickable = true
+        setOnClickListener { actionRun?.invoke() }
+        visibility = View.GONE
+    }
     // Looks like a text box; the typing happens in the Ask sheet, since the pet's window can't hold a keyboard.
     private val reply = TextView(context).apply {
         setText(R.string.bubble_reply)
@@ -120,7 +149,13 @@ class PetBubble(context: Context) : LinearLayout(context) {
             setOnClickListener { toggleExpanded() }
         }
         addView(top)
+        addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, (6 * dp).toInt()).apply {
+            topMargin = (8 * dp).toInt()
+            marginEnd = (8 * dp).toInt()
+        })
+        addView(detail, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = (4 * dp).toInt() })
         addView(body, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = (6 * dp).toInt() })
+        addView(action, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = (8 * dp).toInt() })
         addView(reply, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
             topMargin = (8 * dp).toInt()
             marginEnd = (8 * dp).toInt()
@@ -207,6 +242,21 @@ class PetBubble(context: Context) : LinearLayout(context) {
         mark.visibility = View.GONE
     }
 
+    /** How far along files are (0 to 1), with the detail line under the bar. Null hides the bar. */
+    fun bar(fraction: Double?, detailText: String = "") {
+        bar.visibility = if (fraction != null) View.VISIBLE else View.GONE
+        if (fraction != null) bar.progress = (fraction.coerceIn(0.0, 1.0) * 1000).toInt()
+        detail.text = detailText
+        detail.visibility = if (fraction != null && detailText.isNotEmpty()) View.VISIBLE else View.GONE
+    }
+
+    /** A button under the result, such as "Open". Null takes it away. */
+    fun offer(label: String?, run: (() -> Unit)?) {
+        actionRun = run
+        action.text = label
+        action.visibility = if (label != null && run != null) View.VISIBLE else View.GONE
+    }
+
     /** Sets the top line as given, for updates that already name the device and state ("My laptop • Complete"). */
     fun heading(text: String?) {
         where.text = text
@@ -219,6 +269,8 @@ class PetBubble(context: Context) : LinearLayout(context) {
     }
 
     private fun show(text: String, spinning: Boolean) {
+        bar(null)
+        offer(null, null)
         full = text
         line.animate().cancel()
         line.alpha = 1f

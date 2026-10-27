@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The only folder Butler shares with other apps: one screenshot at a time. -->
+<!-- What Butler shares with other apps: one screenshot at a time, and (on Android 9 and older)
+     files your laptop sent, so they can be opened. -->
 <paths>
     <cache-path name="shared" path="shared/" />
+    <external-files-path name="received" path="Download/Butler/" />
 </paths>
