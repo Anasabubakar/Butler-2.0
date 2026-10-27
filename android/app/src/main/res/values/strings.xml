@@ -47,6 +47,7 @@
     <string name="pet_needs_hands">turn on Butler in Accessibility settings first</string>
     <string name="pet_needs_android_11">screenshots need Android 11 or newer</string>
     <string name="pet_no_screenshot">couldn\'t take a screenshot</string>
+    <string name="pet_screen_hidden">this app hides its screen from screenshots, so all I got was black</string>
     <string name="start_pet">Start Little Butler</string>
     <string name="allow_overlay">Allow Butler to display over other apps, then tap Start again</string>
     <string name="allow_hands">Turn on Butler in Accessibility, then tap Start again. If it\'s greyed out, open Butler\'s App info, tap ⋮ and choose Allow restricted settings first.</string>
