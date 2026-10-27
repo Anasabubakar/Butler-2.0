@@ -64,7 +64,9 @@
     <string name="pet_sending">Sending…</string>
     <string name="pet_sent_page">Sent the page to your laptop</string>
     <string name="pet_sent_text">Sent to your laptop, ready to paste</string>
-    <string name="pet_sent_screenshot">Sent a screenshot to your laptop</string>
+    <string name="pet_sent_screenshot">No file to grab here, so I sent a screenshot to your laptop</string>
+    <string name="pet_finding_file">Finding the Share button…</string>
+    <string name="pet_pick_send">Tap \"Send to laptop\" in the share menu, and the real file goes to your laptop</string>
     <string name="pet_thinking">Working…</string>
     <string name="ask_title">Ask Butler</string>
     <string name="ask_replying_to">Replying to: %1$s</string>
@@ -142,6 +144,33 @@
     <string name="state_complete">Complete</string>
     <string name="state_failed">Failed</string>
     <string name="state_stopped">Stopped</string>
+    <string name="state_sending">Sending</string>
+    <string name="state_receiving">Receiving</string>
+    <string name="state_received">Received</string>
+
+    <!-- Sending real files between phone and laptop. -->
+    <string name="send_share_label">Send to laptop</string>
+    <string name="send_nothing">Nothing to send here</string>
+    <plurals name="files_count">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <string name="transfer_in_line">Receiving %1$s: %2$s</string>
+    <string name="transfer_out_line">Sending %1$s: %2$s</string>
+    <string name="transfer_and_more">%1$s and %2$d more</string>
+    <string name="transfer_and">%1$s and %2$s</string>
+    <string name="transfer_detail">%1$d%% · %2$s of %3$s</string>
+    <string name="transfer_wifi">over Wi-Fi</string>
+    <string name="transfer_server">through Butler</string>
+    <string name="transfer_from">From %1$s</string>
+    <string name="transfer_laptop">your laptop</string>
+    <string name="transfer_got">Got %1$s from %2$s. Saved in Downloads/Butler</string>
+    <string name="transfer_sent">Sent %1$s to %2$s %3$s</string>
+    <string name="transfer_failed_in">Files from %1$s didn\'t arrive: %2$s</string>
+    <string name="transfer_stopped">you stopped it</string>
+    <string name="transfer_open">Open</string>
+    <string name="transfer_show">Show in Downloads</string>
+    <string name="transfer_arrived">Files arrived</string>
     <string name="quiet_channel">Finished jobs on your laptop</string>
     <string name="settings_pet_help">Little Butler sits at the edge of your screen. It needs these, asked for one at a time.</string>
     <string name="perm_overlay">Show over other apps</string>
