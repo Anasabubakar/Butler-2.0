@@ -14,7 +14,7 @@ jobs:
         with:
           deno-version: v2.5.6
       - name: Unit tests
-        run: deno test --allow-read --allow-net --allow-env tests/
+        run: deno test --allow-read --allow-write --allow-net --allow-env tests/
       - name: Type-check server
         run: deno task check
 
