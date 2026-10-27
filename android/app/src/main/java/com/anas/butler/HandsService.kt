@@ -4,6 +4,8 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.ColorSpace
 import android.graphics.Path
 import android.os.Build
 import android.view.Display
@@ -59,8 +61,7 @@ class HandsService : AccessibilityService() {
             takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
                 override fun onSuccess(result: ScreenshotResult) {
                     val buffer = result.hardwareBuffer
-                    val bitmap = Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)
-                        ?.copy(Bitmap.Config.ARGB_8888, false)
+                    val bitmap = Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)?.let(::toSrgb)
                     buffer.close()
                     cont.resume(bitmap)
                 }
@@ -70,6 +71,21 @@ class HandsService : AccessibilityService() {
                 }
             })
         }
+    }
+
+    /**
+     * A plain sRGB copy of a screenshot. With an HDR video on screen (TikTok plays many) the
+     * screenshot comes in HDR colours, which a straight copy can get wrong; drawing it onto
+     * an sRGB picture converts them.
+     */
+    private fun toSrgb(shot: Bitmap): Bitmap? {
+        val srgb = ColorSpace.get(ColorSpace.Named.SRGB)
+        if (shot.colorSpace == null || shot.colorSpace == srgb) return shot.copy(Bitmap.Config.ARGB_8888, false)
+        val wide = shot.copy(Bitmap.Config.RGBA_F16, false) ?: shot.copy(Bitmap.Config.ARGB_8888, false) ?: return null
+        val out = Bitmap.createBitmap(wide.width, wide.height, Bitmap.Config.ARGB_8888, true, srgb)
+        Canvas(out).drawBitmap(wide, 0f, 0f, null)
+        wide.recycle()
+        return out
     }
 
     /** Taps the screen at (x, y) in screen pixels. */
