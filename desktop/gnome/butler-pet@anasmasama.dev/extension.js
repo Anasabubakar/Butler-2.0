@@ -1594,8 +1594,16 @@ export default class ButlerPetExtension extends Extension {
         this._checking = true;
         try {
             const messages = await this._send(config, '/api/inbox', {device: 'laptop', kind: 'laptop', wait: String(INBOX_WAIT)});
-            for (const message of messages)
-                await this._deliver(config, message);
+            // Commands from your phone first: a note's bubble mustn't hold them up, and one thing
+            // going wrong (a file that won't download) mustn't lose the rest.
+            const first = message => (message.kind === 'stop' || message.kind === 'task' ? 0 : 1);
+            for (const message of [...messages].sort((a, b) => first(a) - first(b))) {
+                try {
+                    await this._deliver(config, message);
+                } catch (e) {
+                    console.warn(`Butler: couldn't handle a ${message.kind} from ${message.from_device}: ${e.message}`);
+                }
+            }
             return true;
         } catch (e) {
             return false; // offline or the server is restarting: try again soon
