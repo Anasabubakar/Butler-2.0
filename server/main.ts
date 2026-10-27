@@ -271,6 +271,9 @@ app.post("/api/inbox", async (c) => {
   let due = await inbox.takeDue(device);
   if (!due.length && wait > 0) {
     await inbox.waitForMessage(device, wait * 1000, c.req.raw.signal);
+    // The device gave up (sleep, a dropped connection): taking messages now would mark them
+    // delivered with nobody to read them, and a laptop command would vanish without a word.
+    if (c.req.raw.signal.aborted) return c.json([]);
     due = await inbox.takeDue(device);
   }
   return c.json(due);
