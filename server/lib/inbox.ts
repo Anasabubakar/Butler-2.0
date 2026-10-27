@@ -5,10 +5,11 @@ import { sql } from "./db.ts";
 export const DEVICE_KINDS = ["laptop", "phone"] as const;
 export type DeviceKind = typeof DEVICE_KINDS[number];
 
-export const MESSAGE_KINDS = ["reminder", "note", "clip", "link", "file", "sync", "ring", "task", "stop", "status"] as const;
+export const MESSAGE_KINDS = ["reminder", "note", "clip", "link", "file", "sync", "ring", "task", "stop", "status", "transfer"] as const;
 
-// Kept only until the device has them: copies, and laptop commands (which carry your secret word).
-const FORGET_ONCE_DELIVERED = ["sync", "task", "stop", "status"];
+// Kept only until the device has them: copies, laptop commands (which carry your secret word),
+// and word of files on their way (the device keeps track of those itself).
+const FORGET_ONCE_DELIVERED = ["sync", "task", "stop", "status", "transfer"];
 export type MessageKind = typeof MESSAGE_KINDS[number];
 
 export interface Device {
@@ -41,6 +42,40 @@ export interface NewMessage {
 export async function checkIn(name: string, kind: DeviceKind) {
   await sql`insert into devices (name, kind) values (${name}, ${kind})
     on conflict (name) do update set kind = excluded.kind, last_seen = now()`;
+}
+
+/**
+ * How to reach a device directly on the same network: the port its link listens on, its
+ * certificate's fingerprint and its addresses. Null forgets it (the link is switched off).
+ */
+export interface Local {
+  port: number;
+  fingerprint: string;
+  addresses: string[];
+}
+
+/** Checks a device's own description of its direct link; anything odd is dropped. */
+export function cleanLocal(raw: unknown): Local | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const port = Number(r.port);
+  const fingerprint = String(r.fingerprint ?? "").toLowerCase().replace(/[^0-9a-f]/g, "");
+  if (!Number.isInteger(port) || port < 1024 || port > 65535 || fingerprint.length !== 64) return null;
+  const addresses = (Array.isArray(r.addresses) ? r.addresses : [])
+    .map((a) => String(a).trim())
+    .filter((a) => /^(\d{1,3}\.){3}\d{1,3}$/.test(a) && !a.startsWith("127."))
+    .slice(0, 8);
+  return { port, fingerprint, addresses };
+}
+
+export async function setLocal(name: string, local: Local | null) {
+  await sql`update devices set local = ${local ? sql.json(local as never) : null} where name = ${name}`;
+}
+
+/** Your other devices and how to reach them directly, for a device's token. */
+export function peers(except: string) {
+  return sql<(Device & { local: Local | null })[]>`
+    select name, kind, last_seen, local from devices where name <> ${except} order by last_seen desc`;
 }
 
 export function devices() {
