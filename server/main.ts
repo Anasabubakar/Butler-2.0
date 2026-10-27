@@ -337,8 +337,11 @@ app.post("/api/laptop/task", async (c) => {
   if (!device || !command) return c.json({ error: "device and text are required" }, 400);
   const to = await inbox.resolveTarget(text("target", 100) ?? "laptop", device);
   if (!to.length) return c.json({ error: "no laptop has checked in with Butler yet" }, 404);
-  await inbox.send(to, { from_device: device, kind: "task", body: command });
-  return c.json({ sent_to: to });
+  const job = await jobs.send(device, to, command);
+  // Asleep or offline? Say so now, rather than leave you waiting on a laptop that isn't there.
+  const seen = (await inbox.devices()).filter((d) => to.includes(d.name)).map((d) => new Date(d.last_seen).getTime());
+  const warning = laptop.offlineWarning(seen.length ? new Date(Math.max(...seen)) : null);
+  return c.json({ sent_to: to, job, warning });
 });
 
 // Stops what the laptop is doing. off=1 also switches remote control off on the laptop.
