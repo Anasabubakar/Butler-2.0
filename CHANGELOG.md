@@ -7,6 +7,7 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 - Butler is now licensed under AGPL-3.0. The logos and the Little Butler character stay all rights reserved.
 - **Butler remembers.** Ask Butler sees the last two days of your conversation, so follow-ups like "and tomorrow?" work, and learns lasting facts about you (people, preferences, plans) for every reply. See, add and forget them in Settings → Memory; switch learning off with Learn about me. Passwords, codes and card numbers are never kept.
 - **Reply to the pet.** Every answer in the phone and laptop pet's bubble has a reply box under it.
+- **Laptop control says why.** A command the laptop doesn't pick up in 10 minutes (asleep, locked out, offline) is dropped with a reason on the phone and website, instead of vanishing. Sending to a laptop that hasn't checked in lately warns you straight away, and a running job that goes quiet for 25 minutes is called out. The laptop also retries its final report, waits longer for slow AI answers, and no longer loses commands when a check-in drops halfway.
 - **Chat about one save.** Ask Butler about this, on each library card and in the phone app's save screen: questions answered from the save's full content, and orders carried out with it (reminders, events, email, connected apps, renaming it).
 
 ## v0.2.0 (2026-10-26)
