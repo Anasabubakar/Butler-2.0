@@ -1430,14 +1430,7 @@ export default class ButlerPetExtension extends Extension {
                 }
             });
         });
-        let pixbuf = GdkPixbuf.Pixbuf.new_from_stream(
-            Gio.MemoryInputStream.new_from_bytes(stream.steal_as_bytes()), null);
-        if (pixbuf.get_width() > 1600) {
-            const height = Math.round(pixbuf.get_height() * 1600 / pixbuf.get_width());
-            pixbuf = pixbuf.scale_simple(1600, height, GdkPixbuf.InterpType.BILINEAR);
-        }
-        const [, jpeg] = pixbuf.save_to_bufferv('jpeg', ['quality'], ['85']);
-        return {jpeg: new GLib.Bytes(jpeg), rect: {x: 0, y: 0, width: global.stage.width, height: global.stage.height}};
+        return {jpeg: toJpeg(pixbufFrom(stream)), rect: {x: 0, y: 0, width: global.stage.width, height: global.stage.height}};
     }
 
     // --- clipboard history ---------------------------------------------------------------
