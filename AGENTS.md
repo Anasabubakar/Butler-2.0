@@ -25,4 +25,4 @@ The full rules are in [`design/brand/BRAND.md`](design/brand/BRAND.md). In short
 
 ## Where things are
 
-See the table in [`README.md`](README.md). Server: Deno (`server/`), tests in `tests/` (`deno test --allow-read --allow-net --allow-env tests/`). Library website: Vite + TypeScript in `web/` (`npm run build`). Android app in `android/` (built by CI). GNOME pet in `desktop/gnome/`.
+See the table in [`README.md`](README.md). Server: Deno (`server/`), tests in `tests/` (`deno test --allow-read --allow-write --allow-net --allow-env tests/`). Library website: Vite + TypeScript in `web/` (`npm run build`). Android app in `android/` (built by CI). GNOME pet in `desktop/gnome/`.
