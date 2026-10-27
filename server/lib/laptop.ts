@@ -87,3 +87,48 @@ export function statusTitle(state: State): string {
     locked: "My laptop • Remote control is locked",
   }[state];
 }
+
+// --- saying why a command didn't run ---------------------------------------------------
+// A laptop with Butler running asks for its messages every 25 seconds or so.
+
+/** How long a command waits for the laptop before it's dropped (see expire in jobs.ts). */
+export const PICKUP_MINUTES = 10;
+/** A laptop that hasn't checked in for this long is asleep, locked out or offline. */
+const QUIET_SECONDS = 90;
+/** A job that's running reports at least every 10 minutes; this long without news means trouble. */
+export const SILENT_MINUTES = 25;
+
+/** "40 seconds", "14 min", "3 hours", "2 days". */
+export function ago(since: Date, now = new Date()): string {
+  const s = Math.max(0, Math.round((now.getTime() - since.getTime()) / 1000));
+  if (s < 60) return `${s} seconds`;
+  if (s < 3600) return `${Math.round(s / 60)} min`;
+  if (s < 2 * 86400) return `${Math.round(s / 3600)} hour${s < 5400 ? "" : "s"}`;
+  return `${Math.round(s / 86400)} days`;
+}
+
+/** Said when you send a command to a laptop that hasn't checked in lately, or null if it's around. */
+export function offlineWarning(lastSeen: Date | null, now = new Date()): string | null {
+  if (!lastSeen) return "Butler hasn't heard from your laptop yet, so this may not run.";
+  if (now.getTime() - lastSeen.getTime() < QUIET_SECONDS * 1000) return null;
+  return `Your laptop last checked in ${ago(lastSeen, now)} ago, so it's probably asleep, shut down or offline. ` +
+    `I'll hold this for ${PICKUP_MINUTES} minutes in case it wakes up.`;
+}
+
+/** Why a command was dropped: no laptop took it in time. */
+export function missedReason(lastSeen: Date | null, now = new Date()): string {
+  const head = `Your laptop didn't pick this up within ${PICKUP_MINUTES} minutes, so I dropped it.`;
+  if (lastSeen && now.getTime() - lastSeen.getTime() < QUIET_SECONDS * 1000) {
+    return `${head} It's online but didn't take it, so Butler on the laptop may be stuck. Log out and back in there, then send it again.`;
+  }
+  const seen = lastSeen ? `It last checked in ${ago(lastSeen, now)} ago, so it's` : "It has never checked in, so it's";
+  return `${head} ${seen} probably asleep, shut down or offline. Send it again once it's awake and unlocked.`;
+}
+
+/** Why a job that was running went quiet, or null if it's still fine. */
+export function silentReason(state: string, updated: Date, now = new Date()): string | null {
+  if (state !== "started" && state !== "working") return null;
+  if (now.getTime() - updated.getTime() < SILENT_MINUTES * 60_000) return null;
+  return `No news from your laptop for ${ago(updated, now)}. It may have gone to sleep, or Butler there was restarted, ` +
+    `so this job probably stopped. Check the laptop, or send it again.`;
+}

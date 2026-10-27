@@ -14,6 +14,7 @@ import { cleanUrl, extractUrl, kindFor, platformFor } from "./lib/rules.ts";
 import { aiProviders, geminiKeys, geminiModels, geminiReady } from "./lib/gemini.ts";
 import { LOOK_MODES, type LookMode, locate, look, MAX_STEPS, nextStep } from "./lib/screen.ts";
 import * as inbox from "./lib/inbox.ts";
+import * as jobs from "./lib/jobs.ts";
 import { calendarUrl, explain, localIso, parseWhen, plan, safeZone, shortArgs } from "./lib/command.ts";
 import * as google from "./lib/google.ts";
 import * as backup from "./lib/backup.ts";
@@ -268,11 +269,16 @@ app.post("/api/inbox", async (c) => {
   await inbox.checkIn(device, deviceKind);
   // wait=25 holds the request open until something arrives (or 25 seconds pass).
   const wait = Math.min(Number(text("wait", 3)) || 0, 25);
+  await jobs.expire();
   let due = await inbox.takeDue(device);
   if (!due.length && wait > 0) {
     await inbox.waitForMessage(device, wait * 1000, c.req.raw.signal);
+    // The device gave up (sleep, a dropped connection): taking messages now would mark them
+    // delivered with nobody to read them, and a laptop command would vanish without a word.
+    if (c.req.raw.signal.aborted) return c.json([]);
     due = await inbox.takeDue(device);
   }
+  await jobs.pickedUp(due, device);
   return c.json(due);
 });
 
@@ -331,8 +337,11 @@ app.post("/api/laptop/task", async (c) => {
   if (!device || !command) return c.json({ error: "device and text are required" }, 400);
   const to = await inbox.resolveTarget(text("target", 100) ?? "laptop", device);
   if (!to.length) return c.json({ error: "no laptop has checked in with Butler yet" }, 404);
-  await inbox.send(to, { from_device: device, kind: "task", body: command });
-  return c.json({ sent_to: to });
+  const job = await jobs.send(device, to, command);
+  // Asleep or offline? Say so now, rather than leave you waiting on a laptop that isn't there.
+  const seen = (await inbox.devices()).filter((d) => to.includes(d.name)).map((d) => new Date(d.last_seen).getTime());
+  const warning = laptop.offlineWarning(seen.length ? new Date(Math.max(...seen)) : null);
+  return c.json({ sent_to: to, job, warning });
 });
 
 // Stops what the laptop is doing. off=1 also switches remote control off on the laptop.
@@ -382,10 +391,19 @@ app.post("/api/laptop/status", async (c) => {
     return c.json({ error: `device and state (${laptop.STATES.join(", ")}) are required` }, 400);
   }
   const to = await inbox.resolveTarget(text("target", 100) ?? "phone", device);
-  const body = JSON.stringify({ state, title: laptop.statusTitle(state), text: text("text", 3000) ?? "" });
+  const job = text("job", 40);
+  await jobs.report(device, job, state, text("text", 3000) ?? "");
+  const body = JSON.stringify({ state, title: laptop.statusTitle(state), text: text("text", 3000) ?? "", job });
   laptopStatus.set(device, { state, title: laptop.statusTitle(state), text: text("text", 3000) ?? "", at: new Date().toISOString() });
   await inbox.send(to, { from_device: device, kind: "status", body });
   return c.json({ sent_to: to });
+});
+
+// How one laptop command is going, or why it didn't run: for the website and phone to show.
+app.get("/api/laptop/job/:id", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "bad token" }, 401);
+  const job = await jobs.get(c.req.param("id"));
+  return job ? c.json(job) : c.json({ error: "no such job" }, 404);
 });
 
 // A file sent to this device, fetched with the device token.

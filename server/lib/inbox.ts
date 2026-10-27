@@ -26,6 +26,7 @@ export interface Message {
   url: string | null;
   item_id: string | null;
   due_at: string;
+  job: string | null; // for a 'task': its laptop job (see jobs.ts)
 }
 
 export interface NewMessage {
@@ -35,6 +36,7 @@ export interface NewMessage {
   url?: string | null;
   item_id?: string | null;
   due_at?: string;
+  job?: string | null;
 }
 
 /** Records that a device is alive, so other devices can send to it. */
@@ -51,9 +53,9 @@ export function devices() {
 export async function takeDue(name: string) {
   // A ring that waited more than 5 minutes (the phone was off) would only startle you later.
   await sql`delete from messages where kind = 'ring' and delivered_at is null and due_at < now() - interval '5 minutes'`;
-  // Nor should a laptop command from 10 minutes ago start out of the blue when the laptop wakes.
+  // Nor should a Stop from 10 minutes ago (old laptop commands are dropped by jobs.expire).
   // Switching remote control off ("stop" with body "off") still counts whenever it arrives.
-  await sql`delete from messages where (kind = 'task' or (kind = 'stop' and body is distinct from 'off'))
+  await sql`delete from messages where kind = 'stop' and body is distinct from 'off'
     and delivered_at is null and due_at < now() - interval '10 minutes'`;
   const due = await sql<Message[]>`
     update messages set delivered_at = now()
@@ -63,7 +65,7 @@ export async function takeDue(name: string) {
       order by due_at
       limit 20
       for update skip locked)
-    returning id, created_at, from_device, kind, body, url, item_id, due_at`;
+    returning id, created_at, from_device, kind, body, url, item_id, due_at, job`;
   if (due.some((m) => FORGET_ONCE_DELIVERED.includes(m.kind))) {
     await sql`delete from messages where kind = any(${FORGET_ONCE_DELIVERED}::text[]) and delivered_at is not null`;
   }
@@ -81,6 +83,7 @@ export async function send(to: string[], message: NewMessage) {
     url: message.url ?? null,
     item_id: message.item_id ?? null,
     due_at: message.due_at ?? new Date().toISOString(),
+    job: message.job ?? null,
   }));
   // Only your latest copy matters: drop older ones still waiting.
   if (message.kind === "sync") await sql`delete from messages where kind = 'sync' and delivered_at is null and to_device = any(${to}::text[])`;

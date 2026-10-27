@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checked, planJob, statusTitle } from "../server/lib/laptop.ts";
+import { ago, checked, missedReason, offlineWarning, planJob, silentReason, statusTitle } from "../server/lib/laptop.ts";
 
 const folders = ["glance", "Butler-2.0", "morrow"];
 
@@ -46,4 +46,33 @@ test("the planner gets the command and the folders, and its job is checked", asy
 test("each state has a title for the phone's notification", () => {
   assert.equal(statusTitle("done"), "My laptop • Complete");
   assert.equal(statusTitle("locked"), "My laptop • Remote control is locked");
+});
+
+test("how long ago, in plain words", () => {
+  const now = new Date("2026-10-27T12:00:00Z");
+  const before = (s: number) => new Date(now.getTime() - s * 1000);
+  assert.equal(ago(before(40), now), "40 seconds");
+  assert.equal(ago(before(14 * 60), now), "14 min");
+  assert.equal(ago(before(3600), now), "1 hour");
+  assert.equal(ago(before(3 * 3600), now), "3 hours");
+  assert.equal(ago(before(3 * 86400), now), "3 days");
+});
+
+test("sending to a laptop that's gone quiet says so, and a missed command says why", () => {
+  const now = new Date("2026-10-27T12:00:00Z");
+  const before = (s: number) => new Date(now.getTime() - s * 1000);
+  assert.equal(offlineWarning(before(20), now), null);
+  assert.match(offlineWarning(before(14 * 60), now)!, /last checked in 14 min ago.*asleep.*10 minutes/);
+  assert.match(offlineWarning(null, now)!, /hasn't heard from your laptop/);
+  assert.match(missedReason(before(3 * 3600), now), /didn't pick this up within 10 minutes.*3 hours ago.*asleep/);
+  assert.match(missedReason(before(10), now), /online but didn't take it.*Log out and back in/);
+  assert.match(missedReason(null, now), /never checked in/);
+});
+
+test("a running job with no news for 25 minutes is called out", () => {
+  const now = new Date("2026-10-27T12:00:00Z");
+  const before = (m: number) => new Date(now.getTime() - m * 60_000);
+  assert.equal(silentReason("working", before(5), now), null);
+  assert.equal(silentReason("done", before(60), now), null);
+  assert.match(silentReason("working", before(40), now)!, /No news from your laptop for 40 min/);
 });
