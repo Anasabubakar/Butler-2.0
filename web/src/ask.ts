@@ -17,7 +17,7 @@ interface Reply {
   open?: string;
   confirm?: string;
 }
-interface LaptopStatus { device: string; state: string; title: string; text: string; at: string }
+interface LaptopJob { state: string; text: string }
 interface Turn { role: "owner" | "butler" | "break"; text: string; created_at: string }
 
 const THIS_DEVICE = "this";
@@ -212,22 +212,23 @@ export async function renderAsk(app: HTMLElement) {
     form.set("device", WEB_DEVICE);
     form.set("target", device);
     form.set("text", text);
-    const startedAt = Date.now();
+    let sent: { job: string; warning: string | null };
     try {
-      await api("/api/laptop/task", { method: "POST", body: form });
+      sent = await api("/api/laptop/task", { method: "POST", body: form });
     } catch (e) {
       if (!(e instanceof SignedOut)) log.append(failed(`${label} didn't get it: ${(e as Error).message}.`, () => runOnLaptop(device, text)));
       return;
     }
-    showTask(device, label, text, startedAt);
+    showTask(device, label, text, sent.job, sent.warning);
   }
 
-  function showTask(device: string, label: string, text: string, since: number) {
+  function showTask(device: string, label: string, text: string, job: string, warning: string | null) {
     const STEPS = ["Request received", "Working on it", "Waiting for your review", "Complete"];
     const steps = h("ol", { class: "task__steps" }, ...STEPS.map((s, i) => h("li", {}, h("span", {}, String(i + 1).padStart(2, "0")), s)));
     const bar = h("div", { class: "task__bar", role: "progressbar", "aria-label": "Steps done", "aria-valuemin": "0", "aria-valuemax": "4" }, h("span"));
     const state = h("div", { class: "task__state" }, status("queued"));
-    const said = h("p", { class: "task__said" }, `Queued for ${label}. If it's offline, it waits until it reconnects.`);
+    const said = h("p", { class: "task__said" },
+      warning ?? `Waiting for ${label} to pick it up. If it doesn't within 10 minutes, I'll drop it and tell you why.`);
     const stop = button("Stop task", {
       kind: "danger", icon: "stop",
       onclick: async () => {
@@ -256,16 +257,31 @@ export async function renderAsk(app: HTMLElement) {
     const MAP: Record<string, [number, State, string?]> = {
       started: [1, "working"], working: [2, "working"], done: [4, "complete"], failed: [2, "failed"],
       refused: [1, "stopped", "Didn't run"], stopped: [2, "stopped"], locked: [1, "stopped", "Remote control is locked"],
+      missed: [0, "failed", "Didn't reach the laptop"],
     };
+    let misses = 0;
     const poll = async () => {
       if (!box.isConnected) return;
-      const all = await api<LaptopStatus[]>("/api/laptop/status").catch(() => []);
-      const s = all.find((x) => x.device === device && new Date(x.at).getTime() >= since - 1000);
-      if (s && MAP[s.state]) {
+      let s: LaptopJob;
+      try {
+        s = await api<LaptopJob>(`/api/laptop/job/${job}`);
+        misses = 0;
+      } catch (e) {
+        if (e instanceof SignedOut) return;
+        // Butler restarting (it does after each update) is a blip; minutes of silence aren't.
+        if (++misses === 20) said.textContent = `Can't reach Butler to check on ${label}: ${(e as Error).message}. Still trying.`;
+        setTimeout(poll, 3000);
+        return;
+      }
+      if (MAP[s.state]) {
         const [step, st, text2] = MAP[s.state];
         show(step, st, text2);
         if (s.text) said.textContent = s.text;
-        if (["done", "failed", "refused", "stopped", "locked"].includes(s.state)) { stop.remove(); return; }
+        if (["done", "failed", "refused", "stopped", "locked", "missed"].includes(s.state)) {
+          stop.remove();
+          if (s.state !== "done") box.append(h("div", { class: "ask__buttons" }, button("Send again", { kind: "secondary", onclick: () => runOnLaptop(device, text) })));
+          return;
+        }
       }
       setTimeout(poll, 3000);
     };

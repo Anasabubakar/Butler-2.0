@@ -4,6 +4,8 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.ColorSpace
 import android.graphics.Path
 import android.os.Build
 import android.view.Display
@@ -59,8 +61,7 @@ class HandsService : AccessibilityService() {
             takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
                 override fun onSuccess(result: ScreenshotResult) {
                     val buffer = result.hardwareBuffer
-                    val bitmap = Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)
-                        ?.copy(Bitmap.Config.ARGB_8888, false)
+                    val bitmap = Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)?.let(::toSrgb)
                     buffer.close()
                     cont.resume(bitmap)
                 }
@@ -70,6 +71,21 @@ class HandsService : AccessibilityService() {
                 }
             })
         }
+    }
+
+    /**
+     * A plain sRGB copy of a screenshot. With an HDR video on screen (TikTok plays many) the
+     * screenshot comes in HDR colours, which a straight copy can get wrong; drawing it onto
+     * an sRGB picture converts them.
+     */
+    private fun toSrgb(shot: Bitmap): Bitmap? {
+        val srgb = ColorSpace.get(ColorSpace.Named.SRGB)
+        if (shot.colorSpace == null || shot.colorSpace == srgb) return shot.copy(Bitmap.Config.ARGB_8888, false)
+        val wide = shot.copy(Bitmap.Config.RGBA_F16, false) ?: shot.copy(Bitmap.Config.ARGB_8888, false) ?: return null
+        val out = Bitmap.createBitmap(wide.width, wide.height, Bitmap.Config.ARGB_8888, true, srgb)
+        Canvas(out).drawBitmap(wide, 0f, 0f, null)
+        wide.recycle()
+        return out
     }
 
     /** Taps the screen at (x, y) in screen pixels. */
@@ -130,6 +146,24 @@ class HandsService : AccessibilityService() {
         val text = root.findAccessibilityNodeInfosByViewId(id).firstOrNull()?.text?.toString()?.trim()
         if (text.isNullOrEmpty() || text.contains(' ')) return null // empty, or a search being typed
         return if (text.startsWith("http://") || text.startsWith("https://")) text else "https://$text"
+    }
+
+    /**
+     * The words on screen, top to bottom, as TalkBack would read them. Apps that hide their
+     * picture from screenshots still show these. Never password fields, and nothing at all
+     * from banking and money apps.
+     */
+    fun screenText(): String? {
+        val root = rootInActiveWindow ?: return null
+        if (MONEY_APPS.containsMatchIn(root.packageName?.toString().orEmpty())) return null
+        val lines = LinkedHashSet<String>()
+        fun walk(node: AccessibilityNodeInfo, depth: Int) {
+            if (depth > 40 || lines.size >= 200 || !node.isVisibleToUser || node.isPassword) return
+            (node.text ?: node.contentDescription)?.toString()?.trim()?.takeIf { it.length > 1 }?.let { lines += it }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { walk(it, depth + 1) }
+        }
+        walk(root, 0)
+        return lines.joinToString("\n").take(4000).ifBlank { null }
     }
 
     /**
@@ -194,6 +228,33 @@ class HandsService : AccessibilityService() {
     }
 
     companion object {
+        /**
+         * Whether a screenshot came out black. Apps that hide their screen (banking, Netflix,
+         * private tabs, some chats) show up as solid black. Checked on a small copy, so a dark
+         * app's text still lifts the brightest pixel well above black.
+         */
+        fun isBlank(bitmap: Bitmap): Boolean {
+            val tiny = Bitmap.createScaledBitmap(bitmap, 48, 96, true)
+            val pixels = IntArray(48 * 96).also { tiny.getPixels(it, 0, 48, 0, 0, 48, 96) }
+            if (tiny !== bitmap) tiny.recycle()
+            return pixels.all { p -> ((p shr 16 and 0xff) + (p shr 8 and 0xff) + (p and 0xff)) / 3 < 12 }
+        }
+
+        /**
+         * Whether a screenshot is nearly all black but for a few buttons: a video the app
+         * hides from screenshots, with its icons drawn on top.
+         */
+        fun isMostlyDark(bitmap: Bitmap): Boolean {
+            val tiny = Bitmap.createScaledBitmap(bitmap, 48, 96, true)
+            val pixels = IntArray(48 * 96).also { tiny.getPixels(it, 0, 48, 0, 0, 48, 96) }
+            if (tiny !== bitmap) tiny.recycle()
+            val dark = pixels.count { p -> ((p shr 16 and 0xff) + (p shr 8 and 0xff) + (p and 0xff)) / 3 < 24 }
+            return dark >= pixels.size * 9 / 10
+        }
+
+        /** Banking, payments and crypto apps: Butler never reads their screens. */
+        private val MONEY_APPS = Regex("bank|pay|wallet|finance|money|opay|kuda|moniepoint|fairmoney|chipper|binance|crypto|bybit|cowrywise|piggyvest|risevest|bamboo", RegexOption.IGNORE_CASE)
+
         private val COPY = Regex("\\bcopy\\b", RegexOption.IGNORE_CASE)
         private val COPIED = Regex("\\bcopied\\b", RegexOption.IGNORE_CASE)
 

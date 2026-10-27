@@ -241,8 +241,10 @@ class AskActivity : AppCompatActivity() {
             setBusy(false)
             sent.onSuccess {
                 input.text.clear()
-                show(getString(R.string.laptop_sent, it.joinToString(", ")))
-                delay(1500)
+                // Asleep or offline? Say so, and leave it up long enough to read.
+                show(it.warning ?: getString(R.string.laptop_sent, it.to.joinToString(", ")))
+                it.warning?.let { w -> PetService.addLaptopNews(w) }
+                delay(if (it.warning != null) 6000 else 1500)
                 if (PetService.instance != null) finish()
             }.onFailure { show(getString(R.string.pet_failed, it.message ?: it.toString())) }
         }

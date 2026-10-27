@@ -162,9 +162,9 @@ export class RemoteControl {
     // --- commands ---------------------------------------------------------------------------
 
     /** Tells your phone how it's going, and shows the same in the pet's bubble here. */
-    _report(config, state, text) {
+    _report(config, state, text, job = this._job?.id) {
         this._host.status?.(state, text);
-        return this._host.send(config, '/api/laptop/status', {device: 'laptop', state, text})
+        return this._host.send(config, '/api/laptop/status', {device: 'laptop', state, text, job: job ?? ''})
             .catch(e => console.warn(`Butler: couldn't tell the phone (${state}): ${e.message}`));
     }
 
@@ -173,7 +173,7 @@ export class RemoteControl {
         const from = message.from_device ?? 'phone';
         if (!this.on) {
             this._log({event: 'refused', from, why: 'remote control is off'});
-            return this._report(config, 'refused', "Remote control is off on the laptop. Turn it on from the pet's menu there.");
+            return this._report(config, 'refused', "Remote control is off on the laptop. Turn it on from the pet's menu there.", message.job);
         }
         const {ok, rest} = takeSecret(message.body ?? '', word => this._isSecret(word));
         if (!ok) {
@@ -184,17 +184,17 @@ export class RemoteControl {
                 this._host.notify('Remote control locked',
                     '3 commands came without your secret word, so remote control is off. Turn it back on from the pet\'s menu if that was you.');
                 return this._report(config, 'locked',
-                    '3 commands came without the secret word, so remote control is now off. Turn it back on at the laptop.');
+                    '3 commands came without the secret word, so remote control is now off. Turn it back on at the laptop.', message.job);
             }
-            return this._report(config, 'refused', "That command didn't have the secret word, so I ignored it.");
+            return this._report(config, 'refused', "That command didn't have the secret word, so I ignored it.", message.job);
         }
         this._strikes = [];
         if (!rest)
-            return this._report(config, 'refused', 'I only got the secret word. What should I do?');
+            return this._report(config, 'refused', 'I only got the secret word. What should I do?', message.job);
         if (this._job)
-            return this._report(config, 'refused', `I'm still on "${this._job.command}". Stop it first.`);
+            return this._report(config, 'refused', `I'm still on "${this._job.command}". Stop it first.`, message.job);
 
-        this._job = {command: rest, from, stop: false, started: Date.now(), proc: null};
+        this._job = {id: message.job ?? null, command: rest, from, stop: false, started: Date.now(), proc: null};
         this._log({event: 'started', from, command: rest});
         this._host.banner(`Butler is in control: ${rest}`);
         this._host.notify('Butler is controlling this laptop', `From your ${from}: ${rest}\nTap the pet or press Esc to stop.`);
@@ -208,9 +208,29 @@ export class RemoteControl {
         if (this._job.stop && result.state !== 'done')
             result = {state: 'stopped', text: `Stopped: ${rest}`};
         this._log({event: result.state, command: rest, result: result.text.slice(0, 500)});
+        const job = this._job.id;
         this._job = null;
         this._host.banner(null);
-        return this._report(config, result.state, result.text);
+        return this._reportEnd(config, result.state, result.text, job);
+    }
+
+    /** How a job ended. Tried again a few times, so a blip in the Wi-Fi doesn't leave your phone guessing. */
+    async _reportEnd(config, state, text, job) {
+        this._host.status?.(state, text);
+        for (const wait of [0, 5, 15, 45]) {
+            if (wait)
+                await new Promise(resolve => GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, wait, () => {
+                    resolve();
+                    return GLib.SOURCE_REMOVE;
+                }));
+            try {
+                return await this._host.send(config, '/api/laptop/status', {device: 'laptop', state, text, job: job ?? ''});
+            } catch (e) {
+                console.warn(`Butler: couldn't tell the phone (${state}): ${e.message}`);
+            }
+        }
+        this._log({event: 'unreported', state, why: "couldn't reach Butler to say how it ended"});
+        return null;
     }
 
     async _run(config, command) {

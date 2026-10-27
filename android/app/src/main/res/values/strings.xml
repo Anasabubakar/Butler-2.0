@@ -37,6 +37,8 @@
     <string name="pet_finding_share">Finding the Share button…</string>
     <string name="pet_saved_link">saved. link\'s in your library with its source.</string>
     <string name="pet_saved_screenshot">saved. screenshot\'s in your library.</string>
+    <string name="pet_saved_words">saved. this app hides its picture, so I kept the words on screen instead.</string>
+    <string name="pet_saved_link_only">saved the link. this app hides its screen, so no screenshot this time.</string>
     <string name="pet_copying">Copying…</string>
     <string name="pet_copied">Copied.</string>
     <string name="pet_select_first">select something first</string>
@@ -47,6 +49,7 @@
     <string name="pet_needs_hands">turn on Butler in Accessibility settings first</string>
     <string name="pet_needs_android_11">screenshots need Android 11 or newer</string>
     <string name="pet_no_screenshot">couldn\'t take a screenshot</string>
+    <string name="pet_screen_hidden">this app hides its screen from screenshots, so all I got was black</string>
     <string name="start_pet">Start Little Butler</string>
     <string name="allow_overlay">Allow Butler to display over other apps, then tap Start again</string>
     <string name="allow_hands">Turn on Butler in Accessibility, then tap Start again. If it\'s greyed out, open Butler\'s App info, tap ⋮ and choose Allow restricted settings first.</string>
