@@ -54,9 +54,15 @@ class ButlerClient(private val config: Config) {
         return List(sent.length()) { sent.getString(it) }
     }
 
-    /** A command for the laptop, secret word and all. The laptop checks the word. Returns who got it. */
-    suspend fun laptopTask(text: String): List<String> =
-        sentTo(post("/api/laptop/task", mapOf("device" to config.deviceName, "text" to text), null))
+    /** Who a laptop command went to, and a warning when that laptop seems asleep or offline. */
+    data class LaptopSent(val to: List<String>, val warning: String?)
+
+    /** A command for the laptop, secret word and all. The laptop checks the word. */
+    suspend fun laptopTask(text: String): LaptopSent {
+        val answer = post("/api/laptop/task", mapOf("device" to config.deviceName, "text" to text), null)
+        val warning = JSONObject(answer).optString("warning").takeIf { it.isNotBlank() && it != "null" }
+        return LaptopSent(sentTo(answer), warning)
+    }
 
     /** Stops what the laptop is doing; `off` also switches remote control off there. */
     suspend fun laptopStop(off: Boolean): List<String> =
