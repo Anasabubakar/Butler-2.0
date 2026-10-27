@@ -68,6 +68,21 @@ Settings in `pet.json`: `projects` (the folder Claude Code jobs start from, defa
 
 Be honest with yourself about the secret word: it travels with your Butler token, so whoever gets one will often have seen the other (in the phone's text box, for example). It stops someone who has only the token; it isn't a second lock as strong as a separate password app. The lockout, the kill switch, the banner and the log are there for that reason.
 
+## Send real files to your phone
+
+**Send to phone** sends the files you picked, not a screenshot: the ones selected in Files (or
+Nemo, Dolphin…), or the file open in a viewer or editor (found by its window title in your
+recent files). In Files you can also right-click → **Scripts → Send to phone**. Files from your
+phone land in `~/Downloads/Butler`, and the pet offers **Open folder**.
+
+The sending is done by `link.py`, which the pet starts (it needs `python3` and `openssl`, both
+on Ubuntu already). On the same Wi-Fi, or with the laptop on your phone's hotspot, files go
+straight across with no internet: HTTPS on port 53320 with the laptop's own certificate, whose
+fingerprint the phone learns from your Butler server once and then insists on. The laptop calls
+out on UDP port 53321 so the phone can find it. If you run a firewall (`ufw` is off on Ubuntu by
+default), allow both: `sudo ufw allow 53320/tcp && sudo ufw allow 53321/udp`. Otherwise files go
+through your Butler server, resuming after a dropped connection.
+
 ## Update it
 
 Install the `update-pet` command once, from the repo folder:
