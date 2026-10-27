@@ -18,6 +18,13 @@ jobs:
       - name: Type-check server
         run: deno task check
 
+  laptop-link:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test the laptop's file link
+        run: python3 -m unittest desktop/gnome/test_link.py
+
   docker:
     runs-on: ubuntu-latest
     steps:
