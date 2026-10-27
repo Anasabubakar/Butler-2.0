@@ -36,6 +36,7 @@ import * as recipes from "./lib/recipes.ts";
 import { vaultReady } from "./lib/vault.ts";
 import * as sync from "./lib/sync.ts";
 import * as memory from "./lib/memory.ts";
+import * as transfers from "./lib/transfers.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -49,6 +50,9 @@ const WEB_DIR = env("WEB_DIR", join(ROOT, "web/dist"))!;
 const COOKIE_SECURE = env("COOKIE_SECURE", "true") !== "false";
 
 const MAX_FILE_BYTES = 500 * 1024 * 1024;
+// Files sent between devices wait in a hidden folder next to the saves, until the other device has them.
+const TRANSFERS_DIR = env("TRANSFERS_DIR", join(FILES_DIR, ".transfers"))!;
+const MAX_TRANSFER_BYTES = Number(env("BUTLER_MAX_TRANSFER_GB", "8")) * 1024 ** 3;
 const MAX_VISION_BYTES = 4 * 1024 * 1024;
 const VISION_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
 const VOICE_TYPES = ["audio/wav", "audio/x-wav", "audio/ogg", "audio/webm", "audio/mp4", "audio/mpeg", "audio/aac"] as const;
@@ -410,6 +414,109 @@ app.get("/api/inbox/file/:id", async (c) => {
       "content-disposition": `attachment; filename="${item.file_path.split("/").pop()}"`,
     },
   });
+});
+
+// --- sending real files to another device ----------------------------------------------
+// For when the devices can't reach each other directly (see transfers.ts). The other device
+// is told straight away and downloads each file while it's still arriving.
+
+// Starts sending files: `files` is [{name, size, mime}]. Answers each file's id, to upload to.
+app.post("/api/transfer", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const { text } = await deviceForm(c);
+  const device = text("device", 100);
+  const target = text("target", 100);
+  if (!device || !target) return c.json({ error: "device and target are required" }, 400);
+  let files;
+  try {
+    files = transfers.checkFiles(JSON.parse(text("files", 200_000) ?? "[]"), MAX_TRANSFER_BYTES);
+  } catch (e) {
+    return c.json({ error: e instanceof SyntaxError ? "files must be a list" : (e as Error).message }, 400);
+  }
+  const to = await inbox.resolveTarget(target, device);
+  if (!to.length) return c.json({ error: `no ${target} has checked in with Butler yet` }, 404);
+  const t = await transfers.create(TRANSFERS_DIR, device, to, files);
+  const size = t.files.reduce((n, f) => n + f.size, 0);
+  await inbox.send(to, { from_device: device, kind: "transfer", body: JSON.stringify({ id: t.id, files: t.files, size }) });
+  return c.json({ id: t.id, files: t.files, sent_to: to, piece: 8 * 1024 * 1024 });
+});
+
+// How far along a transfer is, for either end.
+app.get("/api/transfer/:id", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const t = await transfers.get(TRANSFERS_DIR, c.req.param("id"));
+  if (!t) return c.json({ error: "that transfer is gone" }, 404);
+  return c.json(await transfers.status(TRANSFERS_DIR, t));
+});
+
+// One piece of a file, at ?offset= (where the file has got to). The body is the raw bytes.
+// A 409 says where to carry on from, after a dropped connection.
+app.put("/api/transfer/:id/:file", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const t = await transfers.get(TRANSFERS_DIR, c.req.param("id"));
+  if (!t) return c.json({ error: "that transfer is gone" }, 404);
+  const offset = Number(c.req.query("offset") ?? "-1");
+  try {
+    return c.json({ received: await transfers.append(TRANSFERS_DIR, t, c.req.param("file"), offset, c.req.raw.body) });
+  } catch (e) {
+    if (e instanceof transfers.WrongOffset) return c.json({ error: e.message, received: e.received }, 409);
+    if (e instanceof Deno.errors.NotFound) return c.json({ error: "no such file in this transfer" }, 404);
+    return c.json({ error: String((e as Error).message ?? e).slice(0, 200) }, 400);
+  }
+});
+
+// What has arrived of a file so far, from ?from= on. x-received and x-size say how far along it is.
+app.get("/api/transfer/:id/:file", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const t = await transfers.get(TRANSFERS_DIR, c.req.param("id"));
+  if (!t) return c.json({ error: "that transfer is gone" }, 404);
+  try {
+    const part = await transfers.read(TRANSFERS_DIR, t, c.req.param("file"), Number(c.req.query("from") ?? "0") || 0);
+    let left = part.length;
+    const body = part.file.readable.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, out) {
+        if (left <= 0) return;
+        out.enqueue(chunk.length > left ? chunk.subarray(0, left) : chunk);
+        left -= chunk.length;
+      },
+    }));
+    return new Response(body, {
+      headers: {
+        "content-type": "application/octet-stream",
+        "content-length": String(part.length),
+        "x-from": String(part.from),
+        "x-received": String(part.received),
+        "x-size": String(part.size),
+      },
+    });
+  } catch (e) {
+    if (e instanceof Deno.errors.NotFound) return c.json({ error: "no such file in this transfer" }, 404);
+    throw e;
+  }
+});
+
+// The receiving device has every file: once every device has, the server forgets them.
+app.post("/api/transfer/:id/done", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const { text } = await deviceForm(c);
+  const device = text("device", 100);
+  if (!device) return c.json({ error: "device is required" }, 400);
+  const t = await transfers.get(TRANSFERS_DIR, c.req.param("id"));
+  if (!t) return c.json({ ok: true, gone: true });
+  return c.json({ ok: true, gone: await transfers.finish(TRANSFERS_DIR, t, device) });
+});
+
+// The sender gave up (Stop). The other device finds it gone and says so.
+app.delete("/api/transfer/:id", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  await transfers.remove(TRANSFERS_DIR, c.req.param("id"));
+  return c.json({ ok: true });
+});
+
+// Your other devices and how to reach each one directly on the same Wi-Fi, for a device's token.
+app.get("/api/device/peers", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  return c.json(await inbox.peers(c.req.query("device") ?? ""));
 });
 
 // Emails wait here for your yes; they're forgotten after 10 minutes.
@@ -1642,6 +1749,7 @@ if (import.meta.main) {
   setInterval(() => watchPrices().catch((e) => console.error("prices:", e)), 30 * 60_000);
   setInterval(() => rescueLinks().catch((e) => console.error("links:", e)), 10 * 60_000);
   setInterval(() => resortOld().catch((e) => console.error("resort:", e)), 60_000);
+  setInterval(() => transfers.sweep(TRANSFERS_DIR).catch((e) => console.error("transfers:", e)), 60 * 60_000);
   if (geminiReady()) console.log("AI providers, in order:", aiProviders().join(", "));
   if (geminiKeys().length) geminiModels().then((m) => console.log("Gemini models, in order:", m.join(", ")));
   Deno.serve({ port: PORT, hostname: env("HOST", "0.0.0.0") }, app.fetch);
