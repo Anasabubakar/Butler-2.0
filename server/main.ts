@@ -266,6 +266,13 @@ app.post("/api/inbox", async (c) => {
   const device = text("device", 100);
   if (!device || !deviceKind) return c.json({ error: "device and kind (laptop or phone) are required" }, 400);
   await inbox.checkIn(device, deviceKind);
+  // How to reach this device directly on the same Wi-Fi ("off" when its link is switched off).
+  const local = text("local", 2000);
+  if (local) {
+    try {
+      await inbox.setLocal(device, local === "off" ? null : inbox.cleanLocal(JSON.parse(local)));
+    } catch { /* not JSON: leave it as it was */ }
+  }
   // wait=25 holds the request open until something arrives (or 25 seconds pass).
   const wait = Math.min(Number(text("wait", 3)) || 0, 25);
   let due = await inbox.takeDue(device);
