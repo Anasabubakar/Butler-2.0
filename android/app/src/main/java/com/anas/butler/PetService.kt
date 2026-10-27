@@ -55,6 +55,9 @@ class PetService : Service() {
 
     private class Shot(val jpeg: ByteArray, val width: Int, val height: Int)
 
+    /** The app on screen hid it, so the screenshot came out black. */
+    private class ScreenHidden(message: String) : IllegalStateException(message)
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var windows: WindowManager
     private lateinit var pet: ButlerSpriteView
@@ -524,7 +527,7 @@ class PetService : Service() {
     private fun hands(): HandsService =
         HandsService.instance ?: throw IllegalStateException(getString(R.string.pet_needs_hands))
 
-    /** A screenshot without the pet or its notes in it. */
+    /** A screenshot without the pet or its notes in it. Never a black one: throws ScreenHidden instead. */
     private suspend fun snap(): Shot {
         val hands = hands()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) throw IllegalStateException(getString(R.string.pet_needs_android_11))
@@ -534,6 +537,7 @@ class PetService : Service() {
         delay(150)
         try {
             val bitmap = hands.screenshot() ?: throw IllegalStateException(getString(R.string.pet_no_screenshot))
+            if (withContext(Dispatchers.Default) { HandsService.isBlank(bitmap) }) throw ScreenHidden(getString(R.string.pet_screen_hidden))
             val jpeg = withContext(Dispatchers.Default) {
                 ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
             }
