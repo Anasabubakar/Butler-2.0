@@ -399,6 +399,13 @@ app.post("/api/laptop/status", async (c) => {
   return c.json({ sent_to: to });
 });
 
+// How one laptop command is going, or why it didn't run: for the website and phone to show.
+app.get("/api/laptop/job/:id", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "bad token" }, 401);
+  const job = await jobs.get(c.req.param("id"));
+  return job ? c.json(job) : c.json({ error: "no such job" }, 404);
+});
+
 // A file sent to this device, fetched with the device token.
 app.get("/api/inbox/file/:id", async (c) => {
   if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
