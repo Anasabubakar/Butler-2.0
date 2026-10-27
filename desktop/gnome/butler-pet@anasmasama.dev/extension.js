@@ -92,6 +92,26 @@ function screenChanged(a, b) {
     return diff > 1.2;
 }
 
+/**
+ * Whether a screenshot is empty: all see-through or all black. On Wayland some windows
+ * (videos, games, apps drawing with the GPU, fullscreen ones) come out like that.
+ */
+function isBlank(pixbuf) {
+    const tiny = pixbuf.scale_simple(48, 27, GdkPixbuf.InterpType.BILINEAR);
+    const pixels = tiny.get_pixels();
+    const stride = tiny.get_rowstride(), channels = tiny.get_n_channels(), alpha = tiny.get_has_alpha();
+    for (let y = 0; y < 27; y++) {
+        for (let x = 0; x < 48; x++) {
+            const i = y * stride + x * channels;
+            if (alpha && pixels[i + 3] < 8)
+                continue;
+            if ((pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3 >= 12)
+                return false;
+        }
+    }
+    return true;
+}
+
 /** This laptop's time zone, like Africa/Lagos, so "at 3pm" means your 3pm. */
 function timeZone() {
     const id = GLib.TimeZone.new_local().get_identifier();
