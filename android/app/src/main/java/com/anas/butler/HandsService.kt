@@ -177,6 +177,18 @@ class HandsService : AccessibilityService() {
     }
 
     companion object {
+        /**
+         * Whether a screenshot came out black. Apps that hide their screen (banking, Netflix,
+         * private tabs, some chats) show up as solid black. Checked on a small copy, so a dark
+         * app's text still lifts the brightest pixel well above black.
+         */
+        fun isBlank(bitmap: Bitmap): Boolean {
+            val tiny = Bitmap.createScaledBitmap(bitmap, 48, 96, true)
+            val pixels = IntArray(48 * 96).also { tiny.getPixels(it, 0, 48, 0, 0, 48, 96) }
+            if (tiny !== bitmap) tiny.recycle()
+            return pixels.all { p -> ((p shr 16 and 0xff) + (p shr 8 and 0xff) + (p and 0xff)) / 3 < 12 }
+        }
+
         private val COPY = Regex("\\bcopy\\b", RegexOption.IGNORE_CASE)
         private val COPIED = Regex("\\bcopied\\b", RegexOption.IGNORE_CASE)
 
