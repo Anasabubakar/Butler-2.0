@@ -376,10 +376,11 @@ class Transfers(private val context: Context) {
         }
 
         /** Opens what arrived: the file itself if there's one, else your Downloads. */
-        fun openIntent(saved: Saved): Intent =
+        fun openIntent(context: Context, saved: Saved): Intent =
             if (saved.uris.size == 1) {
                 val uri = saved.uris[0]
-                Intent(Intent.ACTION_VIEW).setDataAndType(uri, null).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                Intent(Intent.ACTION_VIEW).setDataAndType(uri, context.contentResolver.getType(uri))
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             } else {
                 Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS)
             }

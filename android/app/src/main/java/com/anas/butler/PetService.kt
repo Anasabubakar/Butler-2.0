@@ -732,8 +732,11 @@ class PetService : Service() {
         val transfers = Transfers(this)
         val files = body.optJSONArray("files")
         val names = List(files?.length() ?: 0) { files!!.getJSONObject(it).optString("name", "file") }
-        startTransfer(Progress(true, names, 0, body.optLong("size"), "server", from)) {
-            arrived(transfers.receiveFromServer(body, from, ::showTransfer))
+        scope.launch {
+            while (transfer?.isActive == true) delay(1000) // one at a time
+            startTransfer(Progress(true, names, 0, body.optLong("size"), "server", from)) {
+                arrived(transfers.receiveFromServer(body, from, ::showTransfer))
+            }
         }
     }
 
@@ -827,7 +830,7 @@ class PetService : Service() {
         val text = getString(R.string.transfer_got, filesWord(saved.uris.size), saved.peer)
         tell(text, true, getString(R.string.ask_on_phone))
         bubble.heading(getString(R.string.bubble_where, getString(R.string.ask_on_phone), getString(R.string.state_received)))
-        val open = Transfers.openIntent(saved).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val open = Transfers.openIntent(this, saved).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         bubble.offer(getString(if (saved.uris.size == 1) R.string.transfer_open else R.string.transfer_show)) {
             runCatching { startActivity(open) }
             bubbleTurn++
