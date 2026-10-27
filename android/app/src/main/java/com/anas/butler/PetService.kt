@@ -555,12 +555,12 @@ class PetService : Service() {
     }
 
     /** Taps the post's Share button, then Copy link, and reads the link. Null if any step fails. */
-    private suspend fun linkFromShare(shot: Shot): String? {
+    private suspend fun linkFromShare(shot: Shot?): String? {
         var menuOpen = false
         return try {
             // The button's label first; the screenshot guess only if the app doesn't label it.
-            val shared = hands().pressLabelled(HandsService.SHARE) || tapOn(shot,
-                SHARE_LOOK)
+            val shared = hands().pressLabelled(HandsService.SHARE) || (shot != null && tapOn(shot,
+                SHARE_LOOK))
             if (!shared) return null
             menuOpen = true
             delay(900)
@@ -592,11 +592,17 @@ class PetService : Service() {
     private fun saveThis() = work(getString(R.string.pet_grabbing)) {
         val config = Config(this)
         if (!config.isReady) throw IllegalStateException(getString(R.string.setup_first))
-        val shot = snap()
+        // A hidden screen still saves the link, just without the black picture.
+        val shot = try { snap() } catch (e: ScreenHidden) { null }
         var link = hands().browserUrl()
         if (link == null || isFeed(link) || Uri.parse(link).path.isNullOrBlank() || Uri.parse(link).path == "/") {
             say(getString(R.string.pet_finding_share))
             link = linkFromShare(shot) ?: link
+        }
+        if (shot == null) {
+            if (link == null) throw IllegalStateException(getString(R.string.pet_screen_hidden))
+            UploadWorker.enqueue(this, link, null, null, null)
+            return@work getString(R.string.pet_saved_link_only)
         }
         val dir = File(filesDir, "outbox/${UUID.randomUUID()}").apply { mkdirs() }
         val file = File(dir, "screenshot.jpg").apply { writeBytes(shot.jpeg) }
