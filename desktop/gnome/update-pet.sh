@@ -19,4 +19,13 @@ mkdir -p "$fonts"
 cp "$repo/desktop/gnome/fonts/"*.ttf "$repo/desktop/gnome/fonts/LICENSE-Inter.txt" "$fonts/"
 fc-cache -f "$fonts" >/dev/null 2>&1 || true
 
+# Right-click → Scripts → Send to phone, in Files.
+scripts="$HOME/.local/share/nautilus/scripts"
+mkdir -p "$scripts"
+ln -sf "$repo/desktop/gnome/send-to-phone.sh" "$scripts/Send to phone"
+
+# The file link needs python3 (Ubuntu has it) and openssl, for its own certificate.
+command -v python3 >/dev/null || echo "Install python3 to send files to your phone: sudo apt install python3"
+command -v openssl >/dev/null || echo "Install openssl to send files over Wi-Fi with no internet: sudo apt install openssl"
+
 echo "Butler pet updated. Log out and back in to see the new version."
