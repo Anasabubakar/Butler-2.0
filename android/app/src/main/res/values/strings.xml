@@ -151,6 +151,8 @@
     <!-- Sending real files between phone and laptop. -->
     <string name="send_share_label">Send to laptop</string>
     <string name="send_nothing">Nothing to send here</string>
+    <string name="pet_busy_sending">Still sending the last files. Try again when they\'re done.</string>
+    <string name="send_start_pet">Start Little Butler first: it sends the files and shows how far along they are.</string>
     <plurals name="files_count">
         <item quantity="one">%1$d file</item>
         <item quantity="other">%1$d files</item>
