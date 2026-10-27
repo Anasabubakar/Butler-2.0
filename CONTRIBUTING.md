@@ -23,7 +23,7 @@ set -a && . ./butler.local.env && set +a         # load the settings into this s
 
 | What | Command |
 |---|---|
-| Unit tests | `deno test --allow-read --allow-net --allow-env tests/` |
+| Unit tests | `deno test --allow-read --allow-write --allow-net --allow-env tests/` |
 | Type-check the server | `deno task check` |
 | Server on :8080 | `deno task start` |
 | Website on :5173 | `cd web && npm install && npm run dev` (calls the server on :8080) |
