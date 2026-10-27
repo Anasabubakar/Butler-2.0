@@ -1309,7 +1309,7 @@ class PetService : Service() {
         fun sendFiles(context: Context, uris: List<Uri>) {
             val clip = ClipData.newRawUri("files", uris[0]).apply { uris.drop(1).forEach { addItem(ClipData.Item(it)) } }
             context.startForegroundService(Intent(context, PetService::class.java).setAction(SEND_FILES)
-                .setClipData(clip).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply { clipData = clip })
         }
     }
 }
