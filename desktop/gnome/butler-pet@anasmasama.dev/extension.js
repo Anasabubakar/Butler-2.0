@@ -914,7 +914,11 @@ export default class ButlerPetExtension extends Extension {
             if (!config)
                 throw new Error('set your save URL and token in ~/.config/butler/pet.json');
 
-            const shot = await this._snapWindow().catch(() => null);
+            let snapError = null;
+            const shot = await this._snapWindow().catch(e => {
+                snapError = e;
+                return null;
+            });
             let text;
             if (this._inBrowser()) {
                 await this._press(Clutter.KEY_Control_L, Clutter.KEY_l);
@@ -928,7 +932,7 @@ export default class ButlerPetExtension extends Extension {
                 text = await this._copySelection();
             }
             if (!text && !shot)
-                throw new Error('nothing selected to save');
+                throw snapError ?? new Error('nothing selected to save');
 
             const fields = {device: 'laptop'};
             if (text)
