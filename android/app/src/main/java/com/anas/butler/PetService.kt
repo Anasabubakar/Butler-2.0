@@ -53,7 +53,8 @@ import java.util.UUID
  */
 class PetService : Service() {
 
-    private class Shot(val jpeg: ByteArray, val width: Int, val height: Int)
+    /** `dark`: nearly all black, so the picture may be missing what you saw. */
+    private class Shot(val jpeg: ByteArray, val width: Int, val height: Int, val dark: Boolean = false)
 
     /** The app on screen hid it, so the screenshot came out black. */
     private class ScreenHidden(message: String) : IllegalStateException(message)
@@ -538,10 +539,11 @@ class PetService : Service() {
         try {
             val bitmap = hands.screenshot() ?: throw IllegalStateException(getString(R.string.pet_no_screenshot))
             if (withContext(Dispatchers.Default) { HandsService.isBlank(bitmap) }) throw ScreenHidden(getString(R.string.pet_screen_hidden))
+            val dark = withContext(Dispatchers.Default) { HandsService.isMostlyDark(bitmap) }
             val jpeg = withContext(Dispatchers.Default) {
                 ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
             }
-            return Shot(jpeg, bitmap.width, bitmap.height)
+            return Shot(jpeg, bitmap.width, bitmap.height, dark)
         } finally {
             pet.visibility = View.VISIBLE
             panel.visibility = panelWas

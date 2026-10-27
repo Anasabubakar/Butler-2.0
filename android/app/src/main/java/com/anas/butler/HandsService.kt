@@ -207,6 +207,18 @@ class HandsService : AccessibilityService() {
             return pixels.all { p -> ((p shr 16 and 0xff) + (p shr 8 and 0xff) + (p and 0xff)) / 3 < 12 }
         }
 
+        /**
+         * Whether a screenshot is nearly all black but for a few buttons: a video the app
+         * hides from screenshots, with its icons drawn on top.
+         */
+        fun isMostlyDark(bitmap: Bitmap): Boolean {
+            val tiny = Bitmap.createScaledBitmap(bitmap, 48, 96, true)
+            val pixels = IntArray(48 * 96).also { tiny.getPixels(it, 0, 48, 0, 0, 48, 96) }
+            if (tiny !== bitmap) tiny.recycle()
+            val dark = pixels.count { p -> ((p shr 16 and 0xff) + (p shr 8 and 0xff) + (p and 0xff)) / 3 < 24 }
+            return dark >= pixels.size * 9 / 10
+        }
+
         /** Banking, payments and crypto apps: Butler never reads their screens. */
         private val MONEY_APPS = Regex("bank|pay|wallet|finance|money|opay|kuda|moniepoint|fairmoney|chipper|binance|crypto|bybit|cowrywise|piggyvest|risevest|bamboo", RegexOption.IGNORE_CASE)
 
