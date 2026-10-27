@@ -14,9 +14,16 @@ jobs:
         with:
           deno-version: v2.5.6
       - name: Unit tests
-        run: deno test --allow-read --allow-net --allow-env tests/
+        run: deno test --allow-read --allow-write --allow-net --allow-env tests/
       - name: Type-check server
         run: deno task check
+
+  laptop-link:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test the laptop's file link
+        run: python3 -m unittest desktop/gnome/test_link.py
 
   docker:
     runs-on: ubuntu-latest

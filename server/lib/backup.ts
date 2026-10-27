@@ -65,6 +65,7 @@ async function upload(name: string, parent: string, bytes: Uint8Array<ArrayBuffe
 
 async function* walk(dir: string): AsyncGenerator<string> {
   for await (const entry of Deno.readDir(dir)) {
+    if (entry.name.startsWith(".")) continue; // .transfers: files passing between devices, not saves
     const path = join(dir, entry.name);
     if (entry.isDirectory) yield* walk(path);
     else if (entry.isFile) yield path;
