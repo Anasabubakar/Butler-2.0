@@ -112,6 +112,27 @@ function isBlank(pixbuf) {
     return true;
 }
 
+/**
+ * A screenshot as a JPEG no wider than 1600 pixels. JPEG has no see-through, so see-through
+ * parts (rounded corners, shadows) go on white first instead of turning black.
+ */
+function toJpeg(pixbuf) {
+    let width = pixbuf.get_width(), height = pixbuf.get_height();
+    if (width > 1600) {
+        height = Math.round(height * 1600 / width);
+        width = 1600;
+    }
+    pixbuf = pixbuf.get_has_alpha()
+        ? pixbuf.composite_color_simple(width, height, GdkPixbuf.InterpType.BILINEAR, 255, 8, 0xffffff, 0xffffff)
+        : pixbuf.scale_simple(width, height, GdkPixbuf.InterpType.BILINEAR);
+    const [, jpeg] = pixbuf.save_to_bufferv('jpeg', ['quality'], ['85']);
+    return new GLib.Bytes(jpeg);
+}
+
+/** The picture a Shell.Screenshot wrote into `stream`. */
+const pixbufFrom = stream => GdkPixbuf.Pixbuf.new_from_stream(
+    Gio.MemoryInputStream.new_from_bytes(stream.steal_as_bytes()), null);
+
 /** This laptop's time zone, like Africa/Lagos, so "at 3pm" means your 3pm. */
 function timeZone() {
     const id = GLib.TimeZone.new_local().get_identifier();
