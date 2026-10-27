@@ -37,6 +37,7 @@
     <string name="pet_finding_share">Finding the Share button…</string>
     <string name="pet_saved_link">saved. link\'s in your library with its source.</string>
     <string name="pet_saved_screenshot">saved. screenshot\'s in your library.</string>
+    <string name="pet_saved_words">saved. this app hides its picture, so I kept the words on screen instead.</string>
     <string name="pet_saved_link_only">saved the link. this app hides its screen, so no screenshot this time.</string>
     <string name="pet_copying">Copying…</string>
     <string name="pet_copied">Copied.</string>
