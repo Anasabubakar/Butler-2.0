@@ -391,7 +391,9 @@ app.post("/api/laptop/status", async (c) => {
     return c.json({ error: `device and state (${laptop.STATES.join(", ")}) are required` }, 400);
   }
   const to = await inbox.resolveTarget(text("target", 100) ?? "phone", device);
-  const body = JSON.stringify({ state, title: laptop.statusTitle(state), text: text("text", 3000) ?? "" });
+  const job = text("job", 40);
+  await jobs.report(device, job, state, text("text", 3000) ?? "");
+  const body = JSON.stringify({ state, title: laptop.statusTitle(state), text: text("text", 3000) ?? "", job });
   laptopStatus.set(device, { state, title: laptop.statusTitle(state), text: text("text", 3000) ?? "", at: new Date().toISOString() });
   await inbox.send(to, { from_device: device, kind: "status", body });
   return c.json({ sent_to: to });
