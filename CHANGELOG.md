@@ -10,6 +10,7 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 - **Laptop control says why.** A command the laptop doesn't pick up in 10 minutes (asleep, locked out, offline) is dropped with a reason on the phone and website, instead of vanishing. Sending to a laptop that hasn't checked in lately warns you straight away, and a running job that goes quiet for 25 minutes is called out. The laptop also retries its final report, waits longer for slow AI answers, and no longer loses commands when a check-in drops halfway.
 - **Chat about one save.** Ask Butler about this, on each library card and in the phone app's save screen: questions answered from the save's full content, and orders carried out with it (reminders, events, email, connected apps, renaming it).
 - **No more black screenshots.** When an app hides its screen (banking, Netflix, private tabs) the phone saves the link alone and says why. On the laptop, a window that comes out empty is taken again from the screen, and see-through edges go white instead of black.
+- **Words when the picture is hidden.** If a phone app hides or blacks out its picture, Save this keeps the words on screen with the link. Never from banking or money apps, and never password fields.
 
 ## v0.2.0 (2026-10-26)
 

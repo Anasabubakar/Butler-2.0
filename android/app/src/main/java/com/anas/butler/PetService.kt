@@ -53,7 +53,8 @@ import java.util.UUID
  */
 class PetService : Service() {
 
-    private class Shot(val jpeg: ByteArray, val width: Int, val height: Int)
+    /** `dark`: nearly all black, so the picture may be missing what you saw. */
+    private class Shot(val jpeg: ByteArray, val width: Int, val height: Int, val dark: Boolean = false)
 
     /** The app on screen hid it, so the screenshot came out black. */
     private class ScreenHidden(message: String) : IllegalStateException(message)
@@ -538,10 +539,11 @@ class PetService : Service() {
         try {
             val bitmap = hands.screenshot() ?: throw IllegalStateException(getString(R.string.pet_no_screenshot))
             if (withContext(Dispatchers.Default) { HandsService.isBlank(bitmap) }) throw ScreenHidden(getString(R.string.pet_screen_hidden))
+            val dark = withContext(Dispatchers.Default) { HandsService.isMostlyDark(bitmap) }
             val jpeg = withContext(Dispatchers.Default) {
                 ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
             }
-            return Shot(jpeg, bitmap.width, bitmap.height)
+            return Shot(jpeg, bitmap.width, bitmap.height, dark)
         } finally {
             pet.visibility = View.VISIBLE
             panel.visibility = panelWas
@@ -594,19 +596,23 @@ class PetService : Service() {
         if (!config.isReady) throw IllegalStateException(getString(R.string.setup_first))
         // A hidden screen still saves the link, just without the black picture.
         val shot = try { snap() } catch (e: ScreenHidden) { null }
+        // When the picture is black or nearly so, the words on screen are kept too. Read now,
+        // before the Share menu covers them.
+        val words = if (shot == null || shot.dark) hands().screenText() else null
         var link = hands().browserUrl()
         if (link == null || isFeed(link) || Uri.parse(link).path.isNullOrBlank() || Uri.parse(link).path == "/") {
             say(getString(R.string.pet_finding_share))
             link = linkFromShare(shot) ?: link
         }
+        val text = listOfNotNull(link, words?.let { "On screen:\n$it" }).joinToString("\n\n").ifBlank { null }
         if (shot == null) {
-            if (link == null) throw IllegalStateException(getString(R.string.pet_screen_hidden))
-            UploadWorker.enqueue(this, link, null, null, null)
-            return@work getString(R.string.pet_saved_link_only)
+            if (text == null) throw IllegalStateException(getString(R.string.pet_screen_hidden))
+            UploadWorker.enqueue(this, text, null, null, null)
+            return@work getString(if (words != null) R.string.pet_saved_words else R.string.pet_saved_link_only)
         }
         val dir = File(filesDir, "outbox/${UUID.randomUUID()}").apply { mkdirs() }
         val file = File(dir, "screenshot.jpg").apply { writeBytes(shot.jpeg) }
-        UploadWorker.enqueue(this, link, null, file, "image/jpeg")
+        UploadWorker.enqueue(this, text, null, file, "image/jpeg")
         getString(if (link != null) R.string.pet_saved_link else R.string.pet_saved_screenshot)
     }
 
