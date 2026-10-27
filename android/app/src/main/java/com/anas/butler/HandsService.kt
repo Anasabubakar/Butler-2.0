@@ -133,6 +133,24 @@ class HandsService : AccessibilityService() {
     }
 
     /**
+     * The words on screen, top to bottom, as TalkBack would read them. Apps that hide their
+     * picture from screenshots still show these. Never password fields, and nothing at all
+     * from banking and money apps.
+     */
+    fun screenText(): String? {
+        val root = rootInActiveWindow ?: return null
+        if (MONEY_APPS.containsMatchIn(root.packageName?.toString().orEmpty())) return null
+        val lines = LinkedHashSet<String>()
+        fun walk(node: AccessibilityNodeInfo, depth: Int) {
+            if (depth > 40 || lines.size >= 200 || !node.isVisibleToUser || node.isPassword) return
+            (node.text ?: node.contentDescription)?.toString()?.trim()?.takeIf { it.length > 1 }?.let { lines += it }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { walk(it, depth + 1) }
+        }
+        walk(root, 0)
+        return lines.joinToString("\n").take(4000).ifBlank { null }
+    }
+
+    /**
      * Presses the button on screen whose label (what TalkBack would read) matches [want], the
      * way a finger would. Apps label their buttons, so this hits Share, not the Save or
      * Favourites button next to it, which a guess from the screenshot sometimes did.
@@ -188,6 +206,9 @@ class HandsService : AccessibilityService() {
             if (tiny !== bitmap) tiny.recycle()
             return pixels.all { p -> ((p shr 16 and 0xff) + (p shr 8 and 0xff) + (p and 0xff)) / 3 < 12 }
         }
+
+        /** Banking, payments and crypto apps: Butler never reads their screens. */
+        private val MONEY_APPS = Regex("bank|pay|wallet|finance|money|opay|kuda|moniepoint|fairmoney|chipper|binance|crypto|bybit|cowrywise|piggyvest|risevest|bamboo", RegexOption.IGNORE_CASE)
 
         private val COPY = Regex("\\bcopy\\b", RegexOption.IGNORE_CASE)
         private val COPIED = Regex("\\bcopied\\b", RegexOption.IGNORE_CASE)
