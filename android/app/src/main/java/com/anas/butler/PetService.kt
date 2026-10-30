@@ -43,6 +43,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import com.anas.butler.transfer.Laptop
 import com.anas.butler.transfer.Link
+import com.anas.butler.transfer.Outgoing
 import com.anas.butler.transfer.Progress
 import com.anas.butler.transfer.Saved
 import com.anas.butler.transfer.Transfers
@@ -263,10 +264,11 @@ class PetService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == STOP_RING) stopRinging()
-        if (intent?.action == SEND_FILES && ::pet.isInitialized) {
-            val clip = intent.clipData
-            val uris = List(clip?.itemCount ?: 0) { clip!!.getItemAt(it).uri }.filterNotNull()
-            if (uris.isNotEmpty()) sendFiles(uris)
+        if (intent?.action == SEND_FILES) {
+            while (true) {
+                val files = handedOver.poll() ?: break
+                if (::pet.isInitialized) sendFiles(files) else Transfers(this).cleanUp(files)
+            }
         }
         return START_STICKY
     }
@@ -733,19 +735,27 @@ class PetService : Service() {
 
     // --- real files, to and from the laptop -----------------------------------------------
 
-    /** Sends files picked in another app (from Share → Send to laptop). */
-    private fun sendFiles(uris: List<Uri>) {
-        if (transfer?.isActive == true) return say(getString(R.string.pet_busy_sending))
+    /** Sends files picked in another app (from Share → Send to laptop), already opened there. */
+    private fun sendFiles(picked: List<Outgoing>) {
         val transfers = Transfers(this)
-        val files = runCatching { transfers.describe(uris) }.getOrElse { e ->
-            return tell(getString(R.string.pet_failed, e.message ?: e.toString()), false, getString(R.string.ask_on_phone))
+        if (transfer?.isActive == true) {
+            transfers.cleanUp(picked)
+            return say(getString(R.string.pet_busy_sending))
         }
-        if (files.isEmpty()) return say(getString(R.string.send_nothing))
-        startTransfer(Progress(false, files.map { it.name }, 0, files.sumOf { it.size }, "", getString(R.string.transfer_laptop))) {
-            val done = transfers.send("laptop", files, ::showTransfer)
-            val via = getString(if (done.via == "wifi") R.string.transfer_wifi else R.string.transfer_server)
-            val peer = if (done.via == "wifi") getString(R.string.transfer_laptop) else done.peer
-            tell(getString(R.string.transfer_sent, filesWord(files.size), peer, via), true, getString(R.string.ask_on_phone))
+        if (picked.isEmpty()) return say(getString(R.string.send_nothing))
+        val names = picked.map { it.name }
+        startTransfer(Progress(false, names, 0, picked.sumOf { it.size.coerceAtLeast(0) }, "", getString(R.string.transfer_laptop))) {
+            var files = picked
+            try {
+                files = transfers.prepare(picked)
+                val done = transfers.send("laptop", files, ::showTransfer)
+                val via = getString(if (done.via == "wifi") R.string.transfer_wifi else R.string.transfer_server)
+                val peer = if (done.via == "wifi") getString(R.string.transfer_laptop) else done.peer
+                tell(getString(R.string.transfer_sent, filesWord(files.size), peer, via), true, getString(R.string.ask_on_phone))
+            } finally {
+                transfers.cleanUp(picked)
+                if (files !== picked) transfers.cleanUp(files)
+            }
         }
     }
 
@@ -1302,14 +1312,16 @@ class PetService : Service() {
             context.startForegroundService(Intent(context, PetService::class.java))
         }
 
+        /** Files opened by the Share screen, waiting for the pet (same app, so they're simply handed over). */
+        private val handedOver = java.util.concurrent.ConcurrentLinkedQueue<List<Outgoing>>()
+
         /**
-         * Hands files picked in another app to the pet, which sends them to the laptop. The
-         * permission to read them comes along, and lasts while the pet runs.
+         * Hands files picked in another app to the pet, which sends them to the laptop. They're
+         * already open: Android's permission to read them ends when the Share screen closes.
          */
-        fun sendFiles(context: Context, uris: List<Uri>) {
-            val clip = ClipData.newRawUri("files", uris[0]).apply { uris.drop(1).forEach { addItem(ClipData.Item(it)) } }
-            context.startForegroundService(Intent(context, PetService::class.java).setAction(SEND_FILES)
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply { clipData = clip })
+        fun sendFiles(context: Context, files: List<Outgoing>) {
+            handedOver.add(files)
+            context.startForegroundService(Intent(context, PetService::class.java).setAction(SEND_FILES))
         }
     }
 }
