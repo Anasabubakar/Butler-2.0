@@ -25,6 +25,18 @@ export function pathsFromUris(text) {
     return [...new Set(paths)];
 }
 
+/**
+ * File paths from copied plain text, for file managers that only offer text: every line has
+ * to be a full path or a file:// link, so ordinary copied text never counts as files.
+ */
+export function pathsFromText(text) {
+    const lines = String(text ?? '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (!lines.length || !lines.every(l => l.startsWith('/') || l.startsWith('file://')))
+        return [];
+    const paths = lines.flatMap(l => (l.startsWith('/') ? [l] : pathsFromUris(l)));
+    return paths.length === lines.length ? [...new Set(paths)] : [];
+}
+
 const ATTR = (tag, name) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1] ?? '';
 const unescape = s => s.replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
