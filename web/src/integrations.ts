@@ -13,6 +13,7 @@ interface GoogleStatus {
   configured: boolean;
   connected: boolean;
   email: string | null;
+  problem: string | null;
   backup: { at: string; ok: boolean; note: string } | null;
 }
 
@@ -91,13 +92,19 @@ async function google(slot: HTMLElement) {
       h("div", { class: "row__text" },
         h("h3", {}, "Google"),
         h("p", { class: "muted small" }, s.connected ? s.email ?? "Your Google account" : "Calendar, Gmail, Contacts and Drive")),
-      status(s.connected ? "connected" : "offline", s.connected ? "Connected" : "Not connected"),
+      status(s.connected ? (s.problem ? "failed" : "connected") : "offline",
+        s.connected ? (s.problem ? "Needs you" : "Connected") : "Not connected"),
       action,
     ),
+    s.connected && s.problem
+      ? h("div", { class: "actions" }, inlineError(sentence(s.problem)),
+        button("Connect Google again", { kind: "primary", small: true, icon: "google", onclick: () => { location.href = "/api/google/connect"; } }))
+      : null,
     result === "failed" ? inlineError("Connecting Google didn't go through. Try again, and allow the access Butler asks for.") : null,
     h("ul", { class: "scopes" },
-      scope("calendar", "Calendar", "Adds events you ask for, and reads today's for your brief."),
-      scope("mail", "Gmail", "Sends only the emails you confirm, and lets recipes start on new email."),
+      scope("calendar", "Calendar", "Adds events you ask for, and reads your calendars for your brief."),
+      scope("check", "Tasks", "Reads your Google Tasks so the brief knows what's due."),
+      scope("mail", "Gmail", "Sends only the emails you confirm, tells you about unread email, and lets recipes start on new email."),
       scope("chat", "Contacts", "Looks up who you mean when you ask to email someone."),
       scope("download", "Drive", "A daily backup of your library."),
     ),
@@ -107,6 +114,9 @@ async function google(slot: HTMLElement) {
       : null,
   ));
 }
+
+/** Google's message starts lowercase, the way Butler talks; on the website it's a sentence. */
+const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 function scope(iconName: string, name: string, text: string): HTMLElement {
   return h("li", {}, h("span", { class: "row__icon" }, icon(iconName)), h("span", {}, h("strong", {}, name), h("span", { class: "muted" }, text)));
