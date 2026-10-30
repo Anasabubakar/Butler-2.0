@@ -150,3 +150,40 @@ test("the planner sees memories, the conversation and an open save, and says wha
     await server.shutdown();
   }
 });
+
+test("a reply to a pushed message is read as an answer to it, and the screenshot stays in the background", async () => {
+  let prompt = "";
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+    prompt = (await req.json()).contents[0].parts.at(-1).text;
+    const text = JSON.stringify({ action: "answer", reply: "cool, i'll leave them." });
+    return Response.json({ candidates: [{ content: { parts: [{ text }] } }] });
+  });
+  Deno.env.set("GEMINI_URL", `http://localhost:${server.addr.port}`);
+  Deno.env.set("GEMINI_API_KEY", "test-key");
+  try {
+    const shot = { data: "AAAA", mediaType: "image/jpeg" };
+    const got = await plan("Nah", {
+      device: "laptop", timeZone: "UTC", devices: [],
+      answering: "Morning check: 3 emails need a reply. Want me to follow up on them?", replied: true,
+    }, shot);
+    assert.equal(got.reply, "cool, i'll leave them.");
+    assert.match(prompt, /tapped reply on this message/);
+    assert.match(prompt, /"""Morning check: 3 emails need a reply\. Want me to follow up on them\?"""/);
+    assert.match(prompt, /"nah".*mean don't/);
+    assert.match(prompt, /never describe it unasked/);
+
+    await plan("yes", { device: "phone", timeZone: "UTC", devices: [], answering: "Want me to draft a reply?" }, null);
+    assert.match(prompt, /last thing in your conversation is your message/);
+    assert.match(prompt, /otherwise it's something new/);
+
+    await plan("hi", { device: "phone", timeZone: "UTC", devices: [], answering: "x".repeat(3000), replied: true }, null);
+    assert.match(prompt, /x{1500}…"""/);
+    assert.doesNotMatch(prompt, /x{1501}/);
+
+    await plan("hi", { device: "phone", timeZone: "UTC", devices: [] }, null);
+    assert.doesNotMatch(prompt, /tapped reply|last thing in your conversation/);
+  } finally {
+    Deno.env.delete("GEMINI_API_KEY");
+    await server.shutdown();
+  }
+});

@@ -84,12 +84,78 @@ export async function recentTurns(itemId: string | null, limit = HISTORY_TURNS):
   return (sinceBreak === -1 ? rows : rows.slice(0, sinceBreak)).reverse();
 }
 
-/** The last thing Butler said in a conversation, if anything. */
-export async function lastSaid(itemId: string | null): Promise<string | null> {
-  const [row] = await sql<{ text: string }[]>`
-    select text from chat_turns where role = 'butler' and ${itemId ? sql`item_id = ${itemId}` : sql`item_id is null`}
-    order by created_at desc, id desc limit 1`;
-  return row?.text ?? null;
+// --- what Butler sent you on its own --------------------------------------------------------
+
+/** Who sends Butler's own notes: the brief, recaps, recipes, price drops, cheers, focus timers. */
+const BUTLER_SENDERS = ["Butler", "Butler focus"];
+
+/**
+ * What Butler said in a message it pushed to your devices, as the conversation keeps it: its own
+ * notes and every reminder. Null for things you sent between your own devices.
+ */
+export function pushedText(m: { kind: string; from_device: string; body: string | null }): string | null {
+  const body = m.body?.trim();
+  if (!body) return null;
+  if (m.kind === "reminder") return `Reminder: ${body}`;
+  if (m.kind === "note" && BUTLER_SENDERS.includes(m.from_device)) return body;
+  return null;
+}
+
+let pushing: Promise<unknown> = Promise.resolve();
+
+/**
+ * Puts something Butler pushed into the main conversation, so a reply to it ("nah", "yes do
+ * it") follows on, wherever you answer. Each device takes its own copy, so it's kept once:
+ * not again if it's already there since it was sent (`since`). One at a time, so two devices
+ * taking it at the same moment don't both add it.
+ */
+export function addPushed(text: string, since: string): Promise<void> {
+  const next = pushing.then(async () => {
+    const [seen] = await sql`
+      select 1 from chat_turns where item_id is null and role = 'butler' and text = ${text.slice(0, 8000)}
+      and created_at >= ${since}::timestamptz limit 1`;
+    if (!seen) await addTurn("butler", text, null);
+  });
+  pushing = next.catch(() => {});
+  return next;
+}
+
+// --- what you're answering -------------------------------------------------------------------
+
+/** The heading a device puts on what it shows, like "A note from Butler: ". Reminders keep theirs. */
+const SHOWN_AS = /^(?:A note|A link|On your clipboard|Files?)(?: from [^:\n]{1,60})?:\s*/i;
+
+/** What Butler said, from what a device showed: its heading taken off. */
+export function shownText(text: string): string {
+  return text.trim().replace(SHOWN_AS, "").trim();
+}
+
+const plain = (text: string) => shownText(text).replace(/\s+/g, " ").toLowerCase();
+
+/**
+ * The turn where Butler said what a device showed (`shown`, from its bubble), newest first.
+ * A long message matches when one is the start of the other, in case a device cut it short.
+ */
+export function findSaid(turns: Turn[], shown: string): Turn | null {
+  const want = plain(shown);
+  if (!want) return null;
+  for (const t of [...turns].reverse()) {
+    if (t.role !== "butler") continue;
+    const said = plain(t.text);
+    if (said === want) return t;
+    if (Math.min(said.length, want.length) >= 40 && (said.startsWith(want) || want.startsWith(said))) return t;
+  }
+  return null;
+}
+
+/** How long Butler's last word stays what a short reply like "nah" is taken to answer. */
+const ANSWERING_MS = 12 * 3_600_000;
+
+/** Butler's last word in the conversation, if nothing came after it and it's recent: what you're likely answering. */
+export function lastWord(turns: Turn[], now = new Date()): Turn | null {
+  const last = turns.at(-1);
+  if (last?.role !== "butler") return null;
+  return now.getTime() - new Date(last.created_at).getTime() <= ANSWERING_MS ? last : null;
 }
 
 /** Starts a new chat: what came before is kept but no longer read. */

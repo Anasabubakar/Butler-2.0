@@ -290,6 +290,11 @@ app.post("/api/inbox", async (c) => {
     due = await inbox.takeDue(device);
   }
   await jobs.pickedUp(due, device);
+  // What Butler pushed goes into the conversation as it reaches you, so a reply follows on.
+  for (const m of due) {
+    const said = memory.pushedText(m);
+    if (said) memory.addPushed(said, m.due_at).catch((e) => console.error("chat", String(e).slice(0, 200)));
+  }
   return c.json(due);
 });
 
@@ -730,13 +735,17 @@ app.post("/api/command", async (c) => {
   }
   if (item && !picture) picture = (await rawFor(item)).image ?? null; // a saved picture is seen as it is
 
-  // What Butler said that you're answering (the pet's bubble), if the conversation doesn't have it yet.
-  const replyTo = text("reply_to", 4000);
-  if (replyTo && replyTo !== await memory.lastSaid(talk).catch(() => null)) {
-    await memory.addTurn("butler", replyTo, null, talk).catch((e) => console.error("chat", String(e).slice(0, 200)));
-  }
   const { teasing: sass, memory: learn } = await prefs.load().catch(() => prefs.DEFAULTS);
-  const turns = await memory.recentTurns(talk).catch(() => [] as memory.Turn[]);
+  let turns = await memory.recentTurns(talk).catch(() => [] as memory.Turn[]);
+  // What you're answering: the message you tapped reply on (the pet's bubble), or else Butler's
+  // last word. A replied-to message the conversation doesn't have (an old note) goes in first.
+  const replyTo = text("reply_to", 4000);
+  let answering = replyTo ? memory.findSaid(turns, replyTo)?.text ?? null : memory.lastWord(turns)?.text ?? null;
+  if (replyTo && !answering && memory.shownText(replyTo)) {
+    answering = memory.shownText(replyTo);
+    await memory.addTurn("butler", answering, null, talk).catch((e) => console.error("chat", String(e).slice(0, 200)));
+    turns = await memory.recentTurns(talk).catch(() => turns);
+  }
   const known = await memory.memories().catch(() => [] as memory.Memory[]);
 
   const timeZone = safeZone(text("tz", 100));
@@ -751,6 +760,7 @@ app.post("/api/command", async (c) => {
       recipes: saved.map((r) => ({ name: r.name, about: r.instructions.slice(0, 120) })),
       history: memory.historyText(turns, timeZone) || undefined, memories: memory.memoryText(known) || undefined,
       learn, save: item ? saveText(item, await pageOf(item)) : undefined,
+      answering: answering || undefined, replied: Boolean(replyTo),
     }, picture, voice);
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);

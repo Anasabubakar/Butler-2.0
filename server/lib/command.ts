@@ -52,6 +52,10 @@ export interface Context {
   learn?: boolean;
   /** The one save they're asking about, in full (recall.saveText), when they opened it to ask. */
   save?: string;
+  /** What Butler said that they're answering: the message they replied to, or Butler's last word. */
+  answering?: string;
+  /** True when they tapped reply on that message, so it surely is what they're answering. */
+  replied?: boolean;
 }
 
 /** A tool from one of your MCP connections, as the planner sees it. */
@@ -113,6 +117,22 @@ export function parseWhen(when: string | null | undefined): Date | null {
   return Number.isNaN(ms) ? null : new Date(ms);
 }
 
+/** How long a message being answered can be in the prompt. */
+const ANSWERING_CHARS = 1500;
+
+/** The part of the prompt about the message they're answering, so "nah" or "yes" follows on from it. */
+function answeringText(said: string, replied: boolean): string {
+  const quoted = `"""${said.length > ANSWERING_CHARS ? `${said.slice(0, ANSWERING_CHARS)}…` : said}"""`;
+  return (replied
+    ? `They tapped reply on this message you sent them, so what they said answers it:\n${quoted}`
+    : `The last thing in your conversation is your message:\n${quoted}\n` +
+      `If what they said only makes sense as an answer to it, it answers it; otherwise it's something new.`) + `
+Short replies answer that message: "yes", "do it", "go ahead" mean do what you offered or asked about, with the action that does it;
+"no", "nah", "not now", "leave it" mean don't, so choose "answer" with a short easy reply like "cool, i'll leave it." and do nothing else;
+"later" without a time means ask when; "the first one" or "the second" means that item in your message.
+Never reply to an answer with something unrelated to that message, like what's on their screen.`;
+}
+
 /**
  * Works out what you want done, from what you typed (`said`) or a voice clip (`voice`).
  * The screenshot, when there is one, is what you were looking at.
@@ -125,8 +145,9 @@ export function plan(said: string | null, ctx: Context, picture: Picture | null,
 ${voice ? `The owner is on their ${ctx.device} and said what they want out loud in the audio clip. Put their words in heard.`
     : `The owner is on their ${ctx.device} and said: """${said}"""`}
 It is now ${weekday} ${now} (${ctx.timeZone}). Their devices: ${devices}.
-${picture ? (ctx.save ? "The picture is the saved picture itself." : "The picture is a screenshot of what they're looking at right now.") : ""}
-${ctx.memories ? `What you remember about them (numbered):\n${ctx.memories}\n` : ""}${ctx.history ? `Your conversation so far, oldest first. Use it for follow-ups like "and tomorrow?", "send it to him" or "do that again":\n${ctx.history}\n` : ""}${ctx.save ? `They opened one save from their library to talk about it: "this", "it" and "the save" mean this one. Its full content, between the lines:
+${picture ? (ctx.save ? "The picture is the saved picture itself." : "The picture is a screenshot of what they're looking at right now. " +
+    "Use it only when they mean it (\"this\", \"here\", \"my screen\") or need it; never describe it unasked.") : ""}
+${ctx.memories ? `What you remember about them (numbered):\n${ctx.memories}\n` : ""}${ctx.history ? `Your conversation so far, oldest first. Use it for follow-ups like "and tomorrow?", "send it to him" or "do that again":\n${ctx.history}\n` : ""}${ctx.answering ? `${answeringText(ctx.answering, Boolean(ctx.replied))}\n` : ""}${ctx.save ? `They opened one save from their library to talk about it: "this", "it" and "the save" mean this one. Its full content, between the lines:
 -----
 ${ctx.save}
 -----
