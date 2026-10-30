@@ -1490,6 +1490,7 @@ app.get("/api/google/status", async (c) => {
     configured: google.googleConfigured(),
     connected: Boolean(account),
     email: account?.email ?? null,
+    problem: account ? await google.problem().catch(() => null) : null, // what you need to do so it works again
     backup: backup.lastBackup(),
   });
 });
