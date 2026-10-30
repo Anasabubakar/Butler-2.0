@@ -46,7 +46,8 @@ const syncLabel = on => `Clipboard sync: ${on ? 'on' : 'off'}`;
 const HISTORY_KEY = '<Super><Shift>v';
 // Terminals paste with Ctrl+Shift+V.
 const TERMINALS = ['terminal', 'ptyxis', 'kitty', 'alacritty', 'wezterm', 'tilix', 'konsole', 'terminator', 'foot', 'ghostty'];
-const FILE_MANAGERS = ['nautilus', 'nemo', 'caja', 'thunar', 'dolphin', 'pcmanfm', 'files'];
+// Window classes of file managers, and of the desktop's own icons (Ubuntu's ding).
+const FILE_MANAGERS = ['nautilus', 'nemo', 'caja', 'thunar', 'dolphin', 'pcmanfm', 'files', 'ding'];
 // Files picked with right-click → Scripts → Send to phone (see send-to-phone.sh) land here.
 const SEND_REQUESTS = GLib.build_filenamev([GLib.get_user_cache_dir(), 'butler', 'send']);
 const BROWSERS = ['firefox', 'google-chrome', 'chromium', 'brave-browser', 'microsoft-edge', 'vivaldi', 'opera'];
