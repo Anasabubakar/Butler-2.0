@@ -5,3 +5,6 @@ node_modules/
 
 # Python bytecode from the laptop link tests
 __pycache__/
+
+# An empty placeholder the Claude Code sandbox leaves where AWS credentials would live
+/.aws
