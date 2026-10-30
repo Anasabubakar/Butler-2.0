@@ -160,3 +160,35 @@ export async function gather(now: Date, timeZone: string, publicUrl?: string, da
     streak: streak(await savedDays(timeZone), today(now, timeZone)),
   };
 }
+
+const notConnected = "connect Google under Integrations on the Butler website first, then ask again.";
+
+/** "check my email": the newest matching email, or the unread ones that need you. */
+export async function mailNote(query: string | null): Promise<string> {
+  if (!google.googleConfigured() || !await google.account()) return notConnected;
+  const found = await fromGoogle("email", () => google.mail(query || google.IMPORTANT, 8));
+  if (failed(found)) return `couldn't check your email: ${found.error}`;
+  if (!found?.length) return query ? `no email matches "${query}".` : "no unread email waiting on you from the last two days.";
+  const head = query ? `newest email for "${query}":` : `${found.length} unread from the last two days:`;
+  return [head, ...found.map((m) => `• ${m.from}: ${m.subject}${m.snippet ? ` · ${m.snippet.slice(0, 90)}` : ""}`)].join("\n");
+}
+
+/** "what are my tasks?": overdue, due soon and the rest of your open Google Tasks. */
+export async function tasksNote(now: Date, timeZone: string): Promise<string> {
+  if (!google.googleConfigured() || !await google.account()) return notConnected;
+  const found = await fromGoogle("tasks", google.tasks);
+  if (failed(found)) return `couldn't read your Google Tasks: ${found.error}`;
+  if (!found?.length) return "no open tasks in Google Tasks.";
+  const day = today(now, timeZone);
+  const week = new Date(new Date(`${day}T12:00:00Z`).getTime() + 7 * 86_400_000).toISOString().slice(0, 10);
+  const byDue = (a: google.Task, b: google.Task) => a.due!.localeCompare(b.due!);
+  const late = found.filter((t) => t.due && t.due < day).sort(byDue);
+  const soon = found.filter((t) => t.due && t.due >= day && t.due <= week).sort(byDue);
+  const rest = found.filter((t) => !t.due || t.due > week);
+  const lines: string[] = [];
+  const item = (t: google.Task) => `• ${t.title}${t.due ? ` (${t.due === day ? "today" : shortDay(t.due)})` : ""}`;
+  if (late.length) lines.push("Overdue:", ...late.slice(0, 10).map(item), "");
+  if (soon.length) lines.push("Due this week:", ...soon.slice(0, 10).map(item), "");
+  if (rest.length) lines.push(late.length || soon.length ? `plus ${rest.length} more with no date or later.` : "Open:", ...(late.length || soon.length ? [] : rest.slice(0, 10).map(item)));
+  return lines.join("\n").trim();
+}
