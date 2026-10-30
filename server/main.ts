@@ -844,8 +844,14 @@ app.post("/api/command", async (c) => {
       return json({ action: "screen", say: p.reply, goal: p.text || said });
     case "brief": {
       const now = new Date();
-      return json({ action: "answer", say: brief.compose(await brief.gather(now, timeZone, env("PUBLIC_URL")), now, timeZone) });
+      const asked = parseWhen(p.when);
+      const day = asked ? localIso(asked, timeZone).slice(0, 10) : undefined;
+      return json({ action: "answer", say: brief.compose(await brief.gather(now, timeZone, env("PUBLIC_URL"), day), now, timeZone) });
     }
+    case "inbox":
+      return json({ action: "answer", say: await brief.mailNote(p.text?.trim() || null) });
+    case "tasks":
+      return json({ action: "answer", say: await brief.tasksNote(new Date(), timeZone) });
     case "spend": {
       if (!p.amount || p.amount <= 0 || !Number.isFinite(p.amount)) {
         return json({ action: "answer", say: "how much was it? say it like \"I spent 2,500 on suya\"." });
