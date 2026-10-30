@@ -39,6 +39,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -53,14 +54,33 @@ PHONE_HERE_FOR = 45  # seconds after the phone last asked, it counts as on the s
 CONFIG = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "butler", "pet.json")
 STATE = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "butler", "link")
 
+LOG = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "butler", "link.log")
+LOG_MAX = 512 * 1024
+
 _print_lock = threading.Lock()
+_log_lock = threading.Lock()
+
+
+def log(line):
+    """A line in ~/.local/state/butler/link.log, so a failed send can be looked into later. Never the token."""
+    try:
+        with _log_lock:
+            os.makedirs(os.path.dirname(LOG), exist_ok=True)
+            if os.path.exists(LOG) and os.path.getsize(LOG) > LOG_MAX:
+                os.replace(LOG, LOG + ".1")
+            with open(LOG, "a", encoding="utf-8") as f:
+                f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + line + "\n")
+    except OSError:
+        pass  # a log that can't be written mustn't stop a send
 
 
 def say(event, **fields):
-    """One line of news for the pet."""
+    """One line of news for the pet (and the log, for anything but progress)."""
     with _print_lock:
         sys.stdout.write(json.dumps({"event": event, **fields}) + "\n")
         sys.stdout.flush()
+    if event != "progress":
+        log(json.dumps({"event": event, **{k: v for k, v in fields.items() if k != "paths"}, "count": len(fields.get("paths") or [])}))
 
 
 def load_config():
@@ -273,6 +293,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if name:
                 self.link.phone_name = name
             return True
+        log(f"refused {self.command} {self.path.split('?')[0]} from {self.client_address[0]}: wrong token")
         self._json(401, {"error": "bad token"})
         return False
 
@@ -457,6 +478,7 @@ class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
     def handle_error(self, request, client_address):
         # A phone that walked out of Wi-Fi range, or a stranger without the token: nothing to report.
         if not isinstance(sys.exc_info()[1], (OSError, ssl.SSLError)):
+            log(f"error serving {client_address[0]}: {traceback.format_exc()}")
             super().handle_error(request, client_address)
 
 
@@ -665,6 +687,7 @@ def run_send(link, cmd):
         say("failed", job=job_id, direction="out", error=getattr(e, "body", {}).get("error") or f"Butler answered {e.code}")
     except Exception as e:  # noqa: BLE001 - whatever it was, the pet says so
         untrack(job)
+        log(traceback.format_exc())
         say("failed", job=job_id, direction="out", error=str(e) or e.__class__.__name__)
 
 
@@ -684,6 +707,7 @@ def run_fetch(cmd):
         say("failed", job=job_id, direction="in", error="stopped")
     except Exception as e:  # noqa: BLE001
         untrack(job)
+        log(traceback.format_exc())
         say("failed", job=job_id, direction="in", error=str(e) or e.__class__.__name__)
 
 
