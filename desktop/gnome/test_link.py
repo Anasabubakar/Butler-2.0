@@ -46,6 +46,36 @@ class Names(unittest.TestCase):
                 link.describe([])
 
 
+class Fallback(unittest.TestCase):
+    """When the phone seemed to be on the Wi-Fi but doesn't take the files, Butler carries them."""
+
+    def setUp(self):
+        self.saved = {k: getattr(link, k) for k in ("say", "log", "send_by_server", "load_config", "START_WITHIN")}
+        self.events, self.by_server = [], []
+        link.say = lambda event, **f: self.events.append({"event": event, **f})
+        link.log = lambda line: None
+        link.load_config = lambda: {"url": "https://butler.invalid/api/save", "token": "t"}
+        link.send_by_server = lambda remote, job, target, files: self.by_server.append((target, [f["name"] for f in files]))
+        link.START_WITHIN = 1
+
+    def tearDown(self):
+        for k, v in self.saved.items():
+            setattr(link, k, v)
+
+    def test_a_phone_that_never_takes_them_gets_them_through_butler(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "a.txt")
+            with open(path, "w") as f:
+                f.write("hi")
+            here = link.Link("t")
+            here.phone_seen = time.monotonic()  # it asked a moment ago, then went to sleep
+            link.run_send(here, {"cmd": "send", "job": "out-x", "target": "phone", "paths": [path]})
+        self.assertEqual(self.by_server, [("phone", ["a.txt"])])
+        done = [e for e in self.events if e["event"] == "done"]
+        self.assertEqual(done[0]["via"], "server")
+        self.assertFalse(here.offers)  # the offer was taken back
+
+
 class DirectLink(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -53,7 +83,7 @@ class DirectLink(unittest.TestCase):
         os.makedirs(os.path.join(cls.home, ".config", "butler"))
         with open(os.path.join(cls.home, ".config", "butler", "pet.json"), "w") as f:
             json.dump({"url": "https://butler.invalid/api/save", "token": "secret-token"}, f)
-        env = {**os.environ, "HOME": cls.home, "XDG_CONFIG_HOME": "", "XDG_DATA_HOME": ""}
+        env = {**os.environ, "HOME": cls.home, "XDG_CONFIG_HOME": "", "XDG_DATA_HOME": "", "XDG_STATE_HOME": ""}
         cls.proc = subprocess.Popen([sys.executable, LINK], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                     text=True, env=env)
         cls.events = []

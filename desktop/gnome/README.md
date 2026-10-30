@@ -81,7 +81,12 @@ straight across with no internet: HTTPS on port 53320 with the laptop's own cert
 fingerprint the phone learns from your Butler server once and then insists on. The laptop calls
 out on UDP port 53321 so the phone can find it. If you run a firewall (`ufw` is off on Ubuntu by
 default), allow both: `sudo ufw allow 53320/tcp && sudo ufw allow 53321/udp`. Otherwise files go
-through your Butler server, resuming after a dropped connection.
+through your Butler server, resuming after a dropped connection. If the phone seems to be on the
+Wi-Fi but doesn't start taking the files within 15 seconds (asleep, or just left), they go through
+Butler instead.
+
+If a send fails, the reason is in `~/.local/state/butler/link.log` (never your token), and the
+pet's own notes are in `journalctl --user -b | grep Butler`.
 
 ## Update it
 

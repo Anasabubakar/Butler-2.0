@@ -5,6 +5,7 @@ import {
   fileForTitle,
   fraction,
   namesText,
+  pathsFromText,
   pathsFromUris,
   progressText,
   sizeText,
@@ -22,6 +23,15 @@ test("web links, other machines' files and plain text aren't files", () => {
   assert.deepEqual(pathsFromUris("https://example.com/a.jpg\nfile://server/share/a.jpg\nhello"), []);
   assert.deepEqual(pathsFromUris(""), []);
   assert.deepEqual(pathsFromUris("file:///a\nfile:///a"), ["/a"]);
+});
+
+test("files copied as plain paths count, ordinary text never does", () => {
+  assert.deepEqual(pathsFromText("/home/anas/a.jpg\n/home/anas/My file.pdf\n"), ["/home/anas/a.jpg", "/home/anas/My file.pdf"]);
+  assert.deepEqual(pathsFromText("file:///home/anas/a%20b.jpg"), ["/home/anas/a b.jpg"]);
+  assert.deepEqual(pathsFromText("hello /home/anas/a.jpg"), []);
+  assert.deepEqual(pathsFromText("/home/anas/a.jpg\nand some notes"), []);
+  assert.deepEqual(pathsFromText("file://server/share/a.jpg"), []);
+  assert.deepEqual(pathsFromText(""), []);
 });
 
 const XBEL = `<?xml version="1.0" encoding="UTF-8"?>

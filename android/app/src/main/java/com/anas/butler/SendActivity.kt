@@ -8,6 +8,7 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
+import com.anas.butler.transfer.Transfers
 import kotlinx.coroutines.launch
 
 /**
@@ -35,9 +36,17 @@ class SendActivity : ComponentActivity() {
             if (!Settings.canDrawOverlays(this)) {
                 Toast.makeText(this, R.string.send_start_pet, Toast.LENGTH_LONG).show()
                 startActivity(Intent(this, SettingsActivity::class.java))
-            } else {
-                PetService.sendFiles(this, uris)
+                finish()
+                return
             }
+            // Open them now: Android takes away the permission to read them once this closes,
+            // but files that are already open stay readable for the pet.
+            val files = runCatching { Transfers(this).pick(uris) }.getOrElse { e ->
+                Toast.makeText(this, getString(R.string.pet_failed, e.message ?: e.toString()), Toast.LENGTH_LONG).show()
+                finish()
+                return
+            }
+            PetService.sendFiles(this, files)
             finish()
             return
         }

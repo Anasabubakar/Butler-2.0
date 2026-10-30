@@ -46,7 +46,8 @@ const syncLabel = on => `Clipboard sync: ${on ? 'on' : 'off'}`;
 const HISTORY_KEY = '<Super><Shift>v';
 // Terminals paste with Ctrl+Shift+V.
 const TERMINALS = ['terminal', 'ptyxis', 'kitty', 'alacritty', 'wezterm', 'tilix', 'konsole', 'terminator', 'foot', 'ghostty'];
-const FILE_MANAGERS = ['nautilus', 'nemo', 'caja', 'thunar', 'dolphin', 'pcmanfm', 'files'];
+// Window classes of file managers, and of the desktop's own icons (Ubuntu's ding).
+const FILE_MANAGERS = ['nautilus', 'nemo', 'caja', 'thunar', 'dolphin', 'pcmanfm', 'files', 'ding'];
 // Files picked with right-click → Scripts → Send to phone (see send-to-phone.sh) land here.
 const SEND_REQUESTS = GLib.build_filenamev([GLib.get_user_cache_dir(), 'butler', 'send']);
 const BROWSERS = ['firefox', 'google-chrome', 'chromium', 'brave-browser', 'microsoft-edge', 'vivaldi', 'opera'];
@@ -1609,17 +1610,23 @@ export default class ButlerPetExtension extends Extension {
             const clipboard = St.Clipboard.get_default();
             const before = await this._readClipboard();
             clipboard.set_text(St.ClipboardType.CLIPBOARD, '');
+            global.stage.set_key_focus(null); // so Ctrl+C reaches the file manager, not the pet
+            window.activate(global.get_current_time());
+            await sleep(60);
             await this._press(Clutter.KEY_Control_L, Clutter.KEY_c);
-            let files = [];
-            for (let i = 0; i < 6 && !files.length; i++) { // Files takes a moment with many
-                await sleep(120);
-                files = await filesOnClipboard();
+            let found = {paths: [], types: []};
+            for (let i = 0; i < 16 && !found.paths.length; i++) { // Files takes a moment with many
+                await sleep(125);
+                found = await filesOnClipboard();
             }
-            if (!files.length && before)
+            if (!found.paths.length && before)
                 clipboard.set_text(St.ClipboardType.CLIPBOARD, before);
-            if (!files.length)
-                throw new Error('select the files you want to send first');
-            return files;
+            if (!found.paths.length) {
+                console.warn(`Butler: no files copied from ${wmClass}; the clipboard offered [${found.types.join(', ')}]`);
+                throw new Error("I couldn't see which files you picked. Click a file so it's highlighted and try again, " +
+                    'or right-click it → Scripts → Send to phone');
+            }
+            return found.paths;
         }
         if (this._inBrowser())
             return [];

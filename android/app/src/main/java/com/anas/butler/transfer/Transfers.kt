@@ -6,6 +6,9 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.ParcelFileDescriptor
+import android.system.Os
+import android.system.OsConstants
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
@@ -49,8 +52,25 @@ data class Progress(
 /** Files that arrived: where they are, and how to open them. */
 class Saved(val names: List<String>, val uris: List<Uri>, val via: String, val peer: String)
 
-/** A file to send: picked in another app (a content:// link), or one of Butler's own. */
-class Outgoing(val uri: Uri, val name: String, val size: Long, val mime: String)
+/**
+ * A file to send: picked in another app (a content:// link), or one of Butler's own. `fd` or
+ * `once` is the file already opened while the app's permission to read it lasted: Android takes
+ * that permission away as soon as the Share screen closes, but a file that's already open stays
+ * readable. `once` can only be read from start to end, so it's copied before sending.
+ */
+class Outgoing(
+    val uri: Uri,
+    val name: String,
+    val size: Long,
+    val mime: String,
+    val fd: ParcelFileDescriptor? = null,
+    val once: InputStream? = null,
+) {
+    fun close() {
+        runCatching { fd?.close() }
+        runCatching { once?.close() }
+    }
+}
 
 /**
  * Sends and receives real files. Directly to the laptop when it's on the same network (no
@@ -63,32 +83,132 @@ class Transfers(private val context: Context) {
 
     // --- what to send ----------------------------------------------------------------
 
-    /** Names, sizes and types of the files you picked. Throws if one can't be read. */
-    fun describe(uris: List<Uri>): List<Outgoing> = uris.map { uri ->
+    /**
+     * Opens the files you picked, with their names, sizes and types. Call it while the app
+     * that shared them is still on screen (its permission ends when the Share screen closes).
+     * Throws, saying which one, if a file can't be read; nothing is left open then.
+     */
+    fun pick(uris: List<Uri>): List<Outgoing> {
+        val picked = mutableListOf<Outgoing>()
+        try {
+            for (uri in uris) picked += pickOne(uri)
+        } catch (e: Exception) {
+            picked.forEach { it.close() }
+            throw e
+        }
+        return picked
+    }
+
+    private fun pickOne(uri: Uri): Outgoing {
         var name: String? = null
         var size = -1L
         runCatching {
             resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
                 if (c.moveToFirst()) {
-                    name = c.getString(0)
+                    if (!c.isNull(0)) name = c.getString(0)
                     if (!c.isNull(1)) size = c.getLong(1)
                 }
             }
         }
-        if (uri.scheme == "file") {
-            val file = File(uri.path!!)
-            name = name ?: file.name
-            size = file.length()
-        }
-        if (size < 0) size = runCatching { resolver.openFileDescriptor(uri, "r")?.use { it.statSize } }.getOrNull() ?: -1
-        if (size < 0) throw IOException("couldn't read ${name ?: "a file"}")
-        val mime = resolver.getType(uri) ?: MimeTypeMap.getSingleton()
+        if (uri.scheme == "file") name = name ?: uri.lastPathSegment
+        name = name ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { '.' in it }
+        val mime = runCatching { resolver.getType(uri) }.getOrNull() ?: MimeTypeMap.getSingleton()
             .getMimeTypeFromExtension(name.orEmpty().substringAfterLast('.', "").lowercase()) ?: "application/octet-stream"
-        Outgoing(uri, safeName(name ?: "file"), size, mime)
+        val label = name ?: "a file"
+        val fd = try {
+            resolver.openFileDescriptor(uri, "r")
+        } catch (e: SecurityException) {
+            throw IOException("Android didn't let Butler read $label")
+        } catch (e: Exception) {
+            null // this app only hands it over as a stream
+        }
+        if (fd != null) {
+            val known = fd.statSize.takeIf { it >= 0 } ?: size
+            if (seekable(fd) && known >= 0) return Outgoing(uri, safeName(name ?: "file"), known, mime, fd = fd)
+            // A pipe (often a photo still in the cloud): read once, copied before sending.
+            return Outgoing(uri, safeName(name ?: "file"), size, mime, once = ParcelFileDescriptor.AutoCloseInputStream(fd))
+        }
+        val stream = try {
+            resolver.openInputStream(uri)
+        } catch (e: SecurityException) {
+            throw IOException("Android didn't let Butler read $label")
+        } catch (e: Exception) {
+            throw IOException("couldn't open $label: ${e.message ?: e.javaClass.simpleName}")
+        } ?: throw IOException("couldn't open $label")
+        return Outgoing(uri, safeName(name ?: "file"), size, mime, once = stream)
+    }
+
+    private fun seekable(fd: ParcelFileDescriptor) =
+        runCatching { Os.lseek(fd.fileDescriptor, 0, OsConstants.SEEK_CUR) >= 0 }.getOrDefault(false)
+
+    /**
+     * Gets picked files ready to send: one that can only be read once is copied into Butler's
+     * cache first, so a dropped connection can carry on where it stopped. Returns them and a
+     * clean-up for afterwards.
+     */
+    suspend fun prepare(files: List<Outgoing>, onCopied: (Long) -> Unit = {}): List<Outgoing> = withContext(Dispatchers.IO) {
+        val dir = File(context.cacheDir, "outgoing").apply { mkdirs() }
+        files.map { f ->
+            val input = f.once ?: return@map f
+            val copy = File(dir, "${System.nanoTime()}-${f.name}")
+            try {
+                input.use { src ->
+                    copy.outputStream().use { out ->
+                        val buffer = ByteArray(64 * 1024)
+                        var total = 0L
+                        while (true) {
+                            coroutineContext.ensureActive()
+                            val n = src.read(buffer)
+                            if (n < 0) break
+                            out.write(buffer, 0, n)
+                            total += n
+                            onCopied(total)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                copy.delete()
+                if (e is CancellationException) throw e
+                throw IOException("couldn't read ${f.name}: ${e.message ?: e.javaClass.simpleName}")
+            }
+            Outgoing(Uri.fromFile(copy), f.name, copy.length(), f.mime)
+        }
+    }
+
+    /** Closes picked files and deletes copies made by prepare(). */
+    fun cleanUp(files: List<Outgoing>) {
+        val dir = File(context.cacheDir, "outgoing").absolutePath
+        for (f in files) {
+            f.close()
+            if (f.uri.scheme == "file" && f.uri.path?.startsWith(dir) == true) File(f.uri.path!!).delete()
+        }
     }
 
     /** Reads a file from `offset`, jumping straight there when the app allows it. */
     private fun open(file: Outgoing, offset: Long): InputStream {
+        if (file.fd != null) {
+            // A copy of the open file, so each piece reads from its own place.
+            val copy = file.fd.dup()
+            val stream = FileInputStream(copy.fileDescriptor)
+            try {
+                stream.channel.position(offset)
+            } catch (e: IOException) {
+                stream.close()
+                copy.close()
+                throw e
+            }
+            return object : java.io.FilterInputStream(stream) {
+                override fun close() {
+                    super.close()
+                    copy.close()
+                }
+            }
+        }
+        if (file.uri.scheme == "file") {
+            val stream = FileInputStream(File(file.uri.path!!))
+            stream.channel.position(offset)
+            return stream
+        }
         val fd = runCatching { resolver.openFileDescriptor(file.uri, "r") }.getOrNull()
         if (fd != null) {
             val stream = FileInputStream(fd.fileDescriptor)
@@ -124,8 +244,15 @@ class Transfers(private val context: Context) {
             if (laptop != null) {
                 var p = Progress(false, names, 0, size, "wifi", "your laptop")
                 onProgress(p)
-                pushToLaptop(laptop, files) { done -> p = p.copy(done = done); onProgress(p) }
-                return p.copy(done = size)
+                try {
+                    pushToLaptop(laptop, files) { done -> p = p.copy(done = done); onProgress(p) }
+                    return p.copy(done = size)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    coroutineContext.ensureActive() // Stop pressed: don't carry on another way
+                    // The Wi-Fi link broke (or the laptop refused): go through Butler instead.
+                    if (!config.isReady) throw e
+                }
             }
         }
         if (!config.isReady) throw IOException("set up Butler first")
@@ -144,7 +271,8 @@ class Transfers(private val context: Context) {
         var before = 0L
         for ((i, file) in files.withIndex()) {
             val id = ids.getJSONObject(i).getString("id")
-            uploadPieces(file, { at -> onDone(before + at) }) { at, body ->
+            // Only a few tries over Wi-Fi: if the laptop has gone, Butler carries it instead.
+            uploadPieces(file, { at -> onDone(before + at) }, tries = 3) { at, body ->
                 laptop.request("/link/push/${started.getString("id")}/$id?offset=$at").put(body).build() to http
             }
             before += file.size
@@ -188,6 +316,7 @@ class Transfers(private val context: Context) {
     private suspend fun uploadPieces(
         file: Outgoing,
         onAt: (Long) -> Unit,
+        tries: Int = 10,
         piece: (Long, RequestBody) -> Pair<Request, OkHttpClient>,
     ) {
         var at = 0L
@@ -215,7 +344,7 @@ class Transfers(private val context: Context) {
                 throw IOException(e.message)
             } catch (e: IOException) {
                 coroutineContext.ensureActive() // Stop pressed: that's why it broke off
-                if (++failures > 10) throw IOException("lost the connection: ${e.message}")
+                if (++failures > tries) throw IOException("lost the connection: ${e.message}")
                 delay(wait)
                 wait = minOf(wait * 2, 60_000L)
             }

@@ -4,23 +4,40 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
 
-import {fileForTitle, pathsFromUris} from './filepick.js';
+import {fileForTitle, pathsFromText, pathsFromUris} from './filepick.js';
 
 const RECENT = GLib.build_filenamev([GLib.get_user_data_dir(), 'recently-used.xbel']);
 // What file managers put on the clipboard when you copy files, best first.
 const FILE_TYPES = ['x-special/gnome-copied-files', 'text/uri-list'];
+const TEXT_TYPES = ['text/plain;charset=utf-8', 'UTF8_STRING', 'text/plain'];
 
-/** The paths of files on the clipboard (copied in Files, Nemo, Dolphin…), or []. */
-export function filesOnClipboard() {
-    const clipboard = St.Clipboard.get_default();
-    const types = clipboard.get_mimetypes(St.ClipboardType.CLIPBOARD) ?? [];
-    const type = FILE_TYPES.find(t => types.includes(t));
-    if (!type)
-        return Promise.resolve([]);
+function contentOf(clipboard, type) {
     return new Promise(resolve => clipboard.get_content(St.ClipboardType.CLIPBOARD, type, (_clipboard, bytes) => {
         const data = bytes?.get_data?.() ?? bytes;
-        resolve(data ? pathsFromUris(new TextDecoder().decode(data)) : []);
+        resolve(data ? new TextDecoder().decode(data) : '');
     }));
+}
+
+/**
+ * The paths of files on the clipboard (copied in Files, Nemo, Dolphin…), and the types the
+ * clipboard offered (for the log, when no files are found). Plain text counts only when every
+ * line is a file that's really there.
+ */
+export async function filesOnClipboard() {
+    const clipboard = St.Clipboard.get_default();
+    const types = clipboard.get_mimetypes(St.ClipboardType.CLIPBOARD) ?? [];
+    for (const type of FILE_TYPES.filter(t => types.includes(t))) {
+        const paths = pathsFromUris(await contentOf(clipboard, type));
+        if (paths.length)
+            return {paths, types};
+    }
+    const text = TEXT_TYPES.find(t => types.includes(t));
+    if (text) {
+        const paths = pathsFromText(await contentOf(clipboard, text));
+        if (paths.length && paths.every(p => GLib.file_test(p, GLib.FileTest.EXISTS)))
+            return {paths, types};
+    }
+    return {paths: [], types};
 }
 
 /** The file shown in a viewer or editor window, from its title and the recent files list, or null. */
