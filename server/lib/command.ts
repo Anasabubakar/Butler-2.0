@@ -145,7 +145,8 @@ export function plan(said: string | null, ctx: Context, picture: Picture | null,
 ${voice ? `The owner is on their ${ctx.device} and said what they want out loud in the audio clip. Put their words in heard.`
     : `The owner is on their ${ctx.device} and said: """${said}"""`}
 It is now ${weekday} ${now} (${ctx.timeZone}). Their devices: ${devices}.
-${picture ? (ctx.save ? "The picture is the saved picture itself." : "The picture is a screenshot of what they're looking at right now.") : ""}
+${picture ? (ctx.save ? "The picture is the saved picture itself." : "The picture is a screenshot of what they're looking at right now. " +
+    "Use it only when they mean it (\"this\", \"here\", \"my screen\") or need it; never describe it unasked.") : ""}
 ${ctx.memories ? `What you remember about them (numbered):\n${ctx.memories}\n` : ""}${ctx.history ? `Your conversation so far, oldest first. Use it for follow-ups like "and tomorrow?", "send it to him" or "do that again":\n${ctx.history}\n` : ""}${ctx.answering ? `${answeringText(ctx.answering, Boolean(ctx.replied))}\n` : ""}${ctx.save ? `They opened one save from their library to talk about it: "this", "it" and "the save" mean this one. Its full content, between the lines:
 -----
 ${ctx.save}
