@@ -10,11 +10,14 @@ const TOKEN_URL = () => Deno.env.get("GOOGLE_TOKEN_URL") ?? "https://oauth2.goog
 const API = () => Deno.env.get("GOOGLE_API_URL") ?? "https://www.googleapis.com";
 const PEOPLE = () => Deno.env.get("GOOGLE_PEOPLE_URL") ?? "https://people.googleapis.com";
 const GMAIL = () => Deno.env.get("GOOGLE_GMAIL_URL") ?? "https://gmail.googleapis.com";
+const TASKS = () => Deno.env.get("GOOGLE_TASKS_URL") ?? "https://tasks.googleapis.com";
 
 export const SCOPES = [
   "openid",
   "email",
   "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar.readonly", // every calendar you see, not only the main one
+  "https://www.googleapis.com/auth/tasks.readonly", // your Google Tasks, for the brief
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/gmail.readonly", // for recipes that start when an email arrives
   "https://www.googleapis.com/auth/contacts.readonly",
@@ -187,20 +190,84 @@ export interface Event {
   title: string;
   start: Date;
   allDay: boolean;
+  /** For all-day events, the day after the last one, like Google gives it (2026-10-22 for a one-day event on the 21st). */
+  until?: string;
 }
 
-/** Your calendar's events that start between `from` and `to`, in order. */
+type When = { dateTime?: string; date?: string };
+type Listed = { items?: { summary?: string; status?: string; start?: When; end?: When }[] };
+
+/** The calendars you have ticked in Google Calendar, main one first. Just the main one if Butler can't list them. */
+async function calendarIds(): Promise<string[]> {
+  try {
+    const data = await google<{ items?: { id: string; primary?: boolean; selected?: boolean; hidden?: boolean }[] }>(
+      `${API()}/calendar/v3/users/me/calendarList?minAccessRole=reader&maxResults=50`,
+    );
+    const ids = (data.items ?? []).filter((c) => c.primary || (c.selected && !c.hidden))
+      .sort((a, b) => Number(Boolean(b.primary)) - Number(Boolean(a.primary))).map((c) => c.id);
+    return ids.length ? ids.slice(0, 15) : ["primary"];
+  } catch (e) {
+    if (e instanceof GoogleError && e.fix === "permission") return ["primary"]; // connected before Butler asked for this
+    throw e;
+  }
+}
+
+/** Events on all your calendars that are on between `from` and `to`, in order. */
 export async function events(from: Date, to: Date): Promise<Event[]> {
   const params = new URLSearchParams({
-    timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: "true", orderBy: "startTime", maxResults: "20",
+    timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: "true", orderBy: "startTime", maxResults: "50",
   });
-  const data = await google<{ items?: { summary?: string; start?: { dateTime?: string; date?: string } }[] }>(
-    `${API()}/calendar/v3/calendars/primary/events?${params}`,
-  );
-  return (data.items ?? []).flatMap((e) => {
-    const when = e.start?.dateTime ?? e.start?.date;
-    return when ? [{ title: e.summary || "(no title)", start: new Date(when), allDay: !e.start?.dateTime }] : [];
-  });
+  const ids = await calendarIds();
+  const lists = await Promise.allSettled(ids.map((id) =>
+    google<Listed>(`${API()}/calendar/v3/calendars/${encodeURIComponent(id)}/events?${params}`)
+  ));
+  // The main calendar has to work; a broken extra one (a removed share) shouldn't hide the rest.
+  if (lists[0].status === "rejected") throw lists[0].reason;
+  const seen = new Set<string>();
+  const found: Event[] = [];
+  for (const list of lists) {
+    if (list.status !== "fulfilled") continue;
+    for (const e of list.value.items ?? []) {
+      const when = e.start?.dateTime ?? e.start?.date;
+      if (!when || e.status === "cancelled") continue;
+      const event: Event = { title: e.summary || "(no title)", start: dayOrTime(when), allDay: !e.start?.dateTime };
+      if (event.allDay && e.end?.date) event.until = e.end.date;
+      const key = `${event.title}|${event.start.getTime()}`;
+      if (seen.has(key)) continue; // the same event on two calendars
+      seen.add(key);
+      found.push(event);
+    }
+  }
+  return found.sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.start.getTime() - b.start.getTime()).slice(0, 30);
+}
+
+/** An all-day "2026-10-21" is that day, not midnight UTC (the evening before in the Americas). */
+const dayOrTime = (when: string) => /^\d{4}-\d{2}-\d{2}$/.test(when) ? new Date(`${when}T12:00:00Z`) : new Date(when);
+
+// --- tasks ------------------------------------------------------------------------------------
+
+export interface Task {
+  title: string;
+  due: string | null; // the day it's due, like 2026-10-21 (Google Tasks keeps no time)
+  list: string;
+}
+
+/** Your open Google Tasks, from every list. */
+export async function tasks(): Promise<Task[]> {
+  const lists = await google<{ items?: { id: string; title?: string }[] }>(`${TASKS()}/tasks/v1/users/@me/lists?maxResults=20`);
+  const found: Task[] = [];
+  for (const list of lists.items ?? []) {
+    const data = await google<{ items?: { title?: string; due?: string; status?: string; parent?: string }[] }>(
+      `${TASKS()}/tasks/v1/lists/${encodeURIComponent(list.id)}/tasks?${new URLSearchParams({
+        showCompleted: "false", showHidden: "false", maxResults: "100",
+      })}`,
+    );
+    for (const t of data.items ?? []) {
+      if (t.status === "completed" || !t.title?.trim()) continue;
+      found.push({ title: t.title.trim(), due: t.due?.slice(0, 10) ?? null, list: list.title ?? "Tasks" });
+    }
+  }
+  return found;
 }
 
 // --- people ---------------------------------------------------------------------------------
@@ -350,3 +417,35 @@ export async function emailsSince(query: string, after: Date, max = 5): Promise<
   }
   return found.sort((a, b) => a.at.getTime() - b.at.getTime()).slice(0, max);
 }
+
+export interface Mail {
+  from: string; // the sender's name, or their address
+  subject: string;
+  at: Date;
+  unread: boolean;
+  snippet: string;
+}
+
+/** Just the name from a From line like `"Ada" <ada@x.com>`. */
+export const sender = (from: string) => from.replace(/<[^>]*>/, "").replace(/"/g, "").trim() || from.replace(/[<>]/g, "");
+
+/** The newest emails matching a Gmail search, newest first, at most `max`. */
+export async function mail(query: string, max = 8): Promise<Mail[]> {
+  const list = await google<{ messages?: { id: string }[] }>(
+    `${GMAIL()}/gmail/v1/users/me/messages?${new URLSearchParams({ q: query, maxResults: String(max) })}`,
+  );
+  const found = await Promise.all((list.messages ?? []).slice(0, max).map(async ({ id }) => {
+    const m = await google<{ internalDate: string; snippet?: string; labelIds?: string[]; payload?: Part }>(
+      `${GMAIL()}/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`,
+    );
+    const head = (name: string) => m.payload?.headers?.find((h) => h.name.toLowerCase() === name)?.value ?? "";
+    return {
+      from: sender(head("from")), subject: head("subject") || "(no subject)", at: new Date(Number(m.internalDate)),
+      unread: m.labelIds?.includes("UNREAD") ?? false, snippet: (m.snippet ?? "").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&"),
+    };
+  }));
+  return found.sort((a, b) => b.at.getTime() - a.at.getTime());
+}
+
+/** Gmail's search for email worth your attention: unread, in the inbox, not promotions or social. */
+export const IMPORTANT = "in:inbox is:unread -category:promotions -category:social -category:forums newer_than:2d";
