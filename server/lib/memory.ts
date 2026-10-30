@@ -84,14 +84,6 @@ export async function recentTurns(itemId: string | null, limit = HISTORY_TURNS):
   return (sinceBreak === -1 ? rows : rows.slice(0, sinceBreak)).reverse();
 }
 
-/** The last thing Butler said in a conversation, if anything. */
-export async function lastSaid(itemId: string | null): Promise<string | null> {
-  const [row] = await sql<{ text: string }[]>`
-    select text from chat_turns where role = 'butler' and ${itemId ? sql`item_id = ${itemId}` : sql`item_id is null`}
-    order by created_at desc, id desc limit 1`;
-  return row?.text ?? null;
-}
-
 // --- what Butler sent you on its own --------------------------------------------------------
 
 /** Who sends Butler's own notes: the brief, recaps, recipes, price drops, cheers, focus timers. */
