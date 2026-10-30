@@ -52,6 +52,10 @@ export interface Context {
   learn?: boolean;
   /** The one save they're asking about, in full (recall.saveText), when they opened it to ask. */
   save?: string;
+  /** What Butler said that they're answering: the message they replied to, or Butler's last word. */
+  answering?: string;
+  /** True when they tapped reply on that message, so it surely is what they're answering. */
+  replied?: boolean;
 }
 
 /** A tool from one of your MCP connections, as the planner sees it. */
