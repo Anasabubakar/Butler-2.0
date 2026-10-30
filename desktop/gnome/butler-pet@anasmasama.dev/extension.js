@@ -1610,17 +1610,23 @@ export default class ButlerPetExtension extends Extension {
             const clipboard = St.Clipboard.get_default();
             const before = await this._readClipboard();
             clipboard.set_text(St.ClipboardType.CLIPBOARD, '');
+            global.stage.set_key_focus(null); // so Ctrl+C reaches the file manager, not the pet
+            window.activate(global.get_current_time());
+            await sleep(60);
             await this._press(Clutter.KEY_Control_L, Clutter.KEY_c);
-            let files = [];
-            for (let i = 0; i < 6 && !files.length; i++) { // Files takes a moment with many
-                await sleep(120);
-                files = await filesOnClipboard();
+            let found = {paths: [], types: []};
+            for (let i = 0; i < 16 && !found.paths.length; i++) { // Files takes a moment with many
+                await sleep(125);
+                found = await filesOnClipboard();
             }
-            if (!files.length && before)
+            if (!found.paths.length && before)
                 clipboard.set_text(St.ClipboardType.CLIPBOARD, before);
-            if (!files.length)
-                throw new Error('select the files you want to send first');
-            return files;
+            if (!found.paths.length) {
+                console.warn(`Butler: no files copied from ${wmClass}; the clipboard offered [${found.types.join(', ')}]`);
+                throw new Error("I couldn't see which files you picked. Click a file so it's highlighted and try again, " +
+                    'or right-click it → Scripts → Send to phone');
+            }
+            return found.paths;
         }
         if (this._inBrowser())
             return [];
