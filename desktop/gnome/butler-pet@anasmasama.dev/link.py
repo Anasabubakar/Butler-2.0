@@ -50,6 +50,7 @@ BEACON_PORT = 53321
 PIECE = 8 * 1024 * 1024
 MAX_FILES = 200
 PHONE_HERE_FOR = 45  # seconds after the phone last asked, it counts as on the same network
+START_WITHIN = 15  # seconds for the phone to start taking files over Wi-Fi, else they go through Butler
 
 CONFIG = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "butler", "pet.json")
 STATE = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "butler", "link")
@@ -262,6 +263,8 @@ class Link:
                 job.check()
                 if job.done != last:
                     last, quiet_since = job.done, time.monotonic()
+                elif last <= 0 and time.monotonic() - quiet_since > START_WITHIN:
+                    raise TimeoutError("your phone didn't pick them up over Wi-Fi")
                 elif time.monotonic() - quiet_since > 90:
                     raise TimeoutError("your phone stopped answering on Wi-Fi")
         finally:
@@ -669,12 +672,19 @@ def run_send(link, cmd):
     target = cmd.get("target") or "phone"
     job = track(Job(job_id, "out", [f["name"] for f in files], sum(f["size"] for f in files), "", target))
     try:
+        sent = False
         if link and link.phone_here():
             job.via, job.peer = "wifi", link.phone_name
             job.report(force=True)
-            link.offer(job, files)
-        else:
-            job.via = "server"
+            try:
+                link.offer(job, files)
+                sent = True
+            except (TimeoutError, OSError) as e:
+                # The phone went quiet (asleep, or off this Wi-Fi): Butler carries them instead.
+                log(f"send {job_id}: Wi-Fi didn't work ({e}), going through Butler")
+                job.done = 0
+        if not sent:
+            job.via, job.peer = "server", target
             job.report(force=True)
             send_by_server(Remote(load_config()), job, target, files)
         untrack(job)
