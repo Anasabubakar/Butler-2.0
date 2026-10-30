@@ -12,6 +12,7 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 - **Chat about one save.** Ask Butler about this, on each library card and in the phone app's save screen: questions answered from the save's full content, and orders carried out with it (reminders, events, email, connected apps, renaming it).
 - **No more black screenshots.** When an app hides its screen (banking, Netflix, private tabs) the phone saves the link alone and says why. On the laptop, a window that comes out empty is taken again from the screen, and see-through edges go white instead of black.
 - **Words when the picture is hidden.** If a phone app hides or blacks out its picture, Save this keeps the words on screen with the link. Never from banking or money apps, and never password fields.
+- **Calendar, tasks and email that tell the truth.** When Google fails (expired sign-in, a permission not given, an API switched off) the brief says what went wrong and how to fix it, instead of "nothing on your calendar today". The website shows "Needs you" with a Connect Google again button. The brief now reads every calendar you show in Google Calendar, your Google Tasks (due today and overdue) and unread email, and works for other days ("what's on Friday?"). Ask Butler answers "any important emails?" and "what are my tasks?" from the real thing, and never guesses an empty day. Press Connect Google once more to allow Tasks and all calendars.
 
 ## v0.2.0 (2026-10-26)
 

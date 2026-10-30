@@ -4,7 +4,7 @@ import { z } from "npm:zod@4.3.6";
 import { askGemini, type Picture } from "./gemini.ts";
 import { type Teasing, voiceRules } from "./persona.ts";
 
-export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "screen", "recall", "brief", "recap", "spend", "spending", "focus", "unfocus", "ring", "tool", "recipe", "edit", "answer"] as const;
+export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "screen", "recall", "brief", "inbox", "tasks", "recap", "spend", "spending", "focus", "unfocus", "ring", "tool", "recipe", "edit", "answer"] as const;
 export const APPS = ["whatsapp", "telegram"] as const;
 export const CONTENTS = ["text", "clipboard", "link", "screen"] as const;
 
@@ -146,7 +146,11 @@ Choose exactly one action:
   text = the goal in plain words, e.g. "open the first video" or "search YouTube for jollof rice".
 - "recall": find or ask about something they saved in their Butler library before, like "that jollof recipe I saved",
   "what did I save about visas?" or "open that TikTok about budgeting". text = what to look for, as a short search.
-- "brief": they want a rundown of their day, like "what's my day?", "brief me" or "what's on today?".
+- "brief": they want a rundown of a day or ask what's on their calendar, like "what's my day?", "brief me",
+  "what's on today?", "am I free tomorrow?" or "what's on Friday?". when = that day (any time on it) if it isn't today.
+- "inbox": they ask about their email, like "any important emails?", "check my mail" or "did Ada reply?".
+  text = a Gmail search when they want something in particular (like "from:ada" or "subject:invoice"); otherwise leave it out.
+- "tasks": they ask about their to-dos or tasks, like "what are my tasks?" or "what's due this week?".
 - "recap": they want a summary of what they saved lately, like "what did I save this week?" or "my week in Butler".
 - "spend": they spent money, like "I spent 2,500 on suya" or "paid 15k for transport". amount = the number
   (2.5k = 2500, 15k = 15000), currency = ISO code only if they said or showed one (₦/naira NGN, $ USD, £ GBP, € EUR),
@@ -168,7 +172,9 @@ ${ctx.recipes.map((r) => `  * "${r.name}": ${r.about.replace(/\s+/g, " ").slice(
 ` : ""}${ctx.save ? `- "edit": change this save in their library. subject = a new title, text = a new note, category = a new collection,
   tags = the whole new list of tags. Leave out what stays the same.
 ` : ""}- "answer": anything else. Put the answer in reply, short (under 120 words, up to 250 when they want detail about a save).
-  Use the screenshot if it helps.
+  Use the screenshot if it helps. You can't see their calendar, email, tasks, files or devices from here: never say what's
+  in them or that they're empty ("nothing today", "you're free"), pick brief, inbox, tasks or a tool instead.
+  When they reply to something you said in the conversation (a yes, a no, "nah", "later"), answer that, in its context.
 
 Times are ISO 8601 with the offset, like ${now}. "Tonight" means 20:00, "morning" 09:00, "afternoon" 15:00.
 reply is always short and tells them what you did, in your voice, e.g. "got you. i'll remind you at 3pm to call Mum."
