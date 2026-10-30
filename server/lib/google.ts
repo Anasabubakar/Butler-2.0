@@ -3,6 +3,7 @@
 // email that should start one of your recipes.
 import { encodeBase64, encodeBase64Url } from "jsr:@std/encoding@1.0.10";
 import { sql } from "./db.ts";
+import * as settings from "./settings.ts";
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = () => Deno.env.get("GOOGLE_TOKEN_URL") ?? "https://oauth2.googleapis.com/token";
@@ -55,6 +56,41 @@ export async function account(): Promise<Account | null> {
   return row ?? null;
 }
 
+/**
+ * Something Google refused, said so you know what to do about it. `fix` is set when only you can
+ * sort it out (sign in again, allow more, switch an API on), and the website shows it until you do.
+ */
+export class GoogleError extends Error {
+  constructor(message: string, readonly fix: "signin" | "permission" | "api" | null = null) {
+    super(message);
+  }
+}
+
+const SIGN_IN_AGAIN = "your Google sign-in has expired or was removed. press Connect Google on the Butler website to sign in again.";
+const ALLOW_MORE = "Butler doesn't have permission for that yet. press Connect Google on the Butler website and tick every box Google shows.";
+
+/** Google's error, in words you can act on. */
+export function explainFailure(status: number, data: { error?: unknown; error_description?: string }): GoogleError {
+  const err = data.error as { message?: string; status?: string; details?: { reason?: string }[] } | string | undefined;
+  const text = typeof err === "string" ? `${err} ${data.error_description ?? ""}` : `${err?.message ?? ""} ${err?.status ?? ""} ${
+    (err?.details ?? []).map((d) => d.reason ?? "").join(" ")}`;
+  if (status === 401 || /invalid_grant|UNAUTHENTICATED|invalid_token/i.test(text)) return new GoogleError(SIGN_IN_AGAIN, "signin");
+  if (/SERVICE_DISABLED|has not been used in project|is disabled/i.test(text)) {
+    const api = text.match(/(Google Calendar|Gmail|Google Tasks|Tasks|People|Google Drive|Drive)\s*API/i)?.[0] ?? "that Google API";
+    return new GoogleError(`${api} is switched off in your Google Cloud project. turn it on at console.cloud.google.com/apis/library, then press Connect Google on the Butler website.`, "api");
+  }
+  if (status === 403 && /insufficient|SCOPE|PERMISSION_DENIED/i.test(text)) return new GoogleError(ALLOW_MORE, "permission");
+  return new GoogleError(`Google answered ${status}${typeof err === "object" && err?.message ? `: ${err.message}` : ""}`);
+}
+
+/** What Google last needed from you, or null when it's working. */
+export const problem = async () => (await settings.get("google_problem")) || null;
+
+/** Notes a problem only you can fix, so the website can show it. */
+async function noteProblem(e: unknown) {
+  if (e instanceof GoogleError && e.fix) await settings.set("google_problem", e.message).catch(() => {});
+}
+
 async function tokenRequest(params: Record<string, string>) {
   const res = await fetch(TOKEN_URL(), {
     method: "POST",
@@ -63,7 +99,11 @@ async function tokenRequest(params: Record<string, string>) {
     signal: AbortSignal.timeout(20_000),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Google sign-in failed: ${data.error_description ?? data.error ?? res.status}`);
+  if (!res.ok) {
+    const e = data.error === "invalid_grant" ? new GoogleError(SIGN_IN_AGAIN, "signin") : explainFailure(res.status, data);
+    await noteProblem(e);
+    throw e;
+  }
   return data as { access_token: string; expires_in: number; refresh_token?: string; id_token?: string };
 }
 
@@ -74,6 +114,7 @@ export async function connect(code: string) {
   const email = tokens.id_token ? emailFromIdToken(tokens.id_token) : null;
   await sql`insert into google_account (id, email, refresh_token) values (1, ${email}, ${tokens.refresh_token})
     on conflict (id) do update set email = excluded.email, refresh_token = excluded.refresh_token, connected_at = now()`;
+  await settings.set("google_problem", "");
   cached = { token: tokens.access_token, expires: Date.now() + (tokens.expires_in - 60) * 1000 };
 }
 
@@ -117,7 +158,13 @@ export async function authorized(url: string, init: RequestInit = {}, timeoutMs 
 async function google<T>(url: string, init: RequestInit = {}): Promise<T> {
   const res = await authorized(url, { ...init, headers: { "content-type": "application/json", ...init.headers } });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Google answered ${res.status}: ${data.error?.message ?? ""}`.trim());
+  if (!res.ok) {
+    if (res.status === 401) cached = null; // the next try fetches a fresh token
+    const e = explainFailure(res.status, data);
+    await noteProblem(e);
+    throw e;
+  }
+  if (await problem() === SIGN_IN_AGAIN) await settings.set("google_problem", ""); // signed in fine after all
   return data as T;
 }
 
@@ -287,13 +334,9 @@ export function plainText(part: Part | undefined): string {
  */
 export async function emailsSince(query: string, after: Date, max = 5): Promise<Arrived[]> {
   const q = `${query} after:${Math.floor(after.getTime() / 1000)}`;
-  let list: { messages?: { id: string }[] };
-  try {
-    list = await google(`${GMAIL()}/gmail/v1/users/me/messages?${new URLSearchParams({ q, maxResults: "20" })}`);
-  } catch (e) {
-    if (/\b403\b/.test(String(e))) throw new Error("Butler can't read your email yet: press Connect Google on the website again");
-    throw e;
-  }
+  const list = await google<{ messages?: { id: string }[] }>(
+    `${GMAIL()}/gmail/v1/users/me/messages?${new URLSearchParams({ q, maxResults: "20" })}`,
+  );
   const found: Arrived[] = [];
   for (const { id } of list.messages ?? []) {
     const m = await google<{ id: string; internalDate: string; snippet?: string; payload?: Part }>(

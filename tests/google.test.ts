@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { decodeBase64 } from "jsr:@std/encoding@1.0.10/base64";
-import { consentUrl, mime, plainText } from "../server/lib/google.ts";
+import { consentUrl, explainFailure, mime, plainText } from "../server/lib/google.ts";
 
 const to = { name: "David Okafor", email: "david@example.com" };
 
@@ -59,4 +59,20 @@ test("an email's plain text is found inside its parts", () => {
   };
   assert.equal(plainText(email), "Your balance is ₦5,000");
   assert.equal(plainText({ mimeType: "text/html", body: { data: "PGI+" } }), "");
+});
+
+test("Google's refusals say what to do, not just a status code", () => {
+  assert.equal(explainFailure(400, { error: "invalid_grant", error_description: "Token has been expired or revoked." }).fix, "signin");
+  assert.equal(explainFailure(401, { error: { message: "Request had invalid authentication credentials." } }).fix, "signin");
+  const scope = explainFailure(403, { error: { message: "Request had insufficient authentication scopes.", status: "PERMISSION_DENIED" } });
+  assert.equal(scope.fix, "permission");
+  assert.match(scope.message, /Connect Google/);
+  const off = explainFailure(403, {
+    error: { message: "Google Tasks API has not been used in project 123 before or it is disabled.", status: "PERMISSION_DENIED" },
+  });
+  assert.equal(off.fix, "api");
+  assert.match(off.message, /^Google Tasks API is switched off/);
+  const busy = explainFailure(503, { error: { message: "Backend Error" } });
+  assert.equal(busy.fix, null);
+  assert.equal(busy.message, "Google answered 503: Backend Error");
 });
