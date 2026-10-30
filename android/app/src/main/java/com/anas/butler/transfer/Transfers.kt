@@ -244,8 +244,15 @@ class Transfers(private val context: Context) {
             if (laptop != null) {
                 var p = Progress(false, names, 0, size, "wifi", "your laptop")
                 onProgress(p)
-                pushToLaptop(laptop, files) { done -> p = p.copy(done = done); onProgress(p) }
-                return p.copy(done = size)
+                try {
+                    pushToLaptop(laptop, files) { done -> p = p.copy(done = done); onProgress(p) }
+                    return p.copy(done = size)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    coroutineContext.ensureActive() // Stop pressed: don't carry on another way
+                    // The Wi-Fi link broke (or the laptop refused): go through Butler instead.
+                    if (!config.isReady) throw e
+                }
             }
         }
         if (!config.isReady) throw IOException("set up Butler first")
@@ -264,7 +271,8 @@ class Transfers(private val context: Context) {
         var before = 0L
         for ((i, file) in files.withIndex()) {
             val id = ids.getJSONObject(i).getString("id")
-            uploadPieces(file, { at -> onDone(before + at) }) { at, body ->
+            // Only a few tries over Wi-Fi: if the laptop has gone, Butler carries it instead.
+            uploadPieces(file, { at -> onDone(before + at) }, tries = 3) { at, body ->
                 laptop.request("/link/push/${started.getString("id")}/$id?offset=$at").put(body).build() to http
             }
             before += file.size
@@ -308,6 +316,7 @@ class Transfers(private val context: Context) {
     private suspend fun uploadPieces(
         file: Outgoing,
         onAt: (Long) -> Unit,
+        tries: Int = 10,
         piece: (Long, RequestBody) -> Pair<Request, OkHttpClient>,
     ) {
         var at = 0L
@@ -335,7 +344,7 @@ class Transfers(private val context: Context) {
                 throw IOException(e.message)
             } catch (e: IOException) {
                 coroutineContext.ensureActive() // Stop pressed: that's why it broke off
-                if (++failures > 10) throw IOException("lost the connection: ${e.message}")
+                if (++failures > tries) throw IOException("lost the connection: ${e.message}")
                 delay(wait)
                 wait = minOf(wait * 2, 60_000L)
             }
