@@ -28,6 +28,7 @@ export interface Message {
   item_id: string | null;
   due_at: string;
   job: string | null; // for a 'task': its laptop job (see jobs.ts)
+  forget?: boolean; // shown once: deleted as soon as the device has it (a login code)
 }
 
 export interface NewMessage {
@@ -38,6 +39,10 @@ export interface NewMessage {
   item_id?: string | null;
   due_at?: string;
   job?: string | null;
+  /** Holds a secret (a login code, a reset link): deleted once delivered, kept out of the conversation. */
+  forget?: boolean;
+  /** Dropped unseen after this, like a code that has stopped working. */
+  expires_at?: string | null;
 }
 
 /** Records that a device is alive, so other devices can send to it. */
@@ -92,6 +97,8 @@ export async function takeDue(name: string) {
   // Switching remote control off ("stop" with body "off") still counts whenever it arrives.
   await sql`delete from messages where kind = 'stop' and body is distinct from 'off'
     and delivered_at is null and due_at < now() - interval '10 minutes'`;
+  // A code or link that has stopped working is no use to anyone.
+  await sql`delete from messages where delivered_at is null and expires_at < now()`;
   const due = await sql<Message[]>`
     update messages set delivered_at = now()
     where id in (
@@ -100,9 +107,9 @@ export async function takeDue(name: string) {
       order by due_at
       limit 20
       for update skip locked)
-    returning id, created_at, from_device, kind, body, url, item_id, due_at, job`;
-  if (due.some((m) => FORGET_ONCE_DELIVERED.includes(m.kind))) {
-    await sql`delete from messages where kind = any(${FORGET_ONCE_DELIVERED}::text[]) and delivered_at is not null`;
+    returning id, created_at, from_device, kind, body, url, item_id, due_at, job, forget`;
+  if (due.some((m) => m.forget || FORGET_ONCE_DELIVERED.includes(m.kind))) {
+    await sql`delete from messages where (forget or kind = any(${FORGET_ONCE_DELIVERED}::text[])) and delivered_at is not null`;
   }
   return due;
 }
@@ -119,6 +126,8 @@ export async function send(to: string[], message: NewMessage) {
     item_id: message.item_id ?? null,
     due_at: message.due_at ?? new Date().toISOString(),
     job: message.job ?? null,
+    forget: message.forget ?? false,
+    expires_at: message.expires_at ?? null,
   }));
   // Only your latest copy matters: drop older ones still waiting.
   if (message.kind === "sync") await sql`delete from messages where kind = 'sync' and delivered_at is null and to_device = any(${to}::text[])`;
@@ -192,7 +201,7 @@ export function recent(limit = 50) {
       array_agg(to_device order by to_device) as to_devices,
       bool_and(delivered_at is not null) as delivered
     from messages
-    where kind = any(${SHOWN}::text[])
+    where kind = any(${SHOWN}::text[]) and not forget
     group by from_device, kind, body, url, item_id, due_at
     order by due_at desc
     limit ${limit}`;
