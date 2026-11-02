@@ -1122,7 +1122,10 @@ class PetService : Service() {
         val from = message.optString("from_device").takeIf { it != config.deviceName }
             ?.let { getString(R.string.inbox_from, it) }.orEmpty()
         val body = message.optString("body").takeIf { !message.isNull("body") }.orEmpty()
-        when (message.optString("kind")) {
+        val kind = message.optString("kind")
+        // Already rung by the phone itself while it had no data: don't ring it twice.
+        if ((kind == "reminder" || kind == "note") && Ahead.alreadyShown(this, kind, message.optString("id"), body)) return
+        when (kind) {
             "reminder" -> announce(getString(R.string.inbox_reminder), body, null, essential = true)
             "ring" -> ring(from)
             "status" -> { // how a job you gave the laptop is going
