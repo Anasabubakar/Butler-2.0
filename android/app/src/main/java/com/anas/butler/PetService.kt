@@ -255,6 +255,8 @@ class PetService : Service() {
                     refreshPrefs()
                 }
                 val waited = checkInbox(wait = laptopWorking)
+                // While online, keep the copy of coming reminders and events fresh for when data goes off.
+                if (waited) Ahead.refreshIfStale(this@PetService, AHEAD_EVERY_MS)
                 if (!laptopWorking || !waited) delay(INBOX_EVERY_MS)
             }
         }
@@ -1120,7 +1122,10 @@ class PetService : Service() {
         val from = message.optString("from_device").takeIf { it != config.deviceName }
             ?.let { getString(R.string.inbox_from, it) }.orEmpty()
         val body = message.optString("body").takeIf { !message.isNull("body") }.orEmpty()
-        when (message.optString("kind")) {
+        val kind = message.optString("kind")
+        // Already rung by the phone itself while it had no data: don't ring it twice.
+        if ((kind == "reminder" || kind == "note") && Ahead.alreadyShown(this, kind, message.optString("id"), body)) return
+        when (kind) {
             "reminder" -> announce(getString(R.string.inbox_reminder), body, null, essential = true)
             "ring" -> ring(from)
             "status" -> { // how a job you gave the laptop is going
@@ -1320,6 +1325,7 @@ class PetService : Service() {
         private const val MENU_WIDTH_DP = 280
         private const val LAPTOP_QUIET_MS = 15 * 60_000L
         private const val INBOX_EVERY_MS = 20_000L
+        private const val AHEAD_EVERY_MS = 5 * 60_000L
         private const val STOP_RING = "com.anas.butler.STOP_RING"
         private const val COPY_CODE = "com.anas.butler.COPY_CODE"
         private const val EXTRA_CODE = "code"

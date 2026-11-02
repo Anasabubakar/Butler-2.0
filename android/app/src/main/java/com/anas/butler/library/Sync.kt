@@ -128,6 +128,8 @@ object Sync {
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = try {
         Sync.pull(applicationContext)
+        // Also refresh the reminders and events the phone rings by itself with no data.
+        com.anas.butler.Ahead.refresh(applicationContext)
         Result.success()
     } catch (e: ButlerClient.Refused) {
         // A wrong token won't fix itself; a server hiccup might.

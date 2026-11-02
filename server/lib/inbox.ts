@@ -123,6 +123,16 @@ export async function takeDue(name: string) {
   return due;
 }
 
+/** Reminders still waiting for a device and due before `until`: the phone keeps a copy to ring offline. */
+export function remindersAhead(name: string, until: Date) {
+  return sql<{ id: string; body: string | null; due_at: Date }[]>`
+    select id, body, due_at from messages
+    where to_device = ${name} and kind = 'reminder' and delivered_at is null and not forget
+      and due_at > now() and due_at <= ${until}
+    order by due_at
+    limit 100`;
+}
+
 /** Sends one message to each named device. */
 export async function send(to: string[], message: NewMessage) {
   if (!to.length) return;
