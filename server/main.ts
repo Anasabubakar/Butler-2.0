@@ -2233,7 +2233,8 @@ async function resortOld() {
 // --- heads-ups: what matters in new email, and events about to start ---------------------------
 // Every couple of minutes Butler looks at email that arrived since it last looked. Codes and
 // reset links go out at once and are never kept; failed payments, security alerts, deadlines
-// and people writing to you get one line from the AI; events are kept and told an hour before.
+// and people writing to you get one line from the AI, as does any other email that isn't plainly
+// noise when the AI thinks it matters; events are kept and told an hour before.
 // Calendar events get the same hour-before heads-up, told once even when email had it too.
 
 const QUIET_HOURS = env("BUTLER_QUIET_HOURS", "23:00-07:00"); // when heads-ups that can wait, wait ("off": never)
