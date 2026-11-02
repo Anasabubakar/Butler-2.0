@@ -197,6 +197,10 @@
     <string name="pref_motion_help">Replace movement with subtle state changes.</string>
     <string name="pref_quiet">Quiet mode</string>
     <string name="pref_quiet_help">Silence non-essential cues and interruptions.</string>
+    <string name="pref_sms_codes">SMS codes to laptop</string>
+    <string name="pref_sms_codes_help">When a login code arrives by text, send just the code to your laptop to paste. Shown once there, never kept. The message itself never leaves your phone.</string>
+    <string name="notify_copy_code">Copy code</string>
+    <string name="code_copied">Code copied</string>
     <string name="pref_offline">Couldn\'t reach Butler, so that didn\'t change. Check the connection and try again.</string>
     <string name="settings_reach">Always within reach</string>
     <string name="settings_reach_list">Pet position: drag Little Butler to any screen edge; it stays there.\nTheme: follows your phone\'s light or dark mode.\nWake listening: off. Butler only listens when you press the mic.\nScreen access: Accessibility, above.\nClipboard sync: in the pet\'s menu.\nConnected accounts and remote task access: Devices, on the website.\nData export and deletion: Settings, on the website.</string>

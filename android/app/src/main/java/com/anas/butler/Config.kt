@@ -24,6 +24,11 @@ class Config(context: Context) {
         get() = prefs.getBoolean(KEY_SYNC, false)
         set(v) = prefs.edit().putBoolean(KEY_SYNC, v).apply()
 
+    /** Whether login codes that arrive by SMS go to your laptop (just the code, shown once). */
+    var smsCodes: Boolean
+        get() = prefs.getBoolean(KEY_SMS_CODES, false)
+        set(v) = prefs.edit().putBoolean(KEY_SMS_CODES, v).apply()
+
     /** Speak answers aloud on this phone. Off unless you turn it on (B2 · 11, B2 · 16). */
     var voiceReplies: Boolean
         get() = prefs.getBoolean(KEY_VOICE, false)
@@ -60,6 +65,7 @@ class Config(context: Context) {
         const val KEY_TOKEN = "token"
         const val KEY_DEVICE = "device"
         const val KEY_SYNC = "clipboard_sync"
+        const val KEY_SMS_CODES = "sms_codes"
         const val KEY_VOICE = "voice_replies"
         const val KEY_MIC = "microphone"
         const val KEY_MOTION = "reduced_motion"

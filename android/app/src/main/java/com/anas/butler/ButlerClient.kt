@@ -42,13 +42,19 @@ class ButlerClient(private val config: Config) {
     )
 
     /** Sends copied text ("clip"), a link, a note or a file to another device. Returns who got it. */
-    suspend fun send(target: String, kind: String, text: String? = null, url: String? = null, file: Attachment? = null): List<String> {
+    suspend fun send(
+        target: String, kind: String, text: String? = null, url: String? = null, file: Attachment? = null,
+        secret: Boolean = false, copy: String? = null,
+    ): List<String> {
         val fields = buildMap {
             put("device", config.deviceName)
             put("target", target)
             put("kind", kind)
             text?.let { put("text", it) }
             url?.let { put("url", it) }
+            // A login code: shown once on the other device, never kept, with a Copy button.
+            if (secret) put("secret", "1")
+            copy?.let { put("copy", it) }
         }
         val sent = JSONObject(post("/api/send", fields, file)).getJSONArray("sent_to")
         return List(sent.length()) { sent.getString(it) }

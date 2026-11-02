@@ -264,6 +264,16 @@ class PetService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == STOP_RING) stopRinging()
+        if (intent?.action == COPY_CODE) {
+            intent.getStringExtra(EXTRA_CODE)?.let { code ->
+                // Marked sensitive, so Android doesn't show the code in its clipboard preview.
+                val clip = ClipData.newPlainText("Butler code", code).apply {
+                    description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
+                }
+                getSystemService(ClipboardManager::class.java).setPrimaryClip(clip)
+                android.widget.Toast.makeText(this, R.string.code_copied, android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
         if (intent?.action == SEND_FILES) {
             while (true) {
                 val files = handedOver.poll() ?: break
@@ -1135,8 +1145,42 @@ class PetService : Service() {
                 val open = saveDownload(bytes, name)
                 announce(getString(R.string.inbox_file, from), name, open)
             }
-            else -> announce(getString(R.string.inbox_note, from), body, null)
+            else -> { // a note: a heads-up from Butler may carry a link with a preview, or a code to copy
+                val card = message.optJSONObject("card")
+                val url = message.optString("url").takeIf { !message.isNull("url") && it.startsWith("https://") }
+                val copy = card?.optString("copy")?.takeIf { it.isNotBlank() }
+                val picture = card?.optString("image")?.takeIf { it.startsWith("https://") }?.let { loadPicture(it) }
+                announce(
+                    getString(R.string.inbox_note, from), body, url?.let { Intent(Intent.ACTION_VIEW, Uri.parse(it)) },
+                    copy = copy, picture = picture, caption = card?.optString("title")?.takeIf { it.isNotBlank() },
+                )
+            }
         }
+    }
+
+    /** A link preview's picture, small enough for a notification. Null if it won't load in a few seconds. */
+    private suspend fun loadPicture(url: String): Bitmap? = withContext(Dispatchers.IO) {
+        runCatching {
+            val connection = java.net.URL(url).openConnection().apply {
+                connectTimeout = 5000
+                readTimeout = 5000
+            }
+            val bytes = connection.getInputStream().use { input ->
+                val out = ByteArrayOutputStream()
+                val buffer = ByteArray(16 * 1024)
+                while (out.size() < 3_000_000) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    out.write(buffer, 0, n)
+                }
+                out.toByteArray()
+            }
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            var sample = 1
+            while (bounds.outWidth / (sample * 2) >= 720) sample *= 2
+            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+        }.getOrNull()
     }
 
     // --- "where's my phone?" ------------------------------------------------------------
@@ -1196,7 +1240,10 @@ class PetService : Service() {
      * B2 · 14: a clear title, one useful sentence and one relevant action. In quiet mode
      * only reminders interrupt; everything else arrives silently, grouped.
      */
-    private fun announce(title: String, text: String, open: Intent?, essential: Boolean = false) {
+    private fun announce(
+        title: String, text: String, open: Intent?, essential: Boolean = false,
+        copy: String? = null, picture: Bitmap? = null, caption: String? = null,
+    ) {
         val quiet = Config(this).quiet && !essential
         val tap = open?.let {
             PendingIntent.getActivity(
@@ -1209,7 +1256,10 @@ class PetService : Service() {
             .setColor(Ui.ACCENT)
             .setContentTitle(title)
             .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setStyle(
+                if (picture != null) NotificationCompat.BigPictureStyle().bigPicture(picture).setSummaryText(caption ?: text)
+                else NotificationCompat.BigTextStyle().bigText(text),
+            )
             .setPriority(if (quiet) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .apply {
@@ -1217,6 +1267,15 @@ class PetService : Service() {
                 tap?.let {
                     setContentIntent(it)
                     addAction(0, getString(R.string.notify_open), it)
+                }
+                copy?.let {
+                    val copyIt = PendingIntent.getService(
+                        this@PetService, nextNotification,
+                        Intent(this@PetService, PetService::class.java).setAction(COPY_CODE).putExtra(EXTRA_CODE, it),
+                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                    )
+                    addAction(0, getString(R.string.notify_copy_code), copyIt)
+                    if (tap == null) setContentIntent(copyIt)
                 }
             }
             .build()
@@ -1262,6 +1321,8 @@ class PetService : Service() {
         private const val LAPTOP_QUIET_MS = 15 * 60_000L
         private const val INBOX_EVERY_MS = 20_000L
         private const val STOP_RING = "com.anas.butler.STOP_RING"
+        private const val COPY_CODE = "com.anas.butler.COPY_CODE"
+        private const val EXTRA_CODE = "code"
         private const val SEND_FILES = "com.anas.butler.SEND_FILES"
         private const val LOOK_EVERY_MS = 60_000L // how often to look for the laptop on this Wi-Fi
 

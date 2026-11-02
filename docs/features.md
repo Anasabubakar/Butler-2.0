@@ -61,6 +61,10 @@ Butler reads each new email (every two minutes, once Google is connected) and te
 
 Cheap rules sort every email first, so newsletters, marketing and receipts are left alone and the AI is asked only about the few that might matter (at most `BUTLER_HEADS_UP_AI_PER_HOUR`, 30). Codes and reset links never go to an AI: they're pulled out by the rules, shown once, deleted as soon as each device has them, kept out of the conversation, and dropped unseen when they expire. An email that fails Gmail's sender check never has its code or link passed on; Butler warns you it may be phishing instead. Heads-ups that can wait (not codes, security alerts or events) are held during quiet hours, `BUTLER_QUIET_HOURS` (23:00-07:00). Switch it off in Settings → Email heads-ups, or `BUTLER_HEADS_UP=off`.
 
+On the phone and laptop a heads-up shows like a text with a preview: the link's picture, title and site, and tapping it opens the link. Long links become short ones on your server (`/go/...`, gone after 30 days). Secret links (password resets, sign-in links) are never shortened or previewed. A login code has a **Copy code** button on the phone; on the laptop, tapping the note copies it, and the copied code stays out of clipboard history.
+
+**Codes from SMS** (Android, off until you switch on Settings → SMS codes to laptop, which asks for SMS permission): when a text with a login code arrives, the phone sends just the code to your laptop, shown once with a Copy button, and gone after 15 minutes. The rest of the text never leaves the phone.
+
 ## Daily fact, headlines and the Friday check-in
 
 - At 10:00 your time a **"did you know"** arrives, ending "want to know more?". Reply "yes" and Butler goes down the rabbit hole. It won't repeat a topic for about 40 days. `BUTLER_FACT_AT`, or the Daily fun fact switch in Settings.

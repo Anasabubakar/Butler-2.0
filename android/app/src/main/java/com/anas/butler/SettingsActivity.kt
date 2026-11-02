@@ -124,6 +124,13 @@ class SettingsActivity : AppCompatActivity() {
         quiet = toggle(box, R.string.pref_quiet, R.string.pref_quiet_help, R.string.scope_all, config.quiet) {
             shared(JSONObject().put("quiet", it))
         }
+        toggle(box, R.string.pref_sms_codes, R.string.pref_sms_codes_help, R.string.scope_phone, config.smsCodes) {
+            config.smsCodes = it
+            // Android asks once; without it, nothing is read.
+            if (it && checkSelfPermission(Manifest.permission.RECEIVE_SMS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.RECEIVE_SMS), 2)
+            }
+        }
     }
 
     private fun toggle(box: LinearLayout, title: Int, help: Int, scope: Int, on: Boolean, change: (Boolean) -> Unit): MaterialSwitch {

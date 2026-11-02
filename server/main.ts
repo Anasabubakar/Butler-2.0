@@ -41,6 +41,7 @@ import * as transfers from "./lib/transfers.ts";
 import * as alerts from "./lib/alerts.ts";
 import * as daily from "./lib/daily.ts";
 import * as askmore from "./lib/askmore.ts";
+import * as links from "./lib/links.ts";
 import * as tg from "./lib/telegram.ts";
 import { ALLOWED_UPDATES, type Answer, Bot, type Butler, type Update } from "./lib/bot.ts";
 import * as privacy from "./lib/privacy.ts";
@@ -343,7 +344,13 @@ app.post("/api/send", async (c) => {
   const body = text("text", 100_000);
   const url = text("url", 4000);
   if (kind !== "file" && kind !== "ring" && !body && !url) return c.json({ error: "nothing to send" }, 400);
-  await inbox.send(to, { from_device: device, kind, body, url, item_id });
+  // secret=1: a login code (from an SMS on the phone): shown once, never kept, gone after 15 minutes.
+  const secret = kind === "note" && text("secret", 5) === "1";
+  const copy = secret ? text("copy", 40) : null;
+  await inbox.send(to, {
+    from_device: device, kind, body, url, item_id, forget: secret,
+    expires_at: secret ? new Date(Date.now() + 15 * 60_000).toISOString() : null, card: copy ? { copy } : null,
+  });
   return c.json({ sent_to: to });
 });
 
@@ -1983,6 +1990,12 @@ async function deliverToTelegram(bot: Bot) {
 }
 
 // The website: built files, falling back to index.html.
+// Short links in heads-ups: /go/<token> goes to the page, for 30 days.
+app.get("/go/:token", async (c) => {
+  const to = await links.resolve(c.req.param("token"));
+  return to ? c.redirect(to, 302) : c.text("This link has expired or never existed.", 404);
+});
+
 app.use("/*", serveStatic({ root: WEB_DIR }));
 app.get("*", async (c) => {
   const index = await Deno.readTextFile(join(WEB_DIR, "index.html")).catch(() => null);
@@ -2241,6 +2254,7 @@ interface Tell {
   /** When it should arrive; now when not set. */
   due?: Date | null;
   url?: string | null;
+  card?: links.Card | null;
 }
 
 /** Sends a note from Butler to every device. */
@@ -2251,7 +2265,17 @@ async function tellEverywhere(body: string, how: Tell = {}) {
   await inbox.send(devices, {
     from_device: "Butler", kind: "note", body, url: how.url ?? null, due_at: due.toISOString(), forget: how.forget,
     expires_at: how.expiresInMinutes ? new Date(due.getTime() + how.expiresInMinutes * 60_000).toISOString() : null,
+    card: how.card && Object.keys(how.card).length ? { ...how.card } : null,
   });
+}
+
+/** A link for a heads-up: shortened, with a preview card. Never for secret links. */
+async function shareable(url: string): Promise<{ shown: string; card: links.Card }> {
+  const [shown, card] = await Promise.all([
+    links.shorten(url).catch(() => url),
+    links.preview(url).catch(() => ({})),
+  ]);
+  return { shown, card };
 }
 
 /** Keeps an event to tell you about an hour before, unless it's already kept (from email or the calendar). */
@@ -2286,7 +2310,7 @@ async function headsUpFor(m: google.Fetched, timeZone: string) {
   if (secret && m.auth === "fail") return tellEverywhere(alerts.spoofNote(m).body);
   if (sorted.kind === "code") {
     const note = alerts.codeNote(m, body, sorted.code!);
-    return tellEverywhere(note.body, note);
+    return tellEverywhere(note.body, { ...note, card: { copy: sorted.code! } });
   }
   if (sorted.kind === "reset" || sorted.kind === "confirm") {
     const note = alerts.linkNote(m, body, sorted.kind, links);
@@ -2317,14 +2341,15 @@ async function headsUpFor(m: google.Fetched, timeZone: string) {
   }
   if (!verdict.worth || !verdict.line.trim()) return;
   let text = verdict.line.trim();
-  if (picked) text += `\n\n${alerts.linkLine(sorted.kind, picked.url)}`;
+  const link = picked ? await shareable(picked.url) : null;
+  if (picked) text += `\n\n${alerts.linkLine(sorted.kind, link!.shown)}`;
   const due = parseWhen(verdict.due);
   if (verdict.kind === "deadline" && due && due > now) text += "\n\nwant me to put that on your calendar?";
   if (m.attachments.length && sorted.kind === "personal") text += `\n\nsay "read it for me" and i'll go through ${m.attachments.length > 1 ? "them" : "it"}.`;
   if (m.auth === "fail") text = `⚠️ this one failed Gmail's sender check, so it may be fake. don't pay or log in from it.\n\n${text}`;
   // Security alerts can't wait; the rest waits for morning when it arrives at night.
   const hold = sorted.kind === "security" ? null : alerts.holdUntil(local, QUIET_HOURS);
-  await tellEverywhere(text, { due: hold, url: picked?.url });
+  await tellEverywhere(text, { due: hold, url: picked?.url, card: link?.card });
 }
 
 /** Reads email that arrived since the last look and sends heads-ups. */
@@ -2387,7 +2412,9 @@ async function eventsSoon() {
     returning id, title, starts_at, place, link`;
   const timeZone = await ownerZone();
   for (const e of soon) {
-    await tellEverywhere(alerts.soonNote({ ...e, starts_at: new Date(e.starts_at) }, now, timeZone), { url: e.link });
+    const link = e.link ? await shareable(e.link) : null;
+    await tellEverywhere(alerts.soonNote({ ...e, link: link?.shown ?? null, starts_at: new Date(e.starts_at) }, now, timeZone),
+      { url: e.link, card: link?.card });
   }
   await db.sql`delete from upcoming where starts_at < now() - interval '2 days'`;
 }
@@ -2412,6 +2439,7 @@ if (import.meta.main) {
   setInterval(() => watchPrices().catch((e) => console.error("prices:", e)), 30 * 60_000);
   setInterval(() => rescueLinks().catch((e) => console.error("links:", e)), 10 * 60_000);
   setInterval(() => resortOld().catch((e) => console.error("resort:", e)), 60_000);
+  setInterval(() => links.sweep().catch((e) => console.error("short links:", e)), 6 * 60 * 60_000);
   setInterval(() => transfers.sweep(TRANSFERS_DIR).catch((e) => console.error("transfers:", e)), 60 * 60_000);
   if (telegramOn()) startTelegram().catch((e) => console.error("telegram:", tg.redact(String(e), TG_TOKEN)));
   if (geminiReady()) console.log("AI providers, in order:", aiProviders().join(", "));
