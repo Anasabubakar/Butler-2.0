@@ -54,6 +54,11 @@ test("email is sorted by rules: codes, links, money, security, events, deadlines
   assert.equal(sort("Shop <deals@shop.com>", "50% off", "Grab it now", true), "skip");
 });
 
+test("discount codes are not login codes", () => {
+  assert.equal(classify(mail("Shop <deals@shop.com>", "Your code inside", true), "Use code SAVE20 for 20% off").kind, "skip");
+  assert.notEqual(classify(mail("Shop <n@shop.com>", "Hi", false), "Your promo code is SAVE20").kind, "code");
+});
+
 test("a newsletter has to say it in the subject to count", () => {
   assert.equal(classify(mail("X <n@x.com>", "Your invoice is ready", true), "Pay by Friday").kind, "payment");
   assert.equal(classify(mail("X <n@x.com>", "Weekly roundup", true), "Your invoice is ready").kind, "skip");
