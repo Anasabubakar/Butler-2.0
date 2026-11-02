@@ -147,6 +147,8 @@ function organizeLocally(item: RawItem): Promise<OrganizedItem> {
 
 const ollamaUrl = () => Deno.env.get("OLLAMA_URL") ?? "http://ollama:11434";
 const localModel = () => Deno.env.get("BUTLER_LOCAL_MODEL") ?? "gemma3:4b";
+/** Context size to ask Ollama for. Ollama reloads the model whenever a request asks for a different size, so every caller (Butler, LiteLLM) should use the same one. */
+const localContext = () => Number(Deno.env.get("BUTLER_LOCAL_CTX")) || 8192;
 /** Most tokens the local model may write. The JSON answer is ~130; the cap only stops a rambling model (on 2 cores a token takes ~170 ms). */
 const localMaxTokens = () => Number(Deno.env.get("BUTLER_LOCAL_MAX_TOKENS")) || 320;
 
@@ -188,7 +190,7 @@ function chatOllama(item: RawItem): Promise<Response> {
       model: localModel(),
       stream: false,
       format: z.toJSONSchema(Organized),
-      options: { temperature: 0, num_predict: localMaxTokens() },
+      options: { temperature: 0, num_ctx: localContext(), num_predict: localMaxTokens() },
       messages: [{
         role: "user",
         content: describe(item, SHORT) + "\n\nAnswer with JSON.",
