@@ -1903,8 +1903,23 @@ export default class ButlerPetExtension extends Extension {
             return this._announce(`File${from}`, `Saved to ${path.replace(GLib.get_home_dir(), '~')}\n\n(Tap to open it.)`,
                 () => Gio.AppInfo.launch_default_for_uri(GLib.filename_to_uri(path, null), null));
         }
-        default:
+        default: {
+            // A heads-up from Butler can carry a login code (tap copies it) or a link (tap opens it).
+            const code = message.card?.copy;
+            if (code) {
+                return this._announce(`A note${from}`, `${message.body ?? ''}\n\n(Tap to copy the code.)`, () => {
+                    St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, code);
+                    this._lastSynced = code; // a code isn't sent back to the phone
+                });
+            }
+            const url = message.url?.startsWith('https://') ? message.url : null;
+            const title = message.card?.title ? `\n\n${message.card.title}${message.card.site ? ` · ${message.card.site}` : ''}` : '';
+            if (url) {
+                return this._announce(`A note${from}`, `${message.body ?? ''}${title}\n\n(Tap to open it.)`,
+                    () => Gio.AppInfo.launch_default_for_uri(url, null));
+            }
             return this._announce(`A note${from}`, message.body ?? message.url ?? '');
+        }
         }
     }
 
