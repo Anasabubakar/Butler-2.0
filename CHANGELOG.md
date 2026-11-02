@@ -4,6 +4,9 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 
 ## Unreleased
 
+- **Email heads-ups.** Butler reads new email and texts what matters: login codes and reset links (shown once, never kept, never sent to an AI), failed payments and bills with the pay link, security alerts, deadlines with "want me to put that on your calendar?", people who need an answer, and events an hour before they start with the place and ticket or join link (from email and Google Calendar, told once). Newsletters and receipts stay quiet, phishing that fails Gmail's sender check is called out, and anything that can wait is held overnight.
+- **Daily touches.** A "did you know" every morning ("want to know more?"), AI headlines after the brief, and a Friday check-in whose answer goes in your library. Each has a switch in Settings.
+- **Roast me, research this, read it for me.** A roast built on what Butler knows about you, web research with sources, and an email read for you with its PDF attachment.
 - Butler is now licensed under AGPL-3.0. The logos and the Little Butler character stay all rights reserved.
 - **Butler remembers.** Ask Butler sees the last two days of your conversation, so follow-ups like "and tomorrow?" work, and learns lasting facts about you (people, preferences, plans) for every reply. See, add and forget them in Settings → Memory; switch learning off with Learn about me. Passwords, codes and card numbers are never kept.
 - **Reply to the pet.** Every answer in the phone and laptop pet's bubble has a reply box under it.
