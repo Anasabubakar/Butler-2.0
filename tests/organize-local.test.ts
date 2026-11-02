@@ -171,3 +171,35 @@ test("local model: the answer is capped so a rambling model can't run for minute
     await server.shutdown();
   }
 });
+
+test("the same item is answered from memory, a changed one is not, and a failure is retried", async () => {
+  let chats = 0, fail = true;
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+    if (new URL(req.url).pathname === "/api/pull") return Response.json({ status: "success" });
+    await req.body?.cancel();
+    chats++;
+    if (fail) return Response.json({ error: "busy" }, { status: 500 });
+    const answer = { title: "Cached", summary: "S.", tags: ["a"], category: "x" };
+    return Response.json({ message: { content: JSON.stringify(answer) } });
+  });
+  Deno.env.set("BUTLER_AI", "local");
+  Deno.env.set("OLLAMA_URL", `http://localhost:${server.addr.port}`);
+  try {
+    const item = { kind: "text", platform: null, url: null, body: "cache me", note: null };
+    await assert.rejects(organize(item));
+    fail = false;
+    const [a, b] = await Promise.all([organize(item), organize({ ...item })]); // second shares the first
+    assert.equal(chats, 2); // the failed try, then one real answer for both
+    const c = await organize(item);
+    assert.equal(chats, 2);
+    assert.deepEqual(a, c);
+    a.tags.push("changed"); // callers can't change what's remembered
+    assert.deepEqual((await organize(item)).tags, ["a"]);
+    await organize({ ...item, note: "now with a note" });
+    assert.equal(chats, 3);
+    assert.equal(b.title, "Cached");
+  } finally {
+    Deno.env.delete("BUTLER_AI");
+    await server.shutdown();
+  }
+});
