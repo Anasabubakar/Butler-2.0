@@ -39,6 +39,7 @@ import * as sync from "./lib/sync.ts";
 import * as memory from "./lib/memory.ts";
 import * as transfers from "./lib/transfers.ts";
 import * as alerts from "./lib/alerts.ts";
+import * as ahead from "./lib/ahead.ts";
 import * as daily from "./lib/daily.ts";
 import * as askmore from "./lib/askmore.ts";
 import * as links from "./lib/links.ts";
@@ -1162,6 +1163,28 @@ app.get("/api/device/changes", async (c) => {
   const next = last ? sync.formatCursor({ micros: BigInt(last.cursor_micros), id: last.id }) : sync.formatCursor(from);
   const deleted = after || from.micros === 0n ? [] : await db.deletedSince(from.micros);
   return c.json({ items, deleted, next, more: rows.length === limit });
+});
+
+// What the phone rings by itself if it has no internet when the moment comes: reminders
+// waiting for it, and events (only when heads-ups are on) an hour before. Refreshed often.
+app.get("/api/device/ahead", async (c) => {
+  if (!deviceToken(c)) return c.json({ error: "bad token" }, 401);
+  const device = (c.req.query("device") ?? "").trim().slice(0, 100);
+  if (!device) return c.json({ error: "device is required" }, 400);
+  const now = new Date();
+  const until = new Date(now.getTime() + ahead.AHEAD_HOURS * 3_600_000);
+  const reminders = await inbox.remindersAhead(device, until);
+  const headsUp = env("BUTLER_HEADS_UP") !== "off" && (await prefs.load().catch(() => prefs.DEFAULTS)).headsUp;
+  const kept = headsUp
+    ? await db.sql<ahead.Event[]>`select title, starts_at, place, link from upcoming
+        where announced_at is null and starts_at > ${now} and starts_at <= ${new Date(until.getTime() + 3_600_000)}`
+    : [];
+  // Calendar events reach `upcoming` only an hour or so ahead (calendarSoon), so look further here.
+  const calendar = headsUp && await headsUpOn()
+    ? (await google.events(now, new Date(until.getTime() + 3_600_000)).catch(() => []))
+      .filter((e) => !e.allDay).map((e) => ({ title: e.title, starts_at: e.start, place: e.place ?? null, link: e.link ?? null }))
+    : [];
+  return c.json({ items: ahead.plan(reminders, kept, calendar, now, await ownerZone()), until: until.toISOString() });
 });
 
 app.delete("/api/device/items/:id", async (c) => {
