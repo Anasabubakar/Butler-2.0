@@ -2019,7 +2019,7 @@ async function headsUps() {
       : []);
     const fresh = ids.filter((id) => !seen.has(id)).reverse().slice(0, 10); // oldest first
     const timeZone = await ownerZone();
-    let newest = since;
+    let newest = new Date(Math.max(new Date(after).getTime(), since.getTime()));
     for (const id of fresh) {
       try {
         const m = await google.fetchMail(id);
