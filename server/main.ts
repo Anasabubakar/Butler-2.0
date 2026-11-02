@@ -2238,6 +2238,10 @@ async function resortOld() {
 
 const QUIET_HOURS = env("BUTLER_QUIET_HOURS", "23:00-07:00"); // when heads-ups that can wait, wait ("off": never)
 const headsUpAi = new alerts.HourlyLimit(Number(env("BUTLER_HEADS_UP_AI_PER_HOUR", "30")));
+// Email no rule recognised has its own smaller allowance, so it can't crowd out payments and
+// security alerts, and at most a few of those heads-ups go out an hour, so a busy inbox can't spam you.
+const otherAi = new alerts.HourlyLimit(Number(env("BUTLER_HEADS_UP_OTHER_AI_PER_HOUR", "15")));
+const otherSent = new alerts.HourlyLimit(Number(env("BUTLER_HEADS_UP_OTHER_PER_HOUR", "4")));
 const HEADS_UP_AFTER = "heads_up_after";
 let readingMail = false;
 
@@ -2321,7 +2325,7 @@ async function headsUpFor(m: google.Fetched, timeZone: string) {
   const now = new Date();
   const local = localIso(now, timeZone);
   let verdict: alerts.Verdict | null = null;
-  if (geminiReady() && headsUpAi.allow()) {
+  if (geminiReady() && (sorted.kind !== "other" || otherAi.allow()) && headsUpAi.allow()) {
     verdict = await alerts.judge(alerts.forAi(m, body, links), sorted.kind, {
       now: local, timeZone, teasing: await teasing(), attachments: m.attachments.map((a) => a.name),
     }).catch((e) => {
@@ -2330,7 +2334,7 @@ async function headsUpFor(m: google.Fetched, timeZone: string) {
     });
   }
   if (!verdict) {
-    if (sorted.kind === "personal" || sorted.kind === "event") return; // can't tell if it matters, so stay quiet
+    if (sorted.kind === "personal" || sorted.kind === "event" || sorted.kind === "other") return; // can't tell if it matters, so stay quiet
     verdict = { worth: true, line: `${alerts.brand(m.from)}: ${m.subject}`, link: null, kind: "other" };
   }
   const picked = verdict.link && links[verdict.link - 1] ? links[verdict.link - 1] : alerts.pickLink(sorted.kind, links);
@@ -2340,6 +2344,7 @@ async function headsUpFor(m: google.Fetched, timeZone: string) {
     return; // told an hour before it starts
   }
   if (!verdict.worth || !verdict.line.trim()) return;
+  if (sorted.kind === "other" && !otherSent.allow()) return;
   let text = verdict.line.trim();
   const link = picked ? await shareable(picked.url) : null;
   if (picked) text += `\n\n${alerts.linkLine(sorted.kind, link!.shown)}`;
