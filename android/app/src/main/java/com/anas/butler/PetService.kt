@@ -1152,7 +1152,7 @@ class PetService : Service() {
                 val card = message.optJSONObject("card")
                 val url = message.optString("url").takeIf { !message.isNull("url") && it.startsWith("https://") }
                 val copy = card?.optString("copy")?.takeIf { it.isNotBlank() }
-                val picture = card?.optString("image")?.takeIf { it.startsWith("https://") }?.let { picture(it) }
+                val picture = card?.optString("image")?.takeIf { it.startsWith("https://") }?.let { loadPicture(it) }
                 announce(
                     getString(R.string.inbox_note, from), body, url?.let { Intent(Intent.ACTION_VIEW, Uri.parse(it)) },
                     copy = copy, picture = picture, caption = card?.optString("title")?.takeIf { it.isNotBlank() },
@@ -1162,7 +1162,7 @@ class PetService : Service() {
     }
 
     /** A link preview's picture, small enough for a notification. Null if it won't load in a few seconds. */
-    private suspend fun picture(url: String): Bitmap? = withContext(Dispatchers.IO) {
+    private suspend fun loadPicture(url: String): Bitmap? = withContext(Dispatchers.IO) {
         runCatching {
             val connection = java.net.URL(url).openConnection().apply {
                 connectTimeout = 5000
