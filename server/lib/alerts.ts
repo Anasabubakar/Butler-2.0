@@ -196,6 +196,7 @@ const WANT: Partial<Record<Kind, RegExp>> = {
   deadline: /log ?in|sign ?in|complete|submit|view|open|continue|verify|register|start|canvas|portal/i,
   action: /verify|complete|continue|start|upload|submit|sign|review|view|open|log ?in/i,
   personal: /./,
+  other: /view|open|details|log ?in|sign ?in|manage|track|check|respond|reply|continue/i,
 };
 
 /** The one link you'd tap to act on this email: the reset button, the ticket, "Update payment"... */
@@ -300,8 +301,12 @@ Decide:
 - worth: true only if they'd want a text about it now: a failed or declined payment, an invoice or bill due, a subscription about
   to lapse; a security alert (new sign-in, withdrawal request, password changed); a deadline or required step with a real
   consequence; an event they registered for or were personally invited to; a real person writing to them personally who needs an answer
-  or action; an offer, deal or agreement for their work. false for newsletters, marketing, digests, receipts for things that
-  went fine, "thanks for signing up", and anything safe to ignore.
+  or action; an offer, deal or agreement for their work; and any other email that really matters to them personally, like a
+  flight or trip changed or cancelled, a delivery that failed or needs them, exam results or grades, an application accepted,
+  rejected or answered, a notice from a bank, school, employer, landlord, court or government, or an account closed, limited
+  or changed. false for newsletters, marketing, digests, receipts for things that went fine, "thanks for signing up",
+  automatic tips and social notifications, and anything safe to ignore.${kind === "other" ? `
+  No rule matched this one, so be strict: true only if a sharp assistant would interrupt them for it. When unsure, false.` : ""}
 - line: the heads-up, one or two short sentences, lowercase casual texting style. Lead with who and what, then what happens
   if they don't act, and the date in their local time. Like: "higgsfield payment for the $49 plus subscription failed, access
   is paused unless you update your card" or "UoPeople orientation deadline is Nov 7 at 11:30pm (Lagos time). finish it by then
