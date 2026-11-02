@@ -144,3 +144,26 @@ test("local model: long pages, videos, text and collection lists are cut down so
     await server.shutdown();
   }
 });
+
+test("local model: the answer is capped so a rambling model can't run for minutes", async () => {
+  let options: Record<string, unknown> = {};
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+    if (new URL(req.url).pathname === "/api/pull") return Response.json({ status: "success" });
+    options = (await req.json()).options;
+    const answer = { title: "T", summary: "S.", tags: ["a"], category: "x" };
+    return Response.json({ message: { content: JSON.stringify(answer) } });
+  });
+  Deno.env.set("BUTLER_AI", "local");
+  Deno.env.set("OLLAMA_URL", `http://localhost:${server.addr.port}`);
+  try {
+    await organize({ kind: "text", platform: null, url: null, body: "hi", note: null });
+    assert.deepEqual(options, { temperature: 0, num_predict: 320 });
+    Deno.env.set("BUTLER_LOCAL_MAX_TOKENS", "500");
+    await organize({ kind: "text", platform: null, url: null, body: "hello", note: null });
+    assert.equal(options.num_predict, 500);
+  } finally {
+    Deno.env.delete("BUTLER_AI");
+    Deno.env.delete("BUTLER_LOCAL_MAX_TOKENS");
+    await server.shutdown();
+  }
+});
