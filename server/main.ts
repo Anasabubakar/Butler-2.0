@@ -42,6 +42,9 @@ import * as alerts from "./lib/alerts.ts";
 import * as daily from "./lib/daily.ts";
 import * as askmore from "./lib/askmore.ts";
 import * as links from "./lib/links.ts";
+import * as tg from "./lib/telegram.ts";
+import { ALLOWED_UPDATES, type Answer, Bot, type Butler, type Update } from "./lib/bot.ts";
+import * as privacy from "./lib/privacy.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -420,6 +423,8 @@ app.post("/api/laptop/status", async (c) => {
   const to = await inbox.resolveTarget(text("target", 100) ?? "phone", device);
   const job = text("job", 40);
   await jobs.report(device, job, state, text("text", 3000) ?? "");
+  // A job you started from Telegram tells you there how it's going, as well as on your phone.
+  if (job && !to.includes(TG_DEVICE) && (await jobs.get(job).catch(() => null))?.from_device === TG_DEVICE) to.push(TG_DEVICE);
   const body = JSON.stringify({ state, title: laptop.statusTitle(state), text: text("text", 3000) ?? "", job });
   laptopStatus.set(device, { state, title: laptop.statusTitle(state), text: text("text", 3000) ?? "", at: new Date().toISOString() });
   await inbox.send(to, { from_device: device, kind: "status", body });
@@ -1662,6 +1667,328 @@ app.get("/s/:token/file", async (c) => {
   return fileResponse(item);
 });
 
+// --- Telegram ------------------------------------------------------------------------------
+// Butler's Telegram bot (see lib/bot.ts). It only ever answers one Telegram account: the one
+// connected from the website (or TELEGRAM_OWNER_ID). Telegram counts as one of your devices,
+// so Butler's notes and reminders reach the chat the way they reach your phone and laptop.
+
+const TG_TOKEN = env("TELEGRAM_BOT_TOKEN", "")!.trim();
+const TG_DEVICE = "Telegram";
+const telegramOn = () => Boolean(TG_TOKEN) && env("BUTLER_TELEGRAM") !== "off";
+let telegram: { bot: Bot; username: string; secret: string; mode: string } | null = null;
+const pairCodes = new Map<string, number>(); // Connect Telegram codes and when each expires
+const miniAppThrottle = new Throttle(10, 60_000);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** The Telegram user Butler answers: TELEGRAM_OWNER_ID, or whoever you connected from the website. */
+async function telegramOwner(): Promise<number | null> {
+  const fixed = Number(env("TELEGRAM_OWNER_ID"));
+  if (Number.isSafeInteger(fixed) && fixed > 0) return fixed;
+  const kept = Number(await settings.get("telegram_owner").catch(() => null));
+  return Number.isSafeInteger(kept) && kept > 0 ? kept : null;
+}
+
+const fixedOwner = () => Number(env("TELEGRAM_OWNER_ID")) > 0;
+
+/** A form, leaving out what's missing. */
+function formOf(fields: Record<string, string | File | undefined>): FormData {
+  const form = new FormData();
+  for (const [k, v] of Object.entries(fields)) if (v !== undefined) form.set(k, v);
+  return form;
+}
+
+/** Calls this server's own API the way a device does, so Telegram gets exactly what the apps get. */
+async function asDevice(path: string, fields: Record<string, string | File | undefined>): Promise<Answer> {
+  const res = await app.fetch(new Request(`http://butler.local${path}`, {
+    method: "POST", body: formOf(fields), headers: { "x-butler-token": TOKEN },
+  }));
+  return { status: res.status, reply: await res.json().catch(() => ({})) };
+}
+
+/** What the bot can do in Butler. */
+function telegramButler(): Butler {
+  const publicUrl = env("PUBLIC_URL");
+  return {
+    ask: async (i) => asDevice("/api/command", {
+      device: TG_DEVICE, kind: "telegram", tz: await ownerZone(), text: i.text, audio: i.audio, file: i.picture, reply_to: i.replyTo,
+    }),
+    confirm: (id, yes) => {
+      if (yes) return asDevice("/api/command/confirm", { confirm: id });
+      pendingTools.delete(id);
+      pendingEmails.delete(id);
+      confirmChat.delete(id);
+      return Promise.resolve({ status: 200, reply: { say: "cancelled." } });
+    },
+    save: async (i) => {
+      const r = await asDevice("/api/save", { device: TG_DEVICE, text: i.text, url: i.url, note: i.note, file: i.file });
+      const body = r.reply as { id?: string; error?: string };
+      return { status: r.status, id: body.id, error: body.error };
+    },
+    item: async (id) => (UUID_RE.test(id) ? await db.getItem(id) : undefined),
+    remove: async (id) => {
+      if (!UUID_RE.test(id)) return false;
+      const item = await db.deleteItem(id);
+      if (item?.file_path) await Deno.remove(join(FILES_DIR, id), { recursive: true }).catch(() => {});
+      return Boolean(item);
+    },
+    link: (item) => linkFor(item, publicUrl),
+    file: async (item) => {
+      if (!item.file_path) return null;
+      const path = join(FILES_DIR, item.file_path);
+      const info = await Deno.stat(path).catch(() => null);
+      if (!info) return null;
+      if (info.size > 50 * 1024 * 1024) return "too big";
+      return new File([await Deno.readFile(path)], item.file_path.split("/").pop() ?? "file", { type: item.mime ?? "application/octet-stream" });
+    },
+    sendItem: async (target, item) => {
+      const to = await inbox.resolveTarget(target, TG_DEVICE);
+      if (!to.length) return [];
+      if (item.file_path) await inbox.send(to, { from_device: TG_DEVICE, kind: "file", item_id: item.id });
+      else if (item.url) await inbox.send(to, { from_device: TG_DEVICE, kind: "link", url: item.url, body: item.title });
+      else await inbox.send(to, { from_device: TG_DEVICE, kind: "note", body: item.body ?? item.title ?? "" });
+      return to;
+    },
+    sendText: async (target, text) => {
+      const to = await inbox.resolveTarget(target, TG_DEVICE);
+      const url = tg.onlyLink(text);
+      await inbox.send(to, url ? { from_device: TG_DEVICE, kind: "link", url } : { from_device: TG_DEVICE, kind: "clip", body: text });
+      return to;
+    },
+    laptop: async (command) => {
+      const r = await asDevice("/api/laptop/task", { device: TG_DEVICE, text: command });
+      const body = r.reply as { sent_to?: string[]; warning?: string | null; error?: string };
+      return r.status < 300 && body.sent_to ? { sent: body.sent_to, warning: body.warning ?? null } : { error: body.error ?? `the server answered ${r.status}` };
+    },
+    stopLaptop: async (off) => {
+      const r = await asDevice("/api/laptop/stop", { device: TG_DEVICE, off: off ? "1" : undefined });
+      return (r.reply as { sent_to?: string[] }).sent_to ?? [];
+    },
+    remindHere: (text, at) => inbox.send([TG_DEVICE], { from_device: "Butler", kind: "reminder", body: text, due_at: at.toISOString() }),
+    brief: async () => {
+      const now = new Date();
+      const timeZone = await ownerZone();
+      return brief.compose(await brief.gather(now, timeZone, publicUrl), now, timeZone);
+    },
+    mail: () => brief.mailNote(null),
+    tasks: async () => brief.tasksNote(new Date(), await ownerZone()),
+    recap: async () => weekInButler(new Date(), await ownerZone()),
+    spending: async () => spending.compose(await spending.since(spending.startOf("week", new Date(), await ownerZone())), "week"),
+    find: (query) => findInLibrary(query),
+    recent: () => db.listItems({ limit: 20 }),
+    ring: (target) => ring(target, TG_DEVICE),
+    devices: async () => (await inbox.devices()).filter((d) => d.name !== TG_DEVICE),
+    newChat: () => memory.newChat(null),
+    owner: telegramOwner,
+    pair: async (code, user) => {
+      const expires = pairCodes.get(code);
+      if (!expires) return false;
+      pairCodes.delete(code); // one use only
+      if (expires < Date.now()) return false;
+      if (fixedOwner() && Number(env("TELEGRAM_OWNER_ID")) !== user) return false;
+      await settings.set("telegram_owner", String(user));
+      await inbox.checkIn(TG_DEVICE, "telegram");
+      console.log("telegram: connected to its owner");
+      return true;
+    },
+    alerts: async (on) => {
+      if (on !== undefined) await settings.set("telegram_alerts", on ? "on" : "off");
+      return (await settings.get("telegram_alerts")) !== "off";
+    },
+    timeZone: ownerZone,
+  };
+}
+
+// Updates from Telegram. The secret header proves it's Telegram; the bot then answers only you.
+app.post("/api/telegram/webhook", async (c) => {
+  if (!telegram) return c.json({ error: "the bot isn't running" }, 503);
+  if (!tg.sameSecret(c.req.header("x-telegram-bot-api-secret-token") ?? "", telegram.secret)) return c.json({ error: "bad secret" }, 401);
+  const update = await c.req.json<Update>().catch(() => null);
+  if (update && typeof update.update_id === "number") telegram.bot.handle(update); // answered at once; the work carries on
+  return c.json({ ok: true });
+});
+
+// The Telegram card on the website's Integrations page.
+app.get("/api/telegram/status", requireSession, async (c) => c.json({
+  configured: telegramOn(),
+  ready: Boolean(telegram),
+  username: telegram?.username ?? null,
+  mode: telegram?.mode ?? null,
+  connected: Boolean(await telegramOwner().catch(() => null)),
+  fixed: fixedOwner(),
+  alerts: (await settings.get("telegram_alerts").catch(() => null)) !== "off",
+}));
+
+// Connect Telegram: a one-time link (10 minutes) that makes whoever opens it the bot's owner.
+app.post("/api/telegram/pair", requireSession, (c) => {
+  if (!telegram) return c.json({ error: "The Telegram bot isn't running on the server. Set TELEGRAM_BOT_TOKEN first." }, 503);
+  const now = Date.now();
+  for (const [code, expires] of pairCodes) if (expires < now) pairCodes.delete(code);
+  const code = tg.pairCode();
+  pairCodes.set(code, now + 10 * 60_000);
+  return c.json({ link: `https://t.me/${telegram.username}?start=${code}`, app: `tg://resolve?domain=${telegram.username}&start=${code}` });
+});
+
+app.post("/api/telegram/unpair", requireSession, async (c) => {
+  await settings.set("telegram_owner", "");
+  await inbox.forgetDevice(TG_DEVICE);
+  return c.json({ ok: true, fixed: fixedOwner() });
+});
+
+app.put("/api/telegram/alerts", requireSession, async (c) => {
+  const { on } = await c.req.json<{ on?: unknown }>().catch(() => ({ on: undefined }));
+  if (typeof on !== "boolean") return c.json({ error: "on must be true or false" }, 400);
+  await settings.set("telegram_alerts", on ? "on" : "off");
+  return c.json({ ok: true, alerts: on });
+});
+
+// The library opened as a Telegram Mini App signs you in with what Telegram signed: only the owner.
+app.post("/api/telegram/session", async (c) => {
+  if (!miniAppThrottle.allow(clientIp(c))) return c.json({ error: "Too many tries. Wait a minute." }, 429);
+  if (!telegram) return c.json({ error: "The Telegram bot isn't running." }, 503);
+  const { initData } = await c.req.json<{ initData?: unknown }>().catch(() => ({ initData: undefined }));
+  const user = typeof initData === "string" ? await tg.checkInitData(initData, TG_TOKEN) : null;
+  const owner = await telegramOwner();
+  if (!user || !owner || user !== owner) return c.json({ error: "This library is private." }, 403);
+  // Inside Telegram the library can be a frame on another site (Telegram Web), so the cookie has
+  // to be allowed there: SameSite=None, kept apart from other sites' (Partitioned).
+  const value = await newSession(SESSION_SECRET);
+  if (COOKIE_SECURE) {
+    setCookie(c, SESSION_COOKIE, value, {
+      httpOnly: true, secure: true, sameSite: "None", partitioned: true, path: "/", maxAge: SESSION_DAYS * 86_400,
+    });
+  } else {
+    setCookie(c, SESSION_COOKIE, value, { httpOnly: true, sameSite: "Lax", path: "/", maxAge: SESSION_DAYS * 86_400 });
+  }
+  return c.json({ ok: true });
+});
+
+// The privacy policy, for BotFather and the bot's profile.
+const privacyPage = (c: Context) => {
+  c.header("cache-control", "public, max-age=3600");
+  return c.html(privacy.page({
+    site: publicBase(c).replace(/^https?:\/\//, ""), contact: env("BUTLER_CONTACT") ?? null, updated: "2 November 2026",
+  }));
+};
+app.get("/privacy-policy", privacyPage);
+app.get("/privacy", privacyPage);
+
+/** Starts the bot: who it is, its menu, then updates by webhook (or polling without PUBLIC_URL). */
+async function startTelegram() {
+  const api = tg.client(TG_TOKEN, env("TELEGRAM_API"));
+  let me: { username?: string } | null = null;
+  for (let wait = 5_000; !me; wait = Math.min(wait * 2, 300_000)) {
+    try {
+      me = await api.call<{ username?: string }>("getMe");
+    } catch (e) {
+      if (e instanceof tg.TelegramError && (e.code === 401 || e.code === 404)) {
+        console.error("telegram: Telegram doesn't accept TELEGRAM_BOT_TOKEN. Copy it again from BotFather (/mybots → API Token).");
+        return;
+      }
+      console.warn(`telegram: can't reach Telegram yet (${(e as Error).message}); trying again in ${wait / 1000}s`);
+      await sleep(wait);
+    }
+  }
+  const base = env("PUBLIC_URL")?.replace(/\/$/, "");
+  const https = base?.startsWith("https://") ? base : null;
+  const mode = env("BUTLER_TELEGRAM_MODE") === "polling" || !https ? "polling" : "webhook";
+  const bot = new Bot(api, telegramButler(), {
+    username: me.username ?? "",
+    library: https ? `${https}/?app=telegram` : null,
+    privacy: https ? `${https}/privacy-policy` : null,
+  });
+  telegram = { bot, username: me.username ?? "", secret: await tg.webhookSecret(TG_TOKEN, env("TELEGRAM_WEBHOOK_SECRET")), mode };
+  await bot.setup();
+  if (mode === "webhook") {
+    const hook = { url: `${https}/api/telegram/webhook`, secret_token: telegram.secret, allowed_updates: ALLOWED_UPDATES, max_connections: 10 };
+    for (let wait = 10_000; ; wait = Math.min(wait * 2, 600_000)) {
+      try {
+        await api.call("setWebhook", hook);
+        break;
+      } catch (e) {
+        console.warn(`telegram: couldn't set the webhook (${(e as Error).message}); trying again in ${wait / 1000}s`);
+        await sleep(wait);
+      }
+    }
+  } else {
+    pollTelegram(api, bot);
+  }
+  deliverToTelegram(bot);
+  console.log(`telegram: @${telegram.username} is running (${mode})${await telegramOwner() ? "" : ", waiting to be connected from the website"}`);
+}
+
+/** Without a public https address, the bot asks Telegram for updates instead (long polling). */
+async function pollTelegram(api: tg.Api, bot: Bot) {
+  await api.call("deleteWebhook").catch(() => {});
+  let offset = 0;
+  for (;;) {
+    try {
+      const updates = await api.call<Update[]>("getUpdates", { offset, timeout: 25, allowed_updates: ALLOWED_UPDATES });
+      for (const u of updates) {
+        offset = u.update_id + 1;
+        bot.handle(u);
+      }
+    } catch (e) {
+      console.warn("telegram updates:", (e as Error).message);
+      await sleep(5_000);
+    }
+  }
+}
+
+/** Messages that shouldn't stay in the chat (login codes), and when each gets deleted. */
+const FORGET_KEY = "telegram_forget";
+
+async function forgetLater(message: number, expires: string | null | undefined) {
+  const at = expires && !Number.isNaN(Date.parse(expires)) ? Date.parse(expires) : Date.now() + 30 * 60_000;
+  const list = JSON.parse(await settings.get(FORGET_KEY) ?? "[]") as { id: number; at: number }[];
+  list.push({ id: message, at });
+  await settings.set(FORGET_KEY, JSON.stringify(list.slice(-200)));
+}
+
+async function forgetDue(bot: Bot) {
+  const list = JSON.parse(await settings.get(FORGET_KEY) ?? "[]") as { id: number; at: number }[];
+  const now = Date.now();
+  const due = list.filter((m) => m.at <= now);
+  if (!due.length) return;
+  for (const m of due) await bot.unsay(m.id);
+  await settings.set(FORGET_KEY, JSON.stringify(list.filter((m) => m.at > now)));
+}
+
+/**
+ * Telegram's own inbox: whatever Butler sends to every device (reminders, the brief, notes,
+ * files) and how laptop jobs you started from Telegram are going, shown in the chat.
+ */
+async function deliverToTelegram(bot: Bot) {
+  for (;;) {
+    try {
+      if (!(await telegramOwner())) {
+        await sleep(30_000);
+        continue;
+      }
+      await inbox.checkIn(TG_DEVICE, "telegram");
+      await forgetDue(bot);
+      let due = await inbox.takeDue(TG_DEVICE);
+      if (!due.length) {
+        await inbox.waitForMessage(TG_DEVICE, 25_000);
+        due = await inbox.takeDue(TG_DEVICE);
+      }
+      const alerts = (await settings.get("telegram_alerts")) !== "off";
+      for (const m of due as (inbox.Message & { forget?: boolean; expires_at?: string | null })[]) {
+        const said = m.forget ? null : memory.pushedText(m);
+        if (said) memory.addPushed(said, m.due_at).catch((e) => console.error("chat", String(e).slice(0, 200)));
+        if (!alerts && m.kind !== "status") continue; // /alerts off: your phone and laptop still get it
+        const shown = await bot.push(m).catch((e) => {
+          console.warn("telegram push:", (e as Error).message);
+          return null;
+        });
+        if (shown && m.forget) await forgetLater(shown, m.expires_at);
+      }
+    } catch (e) {
+      console.error("telegram delivery:", String(e).slice(0, 300));
+      await sleep(10_000);
+    }
+  }
+}
+
 // The website: built files, falling back to index.html.
 // Short links in heads-ups: /go/<token> goes to the page, for 30 days.
 app.get("/go/:token", async (c) => {
@@ -2114,6 +2441,7 @@ if (import.meta.main) {
   setInterval(() => resortOld().catch((e) => console.error("resort:", e)), 60_000);
   setInterval(() => links.sweep().catch((e) => console.error("short links:", e)), 6 * 60 * 60_000);
   setInterval(() => transfers.sweep(TRANSFERS_DIR).catch((e) => console.error("transfers:", e)), 60 * 60_000);
+  if (telegramOn()) startTelegram().catch((e) => console.error("telegram:", tg.redact(String(e), TG_TOKEN)));
   if (geminiReady()) console.log("AI providers, in order:", aiProviders().join(", "));
   if (geminiKeys().length) geminiModels().then((m) => console.log("Gemini models, in order:", m.join(", ")));
   Deno.serve({ port: PORT, hostname: env("HOST", "0.0.0.0") }, app.fetch);

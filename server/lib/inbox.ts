@@ -2,7 +2,7 @@
 // Devices check in every few seconds and take whatever is due.
 import { sql } from "./db.ts";
 
-export const DEVICE_KINDS = ["laptop", "phone"] as const;
+export const DEVICE_KINDS = ["laptop", "phone", "telegram"] as const;
 export type DeviceKind = typeof DEVICE_KINDS[number];
 
 export const MESSAGE_KINDS = ["reminder", "note", "clip", "link", "file", "sync", "ring", "task", "stop", "status", "transfer"] as const;
@@ -87,6 +87,11 @@ export async function setLocal(name: string, local: Local | null) {
 export function peers(except: string) {
   return sql<(Device & { local: Local | null })[]>`
     select name, kind, last_seen, local from devices where name <> ${except} order by last_seen desc`;
+}
+
+/** Forgets a device and everything waiting for it (Telegram, when you disconnect it). */
+export async function forgetDevice(name: string) {
+  await sql`delete from devices where name = ${name}`;
 }
 
 export function devices() {
