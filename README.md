@@ -111,7 +111,7 @@ Most "save for later" apps are a pile you never open again. Butler is different 
 </tr>
 </table>
 
-Every feature, with its settings, is in **[docs/features.md](docs/features.md)**.
+Every feature, with its settings, is in **[docs/features.md](docs/features.md)**. Butler in Telegram: **[docs/telegram.md](docs/telegram.md)**.
 
 ## 📸 Screenshots
 

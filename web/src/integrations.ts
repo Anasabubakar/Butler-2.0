@@ -2,7 +2,7 @@
 // and your recipes can use. For each tool you choose whether Butler just does it, asks you
 // first, or leaves it alone, and you can see what Butler used lately.
 import { head, shell } from "./shell";
-import { ago, api, busy, button, fill, h, icon, inlineError, modal, SignedOut, status, tabs, toast } from "./ui";
+import { ago, api, busy, button, fill, h, icon, inlineError, modal, SignedOut, status, tabs, toast, toggle } from "./ui";
 
 type Rule = "auto" | "ask" | "off";
 interface Tool { name: string; description: string; readOnly: boolean; rule: Rule }
@@ -22,7 +22,9 @@ type View = "all" | "accounts" | "other";
 const RULE_NAMES: Record<Rule, string> = { auto: "Just do it", ask: "Ask me first", off: "Off" };
 
 export async function renderIntegrations(app: HTMLElement) {
-  const accounts = h("section", { class: "integ-group" });
+  const googleSlot = h("div", { class: "integ-group" });
+  const telegramSlot = h("div", { class: "integ-group" });
+  const accounts = h("section", { class: "integ-group" }, googleSlot, telegramSlot);
   const other = h("section", { class: "integ-group" });
   const add = button("Add", { kind: "primary", icon: "plus", onclick: () => addConnection(load) });
   let view: View = "all";
@@ -39,7 +41,8 @@ export async function renderIntegrations(app: HTMLElement) {
   ));
   show();
 
-  google(accounts);
+  google(googleSlot);
+  telegram(telegramSlot);
   async function load() {
     let s: McpStatus;
     try {
@@ -113,6 +116,95 @@ async function google(slot: HTMLElement) {
         ` ${new Date(s.backup.at).toLocaleString()}${s.backup.note ? ` · ${s.backup.note}` : ""}`)
       : null,
   ));
+}
+
+interface TelegramStatus {
+  configured: boolean;
+  ready: boolean;
+  username: string | null;
+  connected: boolean;
+  fixed: boolean;
+  alerts: boolean;
+}
+
+/** The Telegram bot: connect it to your Telegram account, and choose whether notes go there too. */
+async function telegram(slot: HTMLElement) {
+  const s = await api<TelegramStatus>("/api/telegram/status").catch(() => null);
+  if (!s) return slot.replaceChildren();
+  const bot = s.username ? `@${s.username}` : "Your Butler bot";
+  const headRow = (state: HTMLElement | null, action: HTMLElement | null) =>
+    h("div", { class: "integ__head" },
+      h("span", { class: "integ__logo" }, icon("send")),
+      h("div", { class: "row__text" }, h("h3", {}, "Telegram"), h("p", { class: "muted small" }, s.ready ? bot : "Chat with Butler in Telegram")),
+      state, action);
+  if (!s.configured || !s.ready) {
+    slot.replaceChildren(h("article", { class: "b2-card integ" },
+      headRow(status("offline", "Not set up"), null),
+      h("p", { class: "muted" }, s.configured
+        ? "The bot is starting, or Telegram didn't accept its token. Check the server log for a line starting with \"telegram:\"."
+        : "Make a bot with @BotFather, then put its token in TELEGRAM_BOT_TOKEN on the server. The steps are in docs/telegram.md.")));
+    return;
+  }
+  if (!s.connected) {
+    const box = h("div", { class: "actions" });
+    const connect = button("Connect Telegram", {
+      kind: "primary", small: true, icon: "send",
+      onclick: async (e) => {
+        const r = await busy(e.currentTarget as HTMLButtonElement, () => api<{ link: string }>("/api/telegram/pair", { method: "POST" }))
+          .catch((err) => (box.replaceChildren(inlineError((err as Error).message)), null));
+        if (!r) return;
+        box.replaceChildren(
+          h("a", { class: "b2-button b2-button--primary b2-button--small", href: r.link, target: "_blank", rel: "noopener" }, icon("external"), `Open ${bot} and tap Start`),
+          h("p", { class: "muted small" }, "The link works once, for 10 minutes. Whoever taps Start with it becomes the only person the bot answers, so don't share it."),
+        );
+        waitForConnect();
+      },
+    });
+    box.append(connect);
+    slot.replaceChildren(h("article", { class: "b2-card integ" },
+      headRow(status("offline", "Not connected"), null),
+      h("p", { class: "muted" }, "Connect your Telegram account so the bot answers you, and only you. Everyone else gets silence."),
+      box));
+    return;
+  }
+  const disconnect = s.fixed ? null : button("Disconnect", {
+    kind: "ghost", small: true,
+    onclick: async (e) => {
+      if (!confirm("Disconnect Telegram? The bot will stop answering you and stop sending you reminders until you connect it again.")) return;
+      await busy(e.currentTarget as HTMLButtonElement, () => api("/api/telegram/unpair", { method: "POST" }).catch(() => {}));
+      telegram(slot);
+    },
+  });
+  slot.replaceChildren(h("article", { class: "b2-card integ" },
+    headRow(status("connected", "Connected"), disconnect),
+    toggle("Reminders and notes here too", "Your reminders, morning brief and Butler's notes also come to Telegram.", s.alerts, async (on) => {
+      await api("/api/telegram/alerts", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ on }) });
+      toast(on ? "Telegram will get your reminders and notes." : "Reminders and notes will skip Telegram.");
+    }),
+    h("ul", { class: "scopes" },
+      scope("chat", "Chat", "Talk or send voice notes, the same as Ask Butler."),
+      scope("library", "Save", "Links, photos and files you send are saved to your library."),
+      scope("search", "Share", `Type ${bot} in any chat to share something you saved.`),
+      scope("laptop", "Laptop", "/laptop with your secret word runs something on your laptop."),
+    ),
+    s.username ? h("p", { class: "integ__note" }, h("a", { href: `https://t.me/${s.username}`, target: "_blank", rel: "noopener" }, `Open ${bot} in Telegram`)) : null,
+    s.fixed ? h("p", { class: "muted small" }, "Locked to TELEGRAM_OWNER_ID on the server.") : null,
+  ));
+
+  /** Shows Connected as soon as you tap Start in Telegram (checks for 10 minutes). */
+  function waitForConnect() {
+    const until = Date.now() + 10 * 60_000;
+    const check = async () => {
+      if (!slot.isConnected || Date.now() > until) return;
+      const now = await api<TelegramStatus>("/api/telegram/status").catch(() => null);
+      if (now?.connected) {
+        toast("Telegram is connected.");
+        return telegram(slot);
+      }
+      setTimeout(check, 3000);
+    };
+    setTimeout(check, 3000);
+  }
 }
 
 /** Google's message starts lowercase, the way Butler talks; on the website it's a sentence. */
