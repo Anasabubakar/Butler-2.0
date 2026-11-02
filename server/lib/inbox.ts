@@ -29,6 +29,7 @@ export interface Message {
   due_at: string;
   job: string | null; // for a 'task': its laptop job (see jobs.ts)
   forget?: boolean; // shown once: deleted as soon as the device has it (a login code)
+  expires_at?: string | null; // when it stops being any use
 }
 
 export interface NewMessage {
@@ -107,7 +108,7 @@ export async function takeDue(name: string) {
       order by due_at
       limit 20
       for update skip locked)
-    returning id, created_at, from_device, kind, body, url, item_id, due_at, job, forget`;
+    returning id, created_at, from_device, kind, body, url, item_id, due_at, job, forget, expires_at`;
   if (due.some((m) => m.forget || FORGET_ONCE_DELIVERED.includes(m.kind))) {
     await sql`delete from messages where (forget or kind = any(${FORGET_ONCE_DELIVERED}::text[])) and delivered_at is not null`;
   }
