@@ -226,3 +226,53 @@ async function askBackup<T>(
   const data = await res.json() as { choices?: { message?: { content?: string } }[] };
   return check(model, data.choices?.[0]?.message?.content ?? "", schema);
 }
+
+export interface Searched {
+  text: string;
+  sources: { title: string; url: string }[];
+}
+
+/**
+ * Asks Gemini with Google Search switched on, for questions about the world right now ("what
+ * can I gain from this event?"). Plain text back, with the pages it read. Gemini only: the
+ * backups can't search.
+ */
+export async function searchGemini(prompt: string, options: AskOptions = {}): Promise<Searched> {
+  const errors: string[] = [];
+  for (const [i, key] of geminiKeys().entries()) {
+    for (const model of await geminiModels(key)) {
+      const res = await fetch(`${base()}/models/${model}:generateContent`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          ...(options.system && { systemInstruction: { parts: [{ text: options.system }] } }),
+          tools: [{ google_search: {} }],
+          generationConfig: { temperature: 0.3 },
+        }),
+        signal: AbortSignal.timeout(options.timeoutMs ?? 60_000),
+      }).catch((e) => new Response(String(e), { status: 599 }));
+      if (!res.ok) {
+        errors.push(`Gemini key ${i + 1} ${model}: ${res.status} ${(await res.text()).slice(0, 200)}`);
+        continue;
+      }
+      const data = await res.json() as {
+        candidates?: {
+          content?: { parts?: { text?: string }[] };
+          groundingMetadata?: { groundingChunks?: { web?: { uri?: string; title?: string } }[] };
+        }[];
+      };
+      const first = data.candidates?.[0];
+      const text = first?.content?.parts?.map((p) => p.text ?? "").join("").trim() ?? "";
+      if (!text) {
+        errors.push(`Gemini key ${i + 1} ${model}: empty answer`);
+        continue;
+      }
+      const sources = (first?.groundingMetadata?.groundingChunks ?? [])
+        .flatMap((c) => c.web?.uri?.startsWith("https://") ? [{ title: c.web.title ?? "", url: c.web.uri }] : [])
+        .filter((s, n, all) => all.findIndex((o) => o.url === s.url) === n).slice(0, 5);
+      return { text, sources };
+    }
+  }
+  throw new Error(errors.join(" | ") || "web search needs a Gemini key on the server");
+}
