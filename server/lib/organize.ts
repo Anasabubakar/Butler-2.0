@@ -189,7 +189,7 @@ function chatOllama(item: RawItem): Promise<Response> {
       options: { temperature: 0 },
       messages: [{
         role: "user",
-        content: describe(item) + "\n\nAnswer with JSON.",
+        content: describe(item, SHORT) + "\n\nAnswer with JSON.",
         ...(item.image && { images: [item.image.data] }),
       }],
     }),
