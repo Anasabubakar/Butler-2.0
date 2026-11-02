@@ -148,7 +148,7 @@ const DEADLINE = /deadline|due (?:date|by|on)|\bby (?:mon|tues|wednes|thurs|fri|
 const ACTION = /verify (?:your )?identity|\bkyc\b|liveness|complete (?:your )?(?:profile|verification|onboarding|kyc)|needs? (?:your|you to)|awaiting your|signature (?:required|requested)|please (?:sign|review|confirm|respond)|(?:offer|proposal|agreement|contract) (?:for|is|has been)|offered|(?:portal|account) is (?:ready|active|set up)/i;
 
 /** Email that is plainly noise, from its subject: newsletters, digests, sales, receipts, welcomes, tips. */
-const NOISE = /newsletter|digest|round-?up|recap|\b(?:daily|weekly|monthly)\b|this (?:week|month) (?:in|at|on)|what'?s new|\d+% off|\bsale\b|deals?\b|black friday|cyber monday|limited time|last chance to save|free (?:trial|shipping)|\bwebinar\b|receipt|order (?:confirm|#|no)|thanks? (?:you )?for (?:your (?:order|purchase)|shopping|signing up|joining|subscribing)|welcome (?:to|aboard)|tips?\b|people you may know|new (?:followers?|likes?|connections?)|liked your|commented on|mentioned you in a (?:tweet|post)|survey|feedback|rate (?:us|your)|review your (?:order|purchase|stay)/i;
+const NOISE = /newsletter|digest|round-?up|recap|\b(?:daily|weekly|monthly)\b|this (?:week|month) (?:in|at|on)|what'?s new|\d+% off|\bsale\b|\bdeals\b|black friday|cyber monday|limited time|last chance to save|free (?:trial|shipping)|\bwebinar\b|receipt|order (?:confirm|#|no)|thanks? (?:you )?for (?:your (?:order|purchase)|shopping|signing up|joining|subscribing)|welcome (?:to|aboard)|\btips?\b|people you may know|new (?:followers?|likes?|connections?)|liked your|commented on|mentioned you in a (?:tweet|post)|survey|rate (?:us|your)|review your (?:order|purchase|stay)/i;
 
 /** Discount and invite codes aren't login codes. */
 const PROMO = /promo|coupon|discount|voucher|% off|\boff your\b|referral code|invite code|gift code|redeem/i;
@@ -181,7 +181,7 @@ export function classify(m: Pick<Fetched, "from" | "subject" | "bulk">, body: st
   if (!m.bulk && fromPerson(m.from)) return { kind: "personal" };
   // Anything else may still matter; the AI decides. Not noise, and never an email that talks
   // about a code the rules couldn't find, so a login code can't reach the AI that way.
-  if (NOISE.test(head) || PROMO.test(early) || (CODE_WORDS.test(early) && !PROMO.test(early))) return { kind: "skip" };
+  if NOISE.test(head) || PROMO.test(early) || CODE_WORDS.test(early) return { kind: "skip" };
   return { kind: "other" };
 }
 
