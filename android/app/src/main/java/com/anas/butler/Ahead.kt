@@ -142,11 +142,11 @@ object Ahead {
         val alarms = context.getSystemService(AlarmManager::class.java)
         val pending = alarmIntent(context, key)
         // Exact when Android allows it (USE_EXACT_ALARM on 13+); otherwise within a few minutes.
-        if (Build.VERSION.SDK_INT < 31 || alarms.canScheduleExactAlarms()) {
-            alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
-        } else {
-            alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
-        }
+        val exact = Build.VERSION.SDK_INT < 31 || alarms.canScheduleExactAlarms()
+        runCatching {
+            if (exact) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
+            else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending)
+        }.onFailure { alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending) }
     }
 
     private fun cancel(context: Context, key: String) {
