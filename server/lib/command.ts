@@ -4,7 +4,7 @@ import { z } from "npm:zod@4.3.6";
 import { askGemini, type Picture } from "./gemini.ts";
 import { type Teasing, voiceRules } from "./persona.ts";
 
-export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "screen", "recall", "brief", "inbox", "tasks", "recap", "spend", "spending", "focus", "unfocus", "ring", "tool", "recipe", "edit", "answer"] as const;
+export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "screen", "recall", "brief", "inbox", "tasks", "recap", "spend", "spending", "focus", "unfocus", "ring", "tool", "recipe", "edit", "roast", "research", "readmail", "fact", "answer"] as const;
 export const APPS = ["whatsapp", "telegram"] as const;
 export const CONTENTS = ["text", "clipboard", "link", "screen"] as const;
 
@@ -158,7 +158,8 @@ Choose exactly one action:
 - "calendar": an event for their calendar. text = the event title, when = start, end = end (1 hour after start unless said).
 - "send": send something to another of their devices. target = "laptop", "phone" or a device name;
   content = "clipboard" (what they copied), "link" (the page they're on), "screen" (the screenshot) or "text" (then text = the words to send).
-- "save": keep a note in their library. text = the note.
+- "save": keep a note in their library. text = the note. Also when they're answering your Friday check-in about what they
+  got done this week: text = "Week of <the date>: " and their answer in their own words.
 - "email": an email to someone. person = their name or email address as said, subject = a short subject,
   text = the email body, written as the owner in their own voice, not yours (no signature), attach_screen = true if they want the screenshot attached ("send this").
 - "message": a WhatsApp or Telegram message to someone. app = "whatsapp" or "telegram", person = who, as said,
@@ -183,6 +184,16 @@ Choose exactly one action:
 - "unfocus": they want to stop or cancel the focus timer.
 - "ring": they can't find a device and want it to ring loudly, like "where's my phone?" or "ring my phone".
   target = "phone", "laptop" or a device name (the other device unless they say).
+- "roast": they want you to roast, yab, drag or flame them ("roast me", "yab me like you've never done before"), or to go
+  harder on a roast you just gave ("too weak, go deeper"). text = how they asked.
+- "research": they want something looked up on the web or researched, like "research this", "what can I gain from the event?",
+  "who is the speaker?" or "is this company legit?". text = the full question, with what "this" or "the event" is spelled out
+  from the conversation or the message they're answering, e.g. "What can I gain from attending TIMA Connect Live 2026 in Lagos?".
+- "readmail": they want an email (and what's attached to it) read or summarised for them, like "read it for me",
+  "what does the PDF say?" or "summarise Ada's email". text = a Gmail search that finds it, from what they said or the message
+  they're answering, like "from:abdulbasit has:attachment" or "subject:(market research)".
+- "fact": they want a fun fact or "did you know", or more on one you told them ("tell me more", "yes" to "want to know more?",
+  "rabbit hole"). Put it in reply: a new surprising true fact, or 3 to 5 short lines going deeper on the one they asked about.
 ${ctx.tools?.length ? `- "tool": use one of the tools from their connected services below, when it fits what they asked better than
   the actions above. tool = its name exactly as listed, args = its arguments as a JSON object, using what they said.
   reply = what you're about to do, e.g. "checking your Notion tasks". Never invent a tool or an argument it doesn't list.
