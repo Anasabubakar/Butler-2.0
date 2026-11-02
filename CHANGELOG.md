@@ -6,25 +6,45 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 
 ## v0.3.0 (2026-11-02)
 
-- **Faster local organizing.** On the CPU-only server the local model writes about 6 tokens a second and reads about 17, so Butler now sends it less to read (long pages, video notes, shared text and collection lists are cut down), caps how much it may write, asks Ollama for one fixed context size so the model is not reloaded between requests, and answers a repeated save from memory instead of asking again.
-- Connect Telegram also offers **Open in Telegram Web** and shows the `/start` code to type yourself, for when the link opens the wrong Telegram.
-- **Butler in Telegram.** A private Telegram bot that only answers you: talk or send voice notes like Ask Butler, save links, photos, files and forwarded messages to your library, search it with `/find` or `@bot` in any chat, approve emails with a tap, run laptop commands with your secret word (the message is deleted right after), and get reminders (with Snooze), the morning brief and Butler's notes in the chat. Connect it under Integrations; the Butler Library button opens your library inside Telegram. Butler also serves a privacy policy at `/privacy-policy`. See [docs/telegram.md](docs/telegram.md).
+### Butler texts you first
+
 - **Email heads-ups.** Butler reads new email and texts what matters: login codes and reset links (shown once, never kept, never sent to an AI), failed payments and bills with the pay link, security alerts, deadlines with "want me to put that on your calendar?", people who need an answer, and events an hour before they start with the place and ticket or join link (from email and Google Calendar, told once). Newsletters and receipts stay quiet, phishing that fails Gmail's sender check is called out, and anything that can wait is held overnight.
 - **Heads-ups look like texts.** The link's picture and title, a tap to open it, short `/go/` links instead of long tracking ones, and a Copy code button for login codes. Secret links are never shortened or previewed.
 - **SMS codes to the laptop.** Switch it on in the phone's Settings and a login code that arrives by text pops up on your laptop, ready to copy, then disappears. Needs the new APK and `update-pet`.
 - **Daily touches.** A "did you know" every morning ("want to know more?"), AI headlines after the brief, and a Friday check-in whose answer goes in your library. Each has a switch in Settings.
 - **Roast me, research this, read it for me.** A roast built on what Butler knows about you, web research with sources, and an email read for you with its PDF attachment.
-- Butler is now licensed under AGPL-3.0. The logos and the Little Butler character stay all rights reserved.
+
+### Butler in Telegram
+
+- **Butler in Telegram.** A private Telegram bot that only answers you: talk or send voice notes like Ask Butler, save links, photos, files and forwarded messages to your library, search it with `/find` or `@bot` in any chat, approve emails with a tap, run laptop commands with your secret word (the message is deleted right after), and get reminders (with Snooze), the morning brief and Butler's notes in the chat. Connect it under Integrations; the Butler Library button opens your library inside Telegram. Butler also serves a privacy policy at `/privacy-policy`. See [docs/telegram.md](docs/telegram.md).
+- Connect Telegram also offers **Open in Telegram Web** and shows the `/start` code to type yourself, for when the link opens the wrong Telegram.
+
+### Talking to Butler
+
 - **Butler remembers.** Ask Butler sees the last two days of your conversation, so follow-ups like "and tomorrow?" work, and learns lasting facts about you (people, preferences, plans) for every reply. See, add and forget them in Settings → Memory; switch learning off with Learn about me. Passwords, codes and card numbers are never kept.
 - **Reply to the pet.** Every answer in the phone and laptop pet's bubble has a reply box under it.
 - **Replies follow on.** Butler's own notes (the morning brief, recipes, price drops, cheers) and reminders now join your conversation as they arrive, so "nah", "yes do it" or "later" answers what Butler last said, whether you use the bubble's reply box, Ask Butler or your voice. Replying to an old note works too. A screenshot sent with a reply is only background now, so Butler no longer answers "nah" with what's on your screen.
+- **Chat about one save.** Ask Butler about this, on each library card and in the phone app's save screen: questions answered from the save's full content, and orders carried out with it (reminders, events, email, connected apps, renaming it).
+
+### Phone and laptop
+
 - **Send real files between phone and laptop.** Send to phone / Send to laptop now sends the actual file: the photo open in Gallery, files selected in Files on either device, or the file open in a laptop viewer. On the phone the pet presses the app's Share button and picks Butler's new **Send to laptop** for you; on the laptop, right-click → Scripts → Send to phone works too. Files go directly over the same Wi-Fi or hotspot with no internet (encrypted, only your paired laptop), else through your Butler server, resuming after drops. The pet shows a progress bar over its head while files arrive, then where they were saved, with Open folder.
 - **File sending fixed.** Send to laptop from the phone's Share menu failed because Android took away the permission to read the files the moment the Share screen closed; the files are now opened before it closes (photos still in the cloud are copied first). Send to phone on the laptop waits longer for Files to copy the selection, gives Files the keyboard first, and says what to try if it still can't see it. Either side now falls back to the Butler server when the Wi-Fi link breaks, and the laptop logs why a send failed in `~/.local/state/butler/link.log`.
 - **Laptop control says why.** A command the laptop doesn't pick up in 10 minutes (asleep, locked out, offline) is dropped with a reason on the phone and website, instead of vanishing. Sending to a laptop that hasn't checked in lately warns you straight away, and a running job that goes quiet for 25 minutes is called out. The laptop also retries its final report, waits longer for slow AI answers, and no longer loses commands when a check-in drops halfway.
-- **Chat about one save.** Ask Butler about this, on each library card and in the phone app's save screen: questions answered from the save's full content, and orders carried out with it (reminders, events, email, connected apps, renaming it).
 - **No more black screenshots.** When an app hides its screen (banking, Netflix, private tabs) the phone saves the link alone and says why. On the laptop, a window that comes out empty is taken again from the screen, and see-through edges go white instead of black.
 - **Words when the picture is hidden.** If a phone app hides or blacks out its picture, Save this keeps the words on screen with the link. Never from banking or money apps, and never password fields.
+
+### Google
+
 - **Calendar, tasks and email that tell the truth.** When Google fails (expired sign-in, a permission not given, an API switched off) the brief says what went wrong and how to fix it, instead of "nothing on your calendar today". The website shows "Needs you" with a Connect Google again button. The brief now reads every calendar you show in Google Calendar, your Google Tasks (due today and overdue) and unread email, and works for other days ("what's on Friday?"). Ask Butler answers "any important emails?" and "what are my tasks?" from the real thing, and never guesses an empty day. Press Connect Google once more to allow Tasks and all calendars.
+
+### Speed
+
+- **Faster local organizing.** On the CPU-only server the local model writes about 6 tokens a second and reads about 17, so Butler now sends it less to read (long pages, video notes, shared text and collection lists are cut down), caps how much it may write, asks Ollama for one fixed context size so the model is not reloaded between requests, and answers a repeated save from memory instead of asking again.
+
+### License
+
+- Butler is now licensed under AGPL-3.0. The logos and the Little Butler character stay all rights reserved.
 
 ## v0.2.0 (2026-10-26)
 
