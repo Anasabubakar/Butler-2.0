@@ -38,7 +38,32 @@ let client: Anthropic | undefined; // created on first use; reads ANTHROPIC_API_
 /** "local" uses a model running in Ollama on the same machine; anything else uses Claude. */
 const useLocal = () => Deno.env.get("BUTLER_AI") === "local";
 
-export function organize(item: RawItem): Promise<OrganizedItem> {
+// The same item (same words, same picture, same known collections) gets the same answer, so a
+// repeat is answered from memory instead of costing another ~20 s on the CPU. Asking while the first
+// is still running shares that one answer. Failures are not kept, so they can be retried.
+const CACHE_SIZE = 200;
+const answers = new Map<string, Promise<OrganizedItem>>();
+
+async function cacheKey(item: RawItem): Promise<string> {
+  const which = [useLocal() ? localModel() : Deno.env.get("BUTLER_MODEL"), item.image && useLocal() && geminiReady() ? "gemini" : ""];
+  const text = JSON.stringify([which, describe(item), item.image?.mediaType, item.image?.data]);
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export async function organize(item: RawItem): Promise<OrganizedItem> {
+  const key = await cacheKey(item);
+  let answer = answers.get(key);
+  if (!answer) {
+    answer = organizeFresh(item);
+    answers.set(key, answer);
+    answer.catch(() => answers.delete(key));
+    if (answers.size > CACHE_SIZE) answers.delete(answers.keys().next().value!);
+  }
+  return structuredClone(await answer);
+}
+
+function organizeFresh(item: RawItem): Promise<OrganizedItem> {
   // Pictures go to Gemini when there's a key, since the local model may not see.
   if (item.image && useLocal() && geminiReady()) return organizeWithGemini(item);
   return useLocal() ? organizeLocally(item) : organizeWithClaude(item);
@@ -50,21 +75,26 @@ async function organizeWithGemini(item: RawItem): Promise<OrganizedItem> {
   return tidy(await askGemini(prompt, item.image!, Organized), item.collections);
 }
 
-function describe(item: RawItem): string {
+/** How much of each field goes in the prompt. The local model reads ~17 tokens a second on 2 CPU cores, so it gets less. */
+const FULL = { page: 3000, video: 3000, body: 4000, collections: Infinity };
+const SHORT = { page: 1200, video: 1200, body: 1500, collections: 40 };
+
+function describe(item: RawItem, limits = FULL): string {
   const facts = [
     `kind: ${item.kind}`,
     item.platform && `platform: ${item.platform}`,
     item.url && `url: ${item.url}`,
     item.pageTitle && `page title: ${item.pageTitle}`,
     item.pageDescription && `page description: ${item.pageDescription}`,
-    item.pageText && `what the page says: ${item.pageText.slice(0, 3000)}`,
-    item.details && `what the video says: ${item.details.slice(0, 3000)}`,
-    item.body && `shared text: ${item.body.slice(0, 4000)}`,
+    item.pageText && `what the page says: ${item.pageText.slice(0, limits.page)}`,
+    item.details && `what the video says: ${item.details.slice(0, limits.video)}`,
+    item.body && `shared text: ${item.body.slice(0, limits.body)}`,
     item.note && `owner's note: ${item.note}`,
   ].filter(Boolean).join("\n");
 
-  const known = item.collections?.length
-    ? `\n\nCollections already in the library: ${item.collections.map((c) => `"${c}"`).join(", ")}. ` +
+  const collections = item.collections?.slice(0, limits.collections);
+  const known = collections?.length
+    ? `\n\nCollections already in the library: ${collections.map((c) => `"${c}"`).join(", ")}. ` +
       "If one of them is the same topic, use it exactly as written instead of making a near-duplicate."
     : "";
 
@@ -142,6 +172,10 @@ function organizeLocally(item: RawItem): Promise<OrganizedItem> {
 
 const ollamaUrl = () => Deno.env.get("OLLAMA_URL") ?? "http://ollama:11434";
 const localModel = () => Deno.env.get("BUTLER_LOCAL_MODEL") ?? "gemma3:4b";
+/** Context size to ask Ollama for. Ollama reloads the model whenever a request asks for a different size, so every caller (Butler, LiteLLM) should use the same one. */
+const localContext = () => Number(Deno.env.get("BUTLER_LOCAL_CTX")) || 8192;
+/** Most tokens the local model may write. The JSON answer is ~130; the cap only stops a rambling model (on 2 cores a token takes ~170 ms). */
+const localMaxTokens = () => Number(Deno.env.get("BUTLER_LOCAL_MAX_TOKENS")) || 320;
 
 /** Downloads the model the first time it's needed (a few GB, once). */
 function ensureModel(): Promise<void> {
@@ -181,10 +215,10 @@ function chatOllama(item: RawItem): Promise<Response> {
       model: localModel(),
       stream: false,
       format: z.toJSONSchema(Organized),
-      options: { temperature: 0 },
+      options: { temperature: 0, num_ctx: localContext(), num_predict: localMaxTokens() },
       messages: [{
         role: "user",
-        content: describe(item) + "\n\nAnswer with JSON.",
+        content: describe(item, SHORT) + "\n\nAnswer with JSON.",
         ...(item.image && { images: [item.image.data] }),
       }],
     }),

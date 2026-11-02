@@ -48,6 +48,8 @@ Butler can organize saves with a free model running on the VPS itself, through [
 
 What to expect on a 4-core ARM VM with no GPU: saving is still instant, and organizing happens in the background, one item at a time. Each item takes roughly half a minute, and an image takes longer. Titles and tags are decent, but summaries are plainer than Claude's and the model makes more mistakes. To switch to Claude later, change those two lines back.
 
+To keep it quick on a small CPU, Butler sends the local model a shortened prompt, caps its answer (`BUTLER_LOCAL_MAX_TOKENS`, default 320), and asks Ollama for one fixed context size (`BUTLER_LOCAL_CTX`, default 8192). Ollama reloads the model whenever a request asks for a different size, so if other tools (such as a LiteLLM gateway) share the same Ollama, give them the same `num_ctx` and set `OLLAMA_CONTEXT_LENGTH` to it. A repeated save is answered from memory.
+
 ## Automatic deploys
 
 Once Butler runs on the VPS, GitHub can update it after every change to `main` that passes CI. It uses its own SSH key, which the server only lets run `deploy/update.sh`, so a leaked key can redeploy Butler but can't open a shell.
