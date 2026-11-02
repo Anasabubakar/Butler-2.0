@@ -291,7 +291,8 @@ app.post("/api/inbox", async (c) => {
   }
   await jobs.pickedUp(due, device);
   // What Butler pushed goes into the conversation as it reaches you, so a reply follows on.
-  for (const m of due) {
+  // Codes and reset links are shown once and never kept.
+  for (const m of due.filter((m) => !m.forget)) {
     const said = memory.pushedText(m);
     if (said) memory.addPushed(said, m.due_at).catch((e) => console.error("chat", String(e).slice(0, 200)));
   }
