@@ -143,6 +143,9 @@ const EVENT = /you'?re (?:registered|going|in|confirmed|attending)|registration 
 const DEADLINE = /deadline|due (?:date|by|on)|\bby (?:mon|tues|wednes|thurs|fri|satur|sun)day\b|before (?:the )?(?:\d{1,2}(?:st|nd|rd|th)? |jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|last (?:day|chance)|will be (?:dropped|removed|cancell?ed|deactivated|suspended|deleted|forfeited|deferred)|action required|required action|must (?:complete|submit|log ?in|register|confirm)|expires? (?:on|at)|closes? (?:on|at)|resubmit|haven'?t (?:logged|signed) in|not (?:yet )?(?:logged|signed) in/i;
 const ACTION = /verify (?:your )?identity|\bkyc\b|liveness|complete (?:your )?(?:profile|verification|onboarding|kyc)|needs? (?:your|you to)|awaiting your|signature (?:required|requested)|please (?:sign|review|confirm|respond)|(?:offer|proposal|agreement|contract) (?:for|is|has been)|offered|(?:portal|account) is (?:ready|active|set up)/i;
 
+/** Discount and invite codes aren't login codes. */
+const PROMO = /promo|coupon|discount|voucher|% off|\boff your\b|referral code|invite code|gift code|redeem/i;
+
 export interface Sorted {
   kind: Kind;
   code?: string;
@@ -157,7 +160,7 @@ export function classify(m: Pick<Fetched, "from" | "subject" | "bulk">, body: st
   const early = `${m.subject}\n${body.slice(0, 600)}`;
   const all = `${m.subject}\n${body.slice(0, 5000)}`;
   const where = m.bulk ? head : all;
-  if (CODE_WORDS.test(early) && !RESET.test(head)) {
+  if (CODE_WORDS.test(m.bulk ? head : early) && !RESET.test(head) && !PROMO.test(early)) {
     const code = findCode(m.subject, body);
     if (code) return { kind: "code", code };
   }
@@ -286,7 +289,7 @@ ${ctx.attachments?.length ? `Attached: ${ctx.attachments.join(", ")}\n` : ""}
 Decide:
 - worth: true only if they'd want a text about it now: a failed or declined payment, an invoice or bill due, a subscription about
   to lapse; a security alert (new sign-in, withdrawal request, password changed); a deadline or required step with a real
-  consequence; an event they're registered for or invited to; a real person writing to them personally who needs an answer
+  consequence; an event they registered for or were personally invited to; a real person writing to them personally who needs an answer
   or action; an offer, deal or agreement for their work. false for newsletters, marketing, digests, receipts for things that
   went fine, "thanks for signing up", and anything safe to ignore.
 - line: the heads-up, one or two short sentences, lowercase casual texting style. Lead with who and what, then what happens
@@ -295,7 +298,8 @@ Decide:
   or they'll defer your registration to next term". No greeting, no sign-off, no links (they're added for you), no jokes or
   teasing (money, security and deadlines are serious). Never repeat a password, code or full card number.
 - link: the number of the one link they'd tap to act on it (pay, update card, join, ticket, log in, view), or null.
-- kind: "event" if it's an event they're attending or invited to with a start time; "deadline" if there's a date by which
+- kind: "event" if it's an event with a start time that they registered for, have a ticket to, or were personally invited
+  to (not marketing that advertises an event to everyone); "deadline" if there's a date by which
   they must do something; otherwise "other".
 - title, start, place: for an event only: its short name, start time (ISO 8601 with offset) and venue ("online" for a call).
 - due: for a deadline only: when it is (ISO 8601 with offset).
