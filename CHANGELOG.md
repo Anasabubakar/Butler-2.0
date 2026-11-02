@@ -4,6 +4,8 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 
 ## Unreleased
 
+- **Reminders and events ring with mobile data off.** While online, the phone keeps a copy of the next two days of reminders and events (refreshed every 5 minutes while the pet runs, and with each background sync) and sets an alarm for each. If Butler can't reach the phone when the moment comes, the phone shows it by itself. Whichever comes first is shown; the other is skipped. New emails, codes and messages still need internet: those can't be known ahead. Needs the new APK.
+
 ## v0.3.1 (2026-11-02)
 
 Email heads-ups now cover any important email, not only the kinds Butler had rules for.
