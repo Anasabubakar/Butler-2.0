@@ -4,6 +4,8 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 
 ## Unreleased
 
+## v0.3.0 (2026-11-02)
+
 - **Faster local organizing.** On the CPU-only server the local model writes about 6 tokens a second and reads about 17, so Butler now sends it less to read (long pages, video notes, shared text and collection lists are cut down), caps how much it may write, asks Ollama for one fixed context size so the model is not reloaded between requests, and answers a repeated save from memory instead of asking again.
 - Connect Telegram also offers **Open in Telegram Web** and shows the `/start` code to type yourself, for when the link opens the wrong Telegram.
 - **Butler in Telegram.** A private Telegram bot that only answers you: talk or send voice notes like Ask Butler, save links, photos, files and forwarded messages to your library, search it with `/find` or `@bot` in any chat, approve emails with a tap, run laptop commands with your secret word (the message is deleted right after), and get reminders (with Snooze), the morning brief and Butler's notes in the chat. Connect it under Integrations; the Butler Library button opens your library inside Telegram. Butler also serves a privacy policy at `/privacy-policy`. See [docs/telegram.md](docs/telegram.md).
