@@ -54,6 +54,28 @@ test("email is sorted by rules: codes, links, money, security, events, deadlines
   assert.equal(sort("Shop <deals@shop.com>", "50% off", "Grab it now", true), "skip");
 });
 
+test("any other email that isn't plainly noise goes to the AI to judge", () => {
+  const sort = (from: string, subject: string, body: string, bulk = false) => classify(mail(from, subject, bulk), body).kind;
+  assert.equal(sort("Air Peace <noreply@flyairpeace.com>", "Your flight P47121 has been rescheduled", "New departure 14:20.", true), "other");
+  assert.equal(sort("UoPeople <admissions@uopeople.edu>", "Your application decision", "We are pleased to tell you...", true), "other");
+  assert.equal(sort("DHL <noreply@dhl.com>", "We couldn't deliver your parcel", "We will try again tomorrow."), "other");
+  assert.equal(sort("FIRS <no-reply@firs.gov.ng>", "Notice about your tax record", "Please see the attached notice."), "other");
+});
+
+test("noise stays quiet without asking the AI", () => {
+  const sort = (from: string, subject: string, body: string, bulk = false) => classify(mail(from, subject, bulk), body).kind;
+  assert.equal(sort("Medium <noreply@medium.com>", "Your daily digest", "Stories for you", true), "skip");
+  assert.equal(sort("Jumia <no-reply@jumia.com>", "Thanks for your order", "We got it."), "skip");
+  assert.equal(sort("Notion <team@notion.so>", "Welcome to Notion", "Here's how to start.", true), "skip");
+  assert.equal(sort("Shop <no-reply@shop.com>", "Black Friday is here", "Everything must go", true), "skip");
+  assert.equal(sort("LinkedIn <notifications@linkedin.com>", "People you may know", "Add them", true), "skip");
+});
+
+test("an email about a code the rules can't read never goes to the AI", () => {
+  const sort = (from: string, subject: string, body: string) => classify(mail(from, subject), body).kind;
+  assert.equal(sort("App <no-reply@app.com>", "Sign in", "Your verification code is in the picture below."), "skip");
+});
+
 test("discount codes are not login codes", () => {
   assert.equal(classify(mail("Shop <deals@shop.com>", "Your code inside", true), "Use code SAVE20 for 20% off").kind, "skip");
   assert.notEqual(classify(mail("Shop <n@shop.com>", "Hi", false), "Your promo code is SAVE20").kind, "code");
