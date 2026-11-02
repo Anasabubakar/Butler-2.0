@@ -1085,10 +1085,7 @@ class PetService : Service() {
             .addAction(0, getString(R.string.notify_view), tap)
             .setContentTitle(title)
             .setContentText(text)
-            .setStyle(
-                if (picture != null) NotificationCompat.BigPictureStyle().bigPicture(picture).setSummaryText(caption ?: text)
-                else NotificationCompat.BigTextStyle().bigText(text),
-            )
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setAutoCancel(true)
             .setContentIntent(tap)
