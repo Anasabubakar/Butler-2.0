@@ -39,6 +39,7 @@ import * as sync from "./lib/sync.ts";
 import * as memory from "./lib/memory.ts";
 import * as transfers from "./lib/transfers.ts";
 import * as alerts from "./lib/alerts.ts";
+import * as daily from "./lib/daily.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -1646,6 +1647,55 @@ async function briefIfDue(now = new Date()) {
   const body = brief.compose(await brief.gather(now, timeZone, env("PUBLIC_URL")), now, timeZone);
   await inbox.send(devices, { from_device: "Butler", kind: "note", body });
   console.log(`brief: sent to ${devices.join(", ")}`);
+  await headlinesNow().catch((e) => console.warn("headlines:", String(e).slice(0, 200)));
+}
+
+/** The topics whose headlines come after the morning brief (BUTLER_NEWS, "off" for none). */
+const newsTopics = () =>
+  (env("BUTLER_NEWS", "AI")!).split(",").map((t) => t.trim()).filter((t) => t && t.toLowerCase() !== "off").slice(0, 3);
+
+/** Sends the day's headlines on your topics as their own note, so the brief stays short. */
+async function headlinesNow() {
+  const topics = newsTopics();
+  if (!topics.length) return;
+  const found = await daily.headlines(topics);
+  await tellEverywhere(await daily.headlinesNote(found, topics, geminiReady(), await teasing()));
+}
+
+const FACT_AT = env("BUTLER_FACT_AT", "10:00")!;
+const CHECKIN_AT = env("BUTLER_CHECKIN_AT", "17:00")!;
+
+/** A "did you know" every day at BUTLER_FACT_AT your time, never the same topic twice in a while. */
+async function factIfDue(now = new Date()) {
+  if (env("BUTLER_FACT") === "off" || !geminiReady()) return;
+  if (!(await prefs.load().catch(() => prefs.DEFAULTS)).funFact) return;
+  const local = localIso(now, await ownerZone());
+  const day = local.slice(0, 10);
+  if (local.slice(11, 16) < FACT_AT || local.slice(11, 16) >= "21:00" || await settings.get("fact_sent_on") === day) return;
+  await settings.set("fact_sent_on", day);
+  let recent: string[] = [];
+  try {
+    recent = JSON.parse(await settings.get("fact_topics") ?? "[]");
+  } catch { /* start again */ }
+  const fact = await daily.funFact(recent, await teasing());
+  await settings.set("fact_topics", JSON.stringify(daily.rememberTopic(recent, fact.topic)));
+  await tellEverywhere(fact.text);
+}
+
+/** Friday at BUTLER_CHECKIN_AT your time: what did you get done this week? */
+async function checkInIfDue(now = new Date()) {
+  if (env("BUTLER_CHECKIN") === "off") return;
+  if (!(await prefs.load().catch(() => prefs.DEFAULTS)).checkIn) return;
+  const timeZone = await ownerZone();
+  const local = localIso(now, timeZone);
+  const day = local.slice(0, 10);
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "long" }).format(now);
+  if (weekday !== "Friday" || local.slice(11, 16) < CHECKIN_AT || local.slice(11, 16) >= "22:00") return;
+  if (await settings.get("checkin_sent_on") === day) return;
+  await settings.set("checkin_sent_on", day);
+  const [{ n }] = await db.sql<{ n: number }[]>`
+    select count(*)::int as n from items where created_at >= ${new Date(now.getTime() - 7 * 86_400_000)}`;
+  await tellEverywhere(daily.checkInNote(Math.floor(now.getTime() / (7 * 86_400_000)), n));
 }
 
 const RECAP_AT = env("BUTLER_RECAP_AT", "18:00")!;
@@ -1954,6 +2004,8 @@ if (import.meta.main) {
   setInterval(backUpSoon, 6 * 60 * 60 * 1000);
   setInterval(() => briefIfDue().catch((e) => console.error("brief:", e)), 5 * 60_000);
   setInterval(() => recapIfDue().catch((e) => console.error("recap:", e)), 5 * 60_000);
+  setInterval(() => factIfDue().catch((e) => console.error("fact:", String(e).slice(0, 300))), 5 * 60_000);
+  setInterval(() => checkInIfDue().catch((e) => console.error("check-in:", String(e).slice(0, 300))), 5 * 60_000);
   setInterval(() => recipesIfDue().catch((e) => console.error("recipes:", e)), 60_000);
   setInterval(() => recipesOnEmail().catch((e) => console.error("recipe email:", e)), 2 * 60_000);
   setInterval(() => headsUps().catch((e) => console.error("heads-up:", String(e).slice(0, 300))), 2 * 60_000);
