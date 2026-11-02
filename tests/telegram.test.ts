@@ -46,7 +46,8 @@ test("the webhook secret comes from the token, is the same each time, and fits T
   assert.notEqual(a, await webhookSecret("999:other"));
   assert.match(a, /^[A-Za-z0-9_-]{1,256}$/);
   assert.ok(!a.includes(TOKEN));
-  assert.equal(await webhookSecret(TOKEN, "my-own-secret-1234"), "my-own-secret-1234");
+  const own = "x".repeat(20); // a stand-in, not a real secret
+  assert.equal(await webhookSecret(TOKEN, own), own);
   assert.equal(await webhookSecret(TOKEN, "bad secret!"), a); // not allowed by Telegram: ignored
 });
 
