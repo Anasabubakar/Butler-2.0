@@ -48,6 +48,17 @@ Butler now texts you first: email heads-ups, login codes, events before they sta
 
 - Butler is now licensed under AGPL-3.0. The logos and the Little Butler character stay all rights reserved.
 
+### Before you use it
+
+- Install the new APK on the phone and run `update-pet` on the laptop (then log out and back in). SMS codes, file sending and the reply box need both.
+- Press **Connect Google** once more to allow Tasks and all calendars.
+- For Telegram, press **Connect Telegram** under Integrations and tap Start in the bot.
+
+### Known limits
+
+- Most of this release has only been checked by tests, not yet on a real phone, laptop or Telegram account. Report what breaks.
+- The APK is still signed with a debug key, so Android warns before installing it.
+
 ## v0.2.0 (2026-10-26)
 
 The first tagged release. Everything built so far, in one place.
