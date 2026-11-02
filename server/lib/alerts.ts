@@ -5,7 +5,10 @@
 //   never kept, and never given to an AI;
 // - a failed payment, a security alert, a deadline, an event or a real person writing goes to
 //   the AI, which decides whether it's worth a text and writes one line about it;
-// - everything else (newsletters, receipts, marketing) is left alone.
+// - anything else that isn't plainly noise (a flight change, exam results, a reply about an
+//   application, a notice from the bank or the government) also goes to the AI, which keeps
+//   quiet unless it's something you'd want to know now;
+// - newsletters, digests, sales, receipts and welcomes are left alone without asking the AI.
 //
 // An email that fails Gmail's sender check never gets its code or link passed on.
 import { z } from "npm:zod@4.3.6";
@@ -13,7 +16,8 @@ import { askGemini } from "./gemini.ts";
 import { type Teasing, voiceRules } from "./persona.ts";
 import type { Fetched } from "./google.ts";
 
-export type Kind = "code" | "reset" | "confirm" | "security" | "payment" | "event" | "deadline" | "action" | "personal" | "skip";
+export type Kind =
+  | "code" | "reset" | "confirm" | "security" | "payment" | "event" | "deadline" | "action" | "personal" | "other" | "skip";
 
 export interface Link {
   url: string;
@@ -143,6 +147,9 @@ const EVENT = /you'?re (?:registered|going|in|confirmed|attending)|registration 
 const DEADLINE = /deadline|due (?:date|by|on)|\bby (?:mon|tues|wednes|thurs|fri|satur|sun)day\b|before (?:the )?(?:\d{1,2}(?:st|nd|rd|th)? |jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|last (?:day|chance)|will be (?:dropped|removed|cancell?ed|deactivated|suspended|deleted|forfeited|deferred)|action required|required action|must (?:complete|submit|log ?in|register|confirm)|expires? (?:on|at)|closes? (?:on|at)|resubmit|haven'?t (?:logged|signed) in|not (?:yet )?(?:logged|signed) in/i;
 const ACTION = /verify (?:your )?identity|\bkyc\b|liveness|complete (?:your )?(?:profile|verification|onboarding|kyc)|needs? (?:your|you to)|awaiting your|signature (?:required|requested)|please (?:sign|review|confirm|respond)|(?:offer|proposal|agreement|contract) (?:for|is|has been)|offered|(?:portal|account) is (?:ready|active|set up)/i;
 
+/** Email that is plainly noise, from its subject: newsletters, digests, sales, receipts, welcomes, tips. */
+const NOISE = /newsletter|digest|round-?up|recap|\b(?:daily|weekly|monthly)\b|this (?:week|month) (?:in|at|on)|what'?s new|\d+% off|\bsale\b|\bdeals\b|black friday|cyber monday|limited time|last chance to save|free (?:trial|shipping)|\bwebinar\b|receipt|order (?:confirm|#|no)|thanks? (?:you )?for (?:your (?:order|purchase)|shopping|signing up|joining|subscribing)|welcome (?:to|aboard)|\btips?\b|people you may know|new (?:followers?|likes?|connections?)|liked your|commented on|mentioned you in a (?:tweet|post)|survey|rate (?:us|your)|review your (?:order|purchase|stay)/i;
+
 /** Discount and invite codes aren't login codes. */
 const PROMO = /promo|coupon|discount|voucher|% off|\boff your\b|referral code|invite code|gift code|redeem/i;
 
@@ -172,7 +179,10 @@ export function classify(m: Pick<Fetched, "from" | "subject" | "bulk">, body: st
   if (DEADLINE.test(where)) return { kind: "deadline" };
   if (ACTION.test(where)) return { kind: "action" };
   if (!m.bulk && fromPerson(m.from)) return { kind: "personal" };
-  return { kind: "skip" };
+  // Anything else may still matter; the AI decides. Not noise, and never an email that talks
+  // about a code the rules couldn't find, so a login code can't reach the AI that way.
+  if (NOISE.test(head) || PROMO.test(early) || CODE_WORDS.test(early)) return { kind: "skip" };
+  return { kind: "other" };
 }
 
 // --- links ------------------------------------------------------------------------------------------
@@ -186,6 +196,7 @@ const WANT: Partial<Record<Kind, RegExp>> = {
   deadline: /log ?in|sign ?in|complete|submit|view|open|continue|verify|register|start|canvas|portal/i,
   action: /verify|complete|continue|start|upload|submit|sign|review|view|open|log ?in/i,
   personal: /./,
+  other: /view|open|details|log ?in|sign ?in|manage|track|check|respond|reply|continue/i,
 };
 
 /** The one link you'd tap to act on this email: the reset button, the ticket, "Update payment"... */
@@ -290,8 +301,12 @@ Decide:
 - worth: true only if they'd want a text about it now: a failed or declined payment, an invoice or bill due, a subscription about
   to lapse; a security alert (new sign-in, withdrawal request, password changed); a deadline or required step with a real
   consequence; an event they registered for or were personally invited to; a real person writing to them personally who needs an answer
-  or action; an offer, deal or agreement for their work. false for newsletters, marketing, digests, receipts for things that
-  went fine, "thanks for signing up", and anything safe to ignore.
+  or action; an offer, deal or agreement for their work; and any other email that really matters to them personally, like a
+  flight or trip changed or cancelled, a delivery that failed or needs them, exam results or grades, an application accepted,
+  rejected or answered, a notice from a bank, school, employer, landlord, court or government, or an account closed, limited
+  or changed. false for newsletters, marketing, digests, receipts for things that went fine, "thanks for signing up",
+  automatic tips and social notifications, and anything safe to ignore.${kind === "other" ? `
+  No rule matched this one, so be strict: true only if a sharp assistant would interrupt them for it. When unsure, false.` : ""}
 - line: the heads-up, one or two short sentences, lowercase casual texting style. Lead with who and what, then what happens
   if they don't act, and the date in their local time. Like: "higgsfield payment for the $49 plus subscription failed, access
   is paused unless you update your card" or "UoPeople orientation deadline is Nov 7 at 11:30pm (Lagos time). finish it by then
