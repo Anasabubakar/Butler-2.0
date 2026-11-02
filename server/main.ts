@@ -1984,7 +1984,7 @@ async function headsUpFor(m: google.Fetched, timeZone: string) {
   }
   const picked = verdict.link && links[verdict.link - 1] ? links[verdict.link - 1] : alerts.pickLink(sorted.kind, links);
   const start = parseWhen(verdict.start);
-  if (verdict.kind === "event" && start && start > now) {
+  if (verdict.worth && verdict.kind === "event" && start && start > now) {
     await keepEvent({ title: verdict.title?.trim() || m.subject, start, place: verdict.place, link: picked?.url }, "email");
     return; // told an hour before it starts
   }
