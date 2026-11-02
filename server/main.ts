@@ -2010,14 +2010,16 @@ async function headsUps() {
       await settings.set(HEADS_UP_AFTER, new Date().toISOString());
       return;
     }
-    const since = new Date(new Date(after).getTime() - 10 * 60_000); // Gmail can be a little late to list one
+    // Gmail can be a little late to list one; after a long gap (Google signed out, the server down)
+    // only the last hour counts, so you don't get a flood about old email.
+    const since = new Date(Math.max(new Date(after).getTime() - 10 * 60_000, Date.now() - 3_600_000));
     const ids = await google.mailIds(google.HEADS_UP, since, 25);
     const seen = new Set(ids.length
       ? (await db.sql<{ id: string }[]>`select id from alert_mail where id = any(${ids}::text[])`).map((r) => r.id)
       : []);
     const fresh = ids.filter((id) => !seen.has(id)).reverse().slice(0, 10); // oldest first
     const timeZone = await ownerZone();
-    let newest = new Date(after);
+    let newest = since;
     for (const id of fresh) {
       try {
         const m = await google.fetchMail(id);
@@ -2050,7 +2052,7 @@ async function calendarSoon() {
 
 /** Tells you about each kept event once, about an hour before it starts. */
 async function eventsSoon() {
-  if (env("BUTLER_HEADS_UP") === "off") return;
+  if (env("BUTLER_HEADS_UP") === "off" || !(await prefs.load().catch(() => prefs.DEFAULTS)).headsUp) return;
   const now = new Date();
   const soon = await db.sql<{ id: string; title: string; starts_at: Date; place: string | null; link: string | null }[]>`
     update upcoming set announced_at = now()
