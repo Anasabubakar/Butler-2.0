@@ -255,6 +255,8 @@ class PetService : Service() {
                     refreshPrefs()
                 }
                 val waited = checkInbox(wait = laptopWorking)
+                // While online, keep the copy of coming reminders and events fresh for when data goes off.
+                if (waited) Ahead.refreshIfStale(this@PetService, AHEAD_EVERY_MS)
                 if (!laptopWorking || !waited) delay(INBOX_EVERY_MS)
             }
         }
@@ -1320,6 +1322,7 @@ class PetService : Service() {
         private const val MENU_WIDTH_DP = 280
         private const val LAPTOP_QUIET_MS = 15 * 60_000L
         private const val INBOX_EVERY_MS = 20_000L
+        private const val AHEAD_EVERY_MS = 5 * 60_000L
         private const val STOP_RING = "com.anas.butler.STOP_RING"
         private const val COPY_CODE = "com.anas.butler.COPY_CODE"
         private const val EXTRA_CODE = "code"
