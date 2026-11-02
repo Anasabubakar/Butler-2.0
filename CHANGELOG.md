@@ -4,6 +4,18 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 
 ## Unreleased
 
+## v0.3.1 (2026-11-02)
+
+Email heads-ups now cover any important email, not only the kinds Butler had rules for.
+
+- **Any email that matters.** A flight changed, a parcel that couldn't be delivered, exam results, an answer to an application, a notice from your bank, school or the government: if no rule recognises an email and it isn't plainly noise, the AI decides whether it's worth a text. It's told to be strict, and at most 4 of these go out an hour (`BUTLER_HEADS_UP_OTHER_PER_HOUR`), using their own AI allowance so payments and security alerts are never crowded out.
+- Newsletters, digests, sales, receipts, welcomes and social notifications still stay quiet without asking the AI.
+- Nothing changes for privacy: login codes and reset links never go to an AI (an email that mentions a code the rules can't read is skipped, not sent), passwords and Wi-Fi keys are blanked, the phishing warning stays, and only security alerts break quiet hours.
+
+### Known limits
+
+- Gmail sync was reported failing on 2026-11-02, so this hasn't been tried on real email yet. It's checked by tests only.
+
 ## v0.3.0 (2026-11-02)
 
 Butler now texts you first: email heads-ups, login codes, events before they start and a few daily touches, in the app, on the laptop or in a private Telegram bot. It also remembers your conversation, sends real files between phone and laptop, and organizes saves faster on a CPU-only server.
