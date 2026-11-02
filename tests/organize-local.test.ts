@@ -157,13 +157,17 @@ test("local model: the answer is capped so a rambling model can't run for minute
   Deno.env.set("OLLAMA_URL", `http://localhost:${server.addr.port}`);
   try {
     await organize({ kind: "text", platform: null, url: null, body: "hi", note: null });
-    assert.deepEqual(options, { temperature: 0, num_predict: 320 });
+    assert.deepEqual(options, { temperature: 0, num_ctx: 8192, num_predict: 320 });
     Deno.env.set("BUTLER_LOCAL_MAX_TOKENS", "500");
     await organize({ kind: "text", platform: null, url: null, body: "hello", note: null });
     assert.equal(options.num_predict, 500);
+    Deno.env.set("BUTLER_LOCAL_CTX", "4096");
+    await organize({ kind: "text", platform: null, url: null, body: "hey", note: null });
+    assert.equal(options.num_ctx, 4096);
   } finally {
     Deno.env.delete("BUTLER_AI");
     Deno.env.delete("BUTLER_LOCAL_MAX_TOKENS");
+    Deno.env.delete("BUTLER_LOCAL_CTX");
     await server.shutdown();
   }
 });
