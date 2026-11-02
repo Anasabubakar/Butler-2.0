@@ -75,6 +75,8 @@ export interface Pushed {
   item_id: string | null;
   forget?: boolean;
   expires_at?: string | null;
+  /** A link preview ({title, site}) or a login code to copy ({copy}); a code always comes with forget. */
+  card?: { title?: string; site?: string; image?: string; copy?: string } | null;
 }
 
 export interface Butler {
@@ -730,9 +732,16 @@ export class Bot {
           [{ text: "💤 10 min", callback_data: "snz:10" }, { text: "💤 1 hour", callback_data: "snz:60" }, { text: "✓ Done", callback_data: "dne:" }],
           ...opener,
         ]);
-      case "note":
-        if (!body) return null;
-        return this.send(here, fromButler ? tg.escape(body) : `📝 <b>From your ${tg.escape(m.from_device)}</b>\n${tg.escape(body)}`, opener);
+      case "note": {
+        if (!body && !m.card?.copy) return null;
+        const text = fromButler ? tg.escape(body) : `📝 <b>From your ${tg.escape(m.from_device)}</b>\n${tg.escape(body)}`;
+        // A login code: tap it to copy. The message is deleted when the code expires.
+        const code = m.card?.copy ? `\n\n<code>${tg.escape(m.card.copy.slice(0, 200))}</code>` : "";
+        const preview = !code && m.card?.title
+          ? `\n\n🔗 <b>${tg.escape(m.card.title.slice(0, 200))}</b>${m.card.site ? ` · ${tg.escape(m.card.site.slice(0, 80))}` : ""}`
+          : "";
+        return this.send(here, `${text}${code}${preview}`.trim(), opener);
+      }
       case "link": {
         const url = m.url ?? body;
         if (!url) return null;

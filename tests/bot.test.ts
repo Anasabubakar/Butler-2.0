@@ -358,3 +358,11 @@ test("errors and chat links read plainly", () => {
   assert.equal(chatLink({ app: "whatsapp", person: "Ada", name: "Ada", phone: null, text: "hi" }), "https://wa.me/?text=hi");
   assert.match(chatLink({ app: "telegram", person: "Ada", name: "Ada", phone: null, text: "hi" })!, /^https:\/\/t\.me\/share\/url\?/);
 });
+
+test("a login code shows as a tap-to-copy code, and a link card as a title", async () => {
+  const t = setup();
+  await t.bot.push({ kind: "note", from_device: "Butler", body: "Your GitHub code", url: null, item_id: null, forget: true, card: { copy: "482 913" } });
+  await t.bot.push({ kind: "note", from_device: "Butler", body: "Your ticket", url: "https://x.test/t", item_id: null, card: { title: "Afrobeats Night", site: "tix.test" } });
+  assert.equal(t.sent()[0].params.text, "Your GitHub code\n\n<code>482 913</code>");
+  assert.match(String(t.sent()[1].params.text), /<b>Afrobeats Night<\/b> · tix\.test/);
+});
