@@ -49,4 +49,23 @@ whenSignedOut(() => signIn("Your session ended. Sign in again to carry on."));
 addEventListener("hashchange", () => api("/api/me").then(route, () => {}));
 // Coming back from connecting Google lands on Integrations, where the result shows.
 if (new URLSearchParams(location.search).has("google")) location.hash = "#/integrations";
-fetch("/api/me").then((res) => (res.ok ? route() : renderLanding(() => signIn())), () => renderLanding(() => signIn()));
+
+/**
+ * Opened from the Butler Library button in Telegram: Telegram puts what it signed about who
+ * opened it after the # (tgWebAppData). The server checks it's you and signs you in, so the
+ * library opens without a password. Then the address is tidied and the library shown.
+ */
+async function telegramSignIn(): Promise<boolean> {
+  const data = new URLSearchParams(location.hash.slice(1)).get("tgWebAppData");
+  if (!data) return false;
+  document.documentElement.classList.add("in-telegram");
+  history.replaceState(null, "", `${location.pathname}#/library`);
+  const res = await fetch("/api/telegram/session", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ initData: data }),
+  }).catch(() => null);
+  return Boolean(res?.ok);
+}
+
+telegramSignIn()
+  .then(() => fetch("/api/me"))
+  .then((res) => (res.ok ? route() : renderLanding(() => signIn())), () => renderLanding(() => signIn()));
