@@ -377,10 +377,10 @@ interface Part {
   headers?: { name: string; value: string }[];
 }
 
-/** The first text/plain part of a message, decoded. */
-export function plainText(part: Part | undefined): string {
+/** The first part of a message of this type (text/plain unless said), decoded. */
+export function plainText(part: Part | undefined, type = "text/plain"): string {
   if (!part) return "";
-  if (part.mimeType === "text/plain" && part.body?.data) {
+  if (part.mimeType === type && part.body?.data) {
     const b64 = part.body.data.replace(/-/g, "+").replace(/_/g, "/");
     try {
       return new TextDecoder().decode(Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0)));
@@ -389,7 +389,7 @@ export function plainText(part: Part | undefined): string {
     }
   }
   for (const p of part.parts ?? []) {
-    const found = plainText(p);
+    const found = plainText(p, type);
     if (found) return found;
   }
   return "";
