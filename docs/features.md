@@ -47,6 +47,32 @@ Save a YouTube video and Butler watches it (with Gemini) and writes a short summ
 
 Every morning at 08:00 your time, Butler sends a note to your phone and laptop. It has today's calendar, the reminders still to come, how much you saved in the last day, and one older save worth another look. Ask Butler "what's my day?" to get it any time. It learns your time zone from Ask Butler; set `BUTLER_BRIEF_AT` in `butler.env` for a different time, or `BUTLER_BRIEF=off` to stop it. If the server is down at 08:00, the brief comes when it's back, up to noon.
 
+## Email heads-ups
+
+Butler reads each new email (every two minutes, once Google is connected) and texts every device only what matters, like a sharp assistant would:
+
+- **Login codes**: "your Sterling Bank code is 482913 (valid for 5 mins)".
+- **Password reset and confirm links**: the link, how long it lasts, and the username if the email gives one.
+- **Money trouble**: a failed or declined payment, an invoice or bill due, a subscription about to lapse, with the link to pay or update your card.
+- **Security alerts**: a new sign-in, a withdrawal request, a password change.
+- **Deadlines and required steps**, with "want me to put that on your calendar?" (reply "yes").
+- **People writing to you** who need an answer, an offer for your work, or a file to read ("say \"read it for me\"").
+- **Events an hour before** they start, with the place and the ticket or join link. Events come from your email (tickets, webinars) and your Google Calendar, and the same event is told once. Today's events from email show in the morning brief too.
+
+Cheap rules sort every email first, so newsletters, marketing and receipts are left alone and the AI is asked only about the few that might matter (at most `BUTLER_HEADS_UP_AI_PER_HOUR`, 30). Codes and reset links never go to an AI: they're pulled out by the rules, shown once, deleted as soon as each device has them, kept out of the conversation, and dropped unseen when they expire. An email that fails Gmail's sender check never has its code or link passed on; Butler warns you it may be phishing instead. Heads-ups that can wait (not codes, security alerts or events) are held during quiet hours, `BUTLER_QUIET_HOURS` (23:00-07:00). Switch it off in Settings → Email heads-ups, or `BUTLER_HEADS_UP=off`.
+
+## Daily fact, headlines and the Friday check-in
+
+- At 10:00 your time a **"did you know"** arrives, ending "want to know more?". Reply "yes" and Butler goes down the rabbit hole. It won't repeat a topic for about 40 days. `BUTLER_FACT_AT`, or the Daily fun fact switch in Settings.
+- After the morning brief come **headlines** on your topics from the last day (`BUTLER_NEWS`, AI unless set): the AI picks the three that matter and says each in a line, with links. On a thin news day it says so instead of padding.
+- On **Friday at 17:00**: "what did you actually get done this week?" Your reply is kept in your library as "Week of ...". `BUTLER_CHECKIN_AT`, or the Friday check-in switch in Settings.
+
+## Roast me, research, read it for me
+
+- **"Roast me"** (or "yab me", then "too weak, go deeper"): a roast built on what Butler really knows, your recent email subjects, your library and your spending. Never about health, family or anyone else, and off when Teasing is off.
+- **"Research this"** or "what can I gain from the event?" in reply to a heads-up: Butler searches the web with Gemini and Google Search and answers with its sources.
+- **"Read it for me"**: Butler finds the email, reads it and its PDF, picture or text attachments, and tells you the gist, the key points and what you need to do.
+
 ## Weekly recap
 
 Every Sunday at 18:00 your time, Butler sends a note with what you saved that week: how many, by topic and app, your top tags, and three worth another look (ones you wrote a note on come first). Ask "what did I save this week?" for it any time. Set `BUTLER_RECAP_AT` for a different time, or `BUTLER_RECAP=off` to stop it.

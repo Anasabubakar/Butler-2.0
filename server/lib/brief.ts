@@ -6,6 +6,7 @@ import * as google from "./google.ts";
 import { localIso } from "./command.ts";
 import { savedDays, streak } from "./streaks.ts";
 import { addressed } from "./persona.ts";
+import { sameEvent } from "./alerts.ts";
 
 /** What Google said went wrong, in words for the owner. */
 export interface Failed {
@@ -134,6 +135,17 @@ export async function gather(now: Date, timeZone: string, publicUrl?: string, da
       fromGoogle("tasks", google.tasks),
       isToday ? fromGoogle("email", () => google.mail(google.IMPORTANT, 5)) : Promise.resolve(null),
     ]);
+  }
+  // Events Butler found in your email (a ticket, a webinar) that aren't on your calendar.
+  const fromEmail = await sql<{ title: string; starts_at: Date; place: string | null }[]>`
+    select title, starts_at, place from upcoming where source = 'email' and starts_at >= ${from} and starts_at <= ${end}
+    order by starts_at limit 10`.catch(() => []);
+  const extra = fromEmail.map((e): google.Event => ({
+    title: `${e.title}${e.place && !/^online$/i.test(e.place) ? ` (${e.place})` : ""} · from your email`, start: new Date(e.starts_at), allDay: false,
+  })).filter((e) => !Array.isArray(events) || !events.some((c) => sameEvent(c, { ...e, title: e.title.replace(/ · from your email$/, "") })));
+  if (extra.length) {
+    events = Array.isArray(events) ? [...events, ...extra].sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.start.getTime() - b.start.getTime())
+      : events === null ? extra : events;
   }
   const reminders = await sql<{ body: string; due: Date }[]>`
     select distinct on (body, due_at) body, due_at as due from messages

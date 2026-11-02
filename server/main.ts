@@ -38,6 +38,9 @@ import { vaultReady } from "./lib/vault.ts";
 import * as sync from "./lib/sync.ts";
 import * as memory from "./lib/memory.ts";
 import * as transfers from "./lib/transfers.ts";
+import * as alerts from "./lib/alerts.ts";
+import * as daily from "./lib/daily.ts";
+import * as askmore from "./lib/askmore.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -291,7 +294,8 @@ app.post("/api/inbox", async (c) => {
   }
   await jobs.pickedUp(due, device);
   // What Butler pushed goes into the conversation as it reaches you, so a reply follows on.
-  for (const m of due) {
+  // Codes and reset links are shown once and never kept.
+  for (const m of due.filter((m) => !m.forget)) {
     const said = memory.pushedText(m);
     if (said) memory.addPushed(said, m.due_at).catch((e) => console.error("chat", String(e).slice(0, 200)));
   }
@@ -974,10 +978,78 @@ app.post("/api/command", async (c) => {
       meaning.embedItem(item.id).catch(() => {});
       return json({ action: "edit", say: `${p.reply || "updated."}\n\n${was.join("\n")}` });
     }
+    case "roast": {
+      if (sass === "off") return json({ action: "answer", say: askmore.ROAST_OFF });
+      try {
+        return json({ action: "answer", say: await askmore.roast(p.text || said, await roastFacts(turns, known, timeZone), sass) });
+      } catch (e) {
+        return c.json({ error: String(e).slice(0, 300) }, 502);
+      }
+    }
+    case "research": {
+      try {
+        return json({ action: "answer", say: await askmore.research(p.text || said, answering ?? undefined, sass) });
+      } catch (e) {
+        return json({ action: "answer", say: `couldn't search the web just now: ${String((e as Error).message ?? e).slice(0, 160)}` });
+      }
+    }
+    case "readmail": {
+      if (!google.googleConfigured() || !(await google.account())) {
+        return json({ action: "answer", say: "need your Google account for that. connect it under Integrations on the Butler website, then ask again." });
+      }
+      try {
+        const letter = await letterFor(p.text?.trim() || "in:inbox has:attachment");
+        if (!letter) return json({ action: "answer", say: `couldn't find that email${p.text ? ` (searched "${p.text}")` : ""}. tell me who it's from?` });
+        return json({ action: "answer", say: await askmore.readFor(said, letter, sass) });
+      } catch (e) {
+        return c.json({ error: String(e).slice(0, 300) }, 502);
+      }
+    }
+    case "fact":
+      return json({ action: "answer", say: p.reply || "blanking on facts rn. ask me again in a sec?" });
     default:
       return json({ action: "answer", say: p.reply || "can't do that one yet. try saying it another way?" });
   }
 });
+
+/** What a roast is built on: what Butler remembers, recent email subjects, the library, this month's spending. */
+async function roastFacts(turns: memory.Turn[], known: memory.Memory[], timeZone: string): Promise<askmore.RoastFacts> {
+  const [mail, facets, saves, spent] = await Promise.all([
+    google.googleConfigured() && await google.account().catch(() => null)
+      ? google.mail("in:inbox newer_than:14d -category:promotions", 20).catch(() => [] as google.Mail[])
+      : Promise.resolve([] as google.Mail[]),
+    db.facets().catch(() => []),
+    db.listItems({ limit: 12 }).catch(() => [] as db.Item[]),
+    spending.since(spending.startOf("month", new Date(), timeZone)).catch(() => [] as spending.Row[]),
+  ]);
+  return {
+    memories: memory.memoryText(known),
+    mail: mail.map((m) => `${m.from}: ${m.subject}`),
+    collections: facets.filter((f) => f.facet === "category" && f.value !== "unsorted").sort((a, b) => b.n - a.n).slice(0, 10)
+      .map((f) => `${f.value} (${f.n})`),
+    saves: saves.map((i) => i.title ?? "").filter(Boolean),
+    spending: spent.length ? spending.compose(spent, "month") : undefined,
+    history: memory.historyText(turns, timeZone),
+  };
+}
+
+/** The newest email matching a Gmail search, with the attachments Gemini can read. */
+async function letterFor(query: string): Promise<askmore.Letter | null> {
+  const [id] = await google.mailIds(query, null, 1);
+  if (!id) return null;
+  const m = await google.fetchMail(id);
+  const files: askmore.Letter["files"] = [];
+  const skipped: string[] = [];
+  for (const a of m.attachments) {
+    const mime = a.mime.split(";")[0].toLowerCase();
+    if (files.length >= 3 || !askmore.READABLE.includes(mime) || a.size > askmore.MAX_ATTACHMENT_BYTES) {
+      skipped.push(a.name);
+      continue;
+    }
+    files.push({ name: a.name, picture: { mediaType: mime, data: encodeBase64(await google.attachment(m.id, a.id)) } });
+  }
+  return { from: m.from, subject: m.subject, at: m.at, body: alerts.bodyOf(m), files, skipped };
+}
 
 // Which conversation a yes/no belongs to, so its outcome is kept there too.
 const confirmChat = new Map<string, string | null>();
@@ -1644,6 +1716,55 @@ async function briefIfDue(now = new Date()) {
   const body = brief.compose(await brief.gather(now, timeZone, env("PUBLIC_URL")), now, timeZone);
   await inbox.send(devices, { from_device: "Butler", kind: "note", body });
   console.log(`brief: sent to ${devices.join(", ")}`);
+  await headlinesNow().catch((e) => console.warn("headlines:", String(e).slice(0, 200)));
+}
+
+/** The topics whose headlines come after the morning brief (BUTLER_NEWS, "off" for none). */
+const newsTopics = () =>
+  (env("BUTLER_NEWS", "AI")!).split(",").map((t) => t.trim()).filter((t) => t && t.toLowerCase() !== "off").slice(0, 3);
+
+/** Sends the day's headlines on your topics as their own note, so the brief stays short. */
+async function headlinesNow() {
+  const topics = newsTopics();
+  if (!topics.length) return;
+  const found = await daily.headlines(topics);
+  await tellEverywhere(await daily.headlinesNote(found, topics, geminiReady(), await teasing()));
+}
+
+const FACT_AT = env("BUTLER_FACT_AT", "10:00")!;
+const CHECKIN_AT = env("BUTLER_CHECKIN_AT", "17:00")!;
+
+/** A "did you know" every day at BUTLER_FACT_AT your time, never the same topic twice in a while. */
+async function factIfDue(now = new Date()) {
+  if (env("BUTLER_FACT") === "off" || !geminiReady()) return;
+  if (!(await prefs.load().catch(() => prefs.DEFAULTS)).funFact) return;
+  const local = localIso(now, await ownerZone());
+  const day = local.slice(0, 10);
+  if (local.slice(11, 16) < FACT_AT || local.slice(11, 16) >= "21:00" || await settings.get("fact_sent_on") === day) return;
+  await settings.set("fact_sent_on", day);
+  let recent: string[] = [];
+  try {
+    recent = JSON.parse(await settings.get("fact_topics") ?? "[]");
+  } catch { /* start again */ }
+  const fact = await daily.funFact(recent, await teasing());
+  await settings.set("fact_topics", JSON.stringify(daily.rememberTopic(recent, fact.topic)));
+  await tellEverywhere(fact.text);
+}
+
+/** Friday at BUTLER_CHECKIN_AT your time: what did you get done this week? */
+async function checkInIfDue(now = new Date()) {
+  if (env("BUTLER_CHECKIN") === "off") return;
+  if (!(await prefs.load().catch(() => prefs.DEFAULTS)).checkIn) return;
+  const timeZone = await ownerZone();
+  const local = localIso(now, timeZone);
+  const day = local.slice(0, 10);
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "long" }).format(now);
+  if (weekday !== "Friday" || local.slice(11, 16) < CHECKIN_AT || local.slice(11, 16) >= "22:00") return;
+  if (await settings.get("checkin_sent_on") === day) return;
+  await settings.set("checkin_sent_on", day);
+  const [{ n }] = await db.sql<{ n: number }[]>`
+    select count(*)::int as n from items where created_at >= ${new Date(now.getTime() - 7 * 86_400_000)}`;
+  await tellEverywhere(daily.checkInNote(Math.floor(now.getTime() / (7 * 86_400_000)), n));
 }
 
 const RECAP_AT = env("BUTLER_RECAP_AT", "18:00")!;
@@ -1769,6 +1890,181 @@ async function resortOld() {
   }
 }
 
+// --- heads-ups: what matters in new email, and events about to start ---------------------------
+// Every couple of minutes Butler looks at email that arrived since it last looked. Codes and
+// reset links go out at once and are never kept; failed payments, security alerts, deadlines
+// and people writing to you get one line from the AI; events are kept and told an hour before.
+// Calendar events get the same hour-before heads-up, told once even when email had it too.
+
+const QUIET_HOURS = env("BUTLER_QUIET_HOURS", "23:00-07:00"); // when heads-ups that can wait, wait ("off": never)
+const headsUpAi = new alerts.HourlyLimit(Number(env("BUTLER_HEADS_UP_AI_PER_HOUR", "30")));
+const HEADS_UP_AFTER = "heads_up_after";
+let readingMail = false;
+
+/** Whether heads-ups are on and Google is connected to read email and calendar. */
+async function headsUpOn(): Promise<boolean> {
+  if (env("BUTLER_HEADS_UP") === "off" || !google.googleConfigured()) return false;
+  if (!(await prefs.load().catch(() => prefs.DEFAULTS)).headsUp) return false;
+  return Boolean(await google.account().catch(() => null));
+}
+
+interface Tell {
+  forget?: boolean;
+  expiresInMinutes?: number;
+  /** When it should arrive; now when not set. */
+  due?: Date | null;
+  url?: string | null;
+}
+
+/** Sends a note from Butler to every device. */
+async function tellEverywhere(body: string, how: Tell = {}) {
+  const devices = (await inbox.devices()).map((d) => d.name);
+  if (!devices.length) return;
+  const due = how.due ?? new Date();
+  await inbox.send(devices, {
+    from_device: "Butler", kind: "note", body, url: how.url ?? null, due_at: due.toISOString(), forget: how.forget,
+    expires_at: how.expiresInMinutes ? new Date(due.getTime() + how.expiresInMinutes * 60_000).toISOString() : null,
+  });
+}
+
+/** Keeps an event to tell you about an hour before, unless it's already kept (from email or the calendar). */
+async function keepEvent(e: { title: string; start: Date; place?: string | null; link?: string | null }, source: "email" | "calendar") {
+  const near = await db.sql<{ id: string; title: string; starts_at: Date; place: string | null; link: string | null }[]>`
+    select id, title, starts_at, place, link from upcoming
+    where starts_at between ${new Date(e.start.getTime() - 15 * 60_000)} and ${new Date(e.start.getTime() + 15 * 60_000)}`;
+  const same = near.find((n) => alerts.sameEvent({ title: n.title, start: new Date(n.starts_at) }, e));
+  if (same) {
+    // Fill in what the other one didn't have, like the ticket link the calendar entry lacks.
+    if ((!same.place && e.place) || (!same.link && e.link)) {
+      await db.sql`update upcoming set place = coalesce(place, ${e.place ?? null}), link = coalesce(link, ${e.link ?? null}) where id = ${same.id}`;
+    }
+    return;
+  }
+  await db.sql`insert into upcoming (key, title, starts_at, place, link, source)
+    values (${alerts.eventKey(e.title, e.start)}, ${e.title.slice(0, 200)}, ${e.start}, ${e.place?.slice(0, 200) ?? null},
+      ${e.link?.slice(0, 2000) ?? null}, ${source})
+    on conflict (key) do nothing`;
+}
+
+/** Looks at one new email and tells you about it if it matters. */
+async function headsUpFor(m: google.Fetched, timeZone: string) {
+  const body = alerts.bodyOf(m);
+  const sorted = alerts.classify(m, body);
+  await db.sql`insert into alert_mail (id, kind) values (${m.id}, ${sorted.kind}) on conflict (id) do nothing`;
+  if (sorted.kind === "skip") return;
+  const site = m.from.match(/@([\w.-]+)/)?.[1] ?? "?";
+  console.log(`heads-up: ${sorted.kind} email from ${site}`); // never the email itself
+  const links = alerts.linksOf(m.text, m.html);
+  const secret = sorted.kind === "code" || sorted.kind === "reset" || sorted.kind === "confirm";
+  if (secret && m.auth === "fail") return tellEverywhere(alerts.spoofNote(m).body);
+  if (sorted.kind === "code") {
+    const note = alerts.codeNote(m, body, sorted.code!);
+    return tellEverywhere(note.body, note);
+  }
+  if (sorted.kind === "reset" || sorted.kind === "confirm") {
+    const note = alerts.linkNote(m, body, sorted.kind, links);
+    if (note) await tellEverywhere(note.body, note);
+    return;
+  }
+  // The rest needs judgement. Without AI (or over this hour's allowance) only the plain facts go out.
+  const now = new Date();
+  const local = localIso(now, timeZone);
+  let verdict: alerts.Verdict | null = null;
+  if (geminiReady() && headsUpAi.allow()) {
+    verdict = await alerts.judge(alerts.forAi(m, body, links), sorted.kind, {
+      now: local, timeZone, teasing: await teasing(), attachments: m.attachments.map((a) => a.name),
+    }).catch((e) => {
+      console.warn("heads-up: AI failed", String(e).slice(0, 200));
+      return null;
+    });
+  }
+  if (!verdict) {
+    if (sorted.kind === "personal" || sorted.kind === "event") return; // can't tell if it matters, so stay quiet
+    verdict = { worth: true, line: `${alerts.brand(m.from)}: ${m.subject}`, link: null, kind: "other" };
+  }
+  const picked = verdict.link && links[verdict.link - 1] ? links[verdict.link - 1] : alerts.pickLink(sorted.kind, links);
+  const start = parseWhen(verdict.start);
+  if (verdict.worth && verdict.kind === "event" && start && start > now) {
+    await keepEvent({ title: verdict.title?.trim() || m.subject, start, place: verdict.place, link: picked?.url }, "email");
+    return; // told an hour before it starts
+  }
+  if (!verdict.worth || !verdict.line.trim()) return;
+  let text = verdict.line.trim();
+  if (picked) text += `\n\n${alerts.linkLine(sorted.kind, picked.url)}`;
+  const due = parseWhen(verdict.due);
+  if (verdict.kind === "deadline" && due && due > now) text += "\n\nwant me to put that on your calendar?";
+  if (m.attachments.length && sorted.kind === "personal") text += `\n\nsay "read it for me" and i'll go through ${m.attachments.length > 1 ? "them" : "it"}.`;
+  if (m.auth === "fail") text = `⚠️ this one failed Gmail's sender check, so it may be fake. don't pay or log in from it.\n\n${text}`;
+  // Security alerts can't wait; the rest waits for morning when it arrives at night.
+  const hold = sorted.kind === "security" ? null : alerts.holdUntil(local, QUIET_HOURS);
+  await tellEverywhere(text, { due: hold, url: picked?.url });
+}
+
+/** Reads email that arrived since the last look and sends heads-ups. */
+async function headsUps() {
+  if (readingMail || !(await headsUpOn())) return;
+  readingMail = true;
+  try {
+    const after = await settings.get(HEADS_UP_AFTER);
+    if (!after) { // the first look: only email from now on, never a flood of old ones
+      await settings.set(HEADS_UP_AFTER, new Date().toISOString());
+      return;
+    }
+    // Gmail can be a little late to list one; after a long gap (Google signed out, the server down)
+    // only the last hour counts, so you don't get a flood about old email.
+    const since = new Date(Math.max(new Date(after).getTime() - 10 * 60_000, Date.now() - 3_600_000));
+    const ids = await google.mailIds(google.HEADS_UP, since, 25);
+    const seen = new Set(ids.length
+      ? (await db.sql<{ id: string }[]>`select id from alert_mail where id = any(${ids}::text[])`).map((r) => r.id)
+      : []);
+    const fresh = ids.filter((id) => !seen.has(id)).reverse().slice(0, 10); // oldest first
+    const timeZone = await ownerZone();
+    let newest = new Date(Math.max(new Date(after).getTime(), since.getTime()));
+    for (const id of fresh) {
+      try {
+        const m = await google.fetchMail(id);
+        if (m.at > newest) newest = m.at;
+        if (m.at < since) { // older email that just got moved to the inbox
+          await db.sql`insert into alert_mail (id, kind) values (${id}, 'old') on conflict (id) do nothing`;
+          continue;
+        }
+        await headsUpFor(m, timeZone);
+      } catch (e) {
+        console.warn("heads-up: one email failed", String(e).slice(0, 200));
+      }
+    }
+    await settings.set(HEADS_UP_AFTER, newest.toISOString());
+    await db.sql`delete from alert_mail where seen_at < now() - interval '30 days'`;
+  } finally {
+    readingMail = false;
+  }
+}
+
+/** Puts calendar events of the next hour and a bit with the ones to tell you about. */
+async function calendarSoon() {
+  if (!(await headsUpOn())) return;
+  const now = new Date();
+  for (const e of await google.events(now, new Date(now.getTime() + 75 * 60_000))) {
+    if (e.allDay || e.start <= now) continue;
+    await keepEvent({ title: e.title, start: e.start, place: e.place, link: e.link }, "calendar");
+  }
+}
+
+/** Tells you about each kept event once, about an hour before it starts. */
+async function eventsSoon() {
+  if (env("BUTLER_HEADS_UP") === "off" || !(await prefs.load().catch(() => prefs.DEFAULTS)).headsUp) return;
+  const now = new Date();
+  const soon = await db.sql<{ id: string; title: string; starts_at: Date; place: string | null; link: string | null }[]>`
+    update upcoming set announced_at = now()
+    where announced_at is null and starts_at > ${now} and starts_at <= ${new Date(now.getTime() + 62 * 60_000)}
+    returning id, title, starts_at, place, link`;
+  const timeZone = await ownerZone();
+  for (const e of soon) {
+    await tellEverywhere(alerts.soonNote({ ...e, starts_at: new Date(e.starts_at) }, now, timeZone), { url: e.link });
+  }
+  await db.sql`delete from upcoming where starts_at < now() - interval '2 days'`;
+}
+
 // --- start ---------------------------------------------------------------------------
 
 if (import.meta.main) {
@@ -1779,8 +2075,13 @@ if (import.meta.main) {
   setInterval(backUpSoon, 6 * 60 * 60 * 1000);
   setInterval(() => briefIfDue().catch((e) => console.error("brief:", e)), 5 * 60_000);
   setInterval(() => recapIfDue().catch((e) => console.error("recap:", e)), 5 * 60_000);
+  setInterval(() => factIfDue().catch((e) => console.error("fact:", String(e).slice(0, 300))), 5 * 60_000);
+  setInterval(() => checkInIfDue().catch((e) => console.error("check-in:", String(e).slice(0, 300))), 5 * 60_000);
   setInterval(() => recipesIfDue().catch((e) => console.error("recipes:", e)), 60_000);
   setInterval(() => recipesOnEmail().catch((e) => console.error("recipe email:", e)), 2 * 60_000);
+  setInterval(() => headsUps().catch((e) => console.error("heads-up:", String(e).slice(0, 300))), 2 * 60_000);
+  setInterval(() => calendarSoon().catch((e) => console.error("calendar soon:", String(e).slice(0, 300))), 10 * 60_000);
+  setInterval(() => eventsSoon().catch((e) => console.error("events soon:", String(e).slice(0, 300))), 60_000);
   setInterval(() => watchPrices().catch((e) => console.error("prices:", e)), 30 * 60_000);
   setInterval(() => rescueLinks().catch((e) => console.error("links:", e)), 10 * 60_000);
   setInterval(() => resortOld().catch((e) => console.error("resort:", e)), 60_000);

@@ -3,7 +3,9 @@ import { applyMotion, applyTheme, local } from "./local";
 import { href, page } from "./shell";
 import { ago, api, busy, button, card, h, iconButton, inlineError, SignedOut, toast, toggle } from "./ui";
 
-interface Prefs { teasing: "on" | "less" | "off"; quiet: boolean; memory: boolean }
+interface Prefs {
+  teasing: "on" | "less" | "off"; quiet: boolean; memory: boolean; headsUp: boolean; funFact: boolean; checkIn: boolean;
+}
 interface Memory { id: string; created_at: string; text: string; source: "learned" | "told" }
 
 export async function renderSettings(app: HTMLElement) {
@@ -41,6 +43,12 @@ export async function renderSettings(app: HTMLElement) {
         (on) => save({ quiet: on }), everywhere),
       toggle("Learn about me", "Butler picks up lasting facts from what you tell it (people, preferences, plans) and uses them in every reply. See and forget them under Memory.",
         prefs.memory, (on) => save({ memory: on }), everywhere),
+      toggle("Email heads-ups", "Butler reads new email and texts you what matters: login codes, failed payments, security alerts, deadlines, and events an hour before they start. Codes and reset links are shown once and never kept.",
+        prefs.headsUp, (on) => save({ headsUp: on }), everywhere),
+      toggle("Daily fun fact", "A \"did you know\" every morning. Reply \"yes\" to go down the rabbit hole.",
+        prefs.funFact, (on) => save({ funFact: on }), everywhere),
+      toggle("Friday check-in", "Friday afternoon, Butler asks what you got done this week and keeps your answer in your library.",
+        prefs.checkIn, (on) => save({ checkIn: on }), everywhere),
     );
   } catch (e) {
     if (e instanceof SignedOut) return;

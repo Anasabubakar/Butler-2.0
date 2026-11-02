@@ -192,10 +192,29 @@ export interface Event {
   allDay: boolean;
   /** For all-day events, the day after the last one, like Google gives it (2026-10-22 for a one-day event on the 21st). */
   until?: string;
+  /** Where it is, as the event says. */
+  place?: string;
+  /** The video call to join (Meet, Zoom, Teams), when it has one. */
+  link?: string;
 }
 
 type When = { dateTime?: string; date?: string };
-type Listed = { items?: { summary?: string; status?: string; start?: When; end?: When }[] };
+type Listed = {
+  items?: {
+    summary?: string; status?: string; start?: When; end?: When; location?: string; description?: string; hangoutLink?: string;
+    conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] };
+  }[];
+};
+
+/** An event's video call: Google Meet, its conference entry, or a Zoom/Teams/Meet link in the place or notes. */
+export function callLink(e: NonNullable<Listed["items"]>[number]): string | undefined {
+  const video = e.conferenceData?.entryPoints?.find((p) => p.entryPointType === "video" && p.uri?.startsWith("https://"))?.uri;
+  if (e.hangoutLink?.startsWith("https://")) return e.hangoutLink;
+  if (video) return video;
+  const found = `${e.location ?? ""} ${e.description ?? ""}`
+    .match(/https:\/\/(?:[\w-]+\.)?(?:zoom\.us|meet\.google\.com|teams\.microsoft\.com|teams\.live\.com)\/[^\s"'<>]+/i);
+  return found?.[0];
+}
 
 /** The calendars you have ticked in Google Calendar, main one first. Just the main one if Butler can't list them. */
 async function calendarIds(): Promise<string[]> {
@@ -232,6 +251,9 @@ export async function events(from: Date, to: Date): Promise<Event[]> {
       if (!when || e.status === "cancelled") continue;
       const event: Event = { title: e.summary || "(no title)", start: dayOrTime(when), allDay: !e.start?.dateTime };
       if (event.allDay && e.end?.date) event.until = e.end.date;
+      if (e.location?.trim() && !/^https?:\/\//.test(e.location.trim())) event.place = e.location.trim().slice(0, 200);
+      const call = callLink(e);
+      if (call) event.link = call;
       const key = `${event.title}|${event.start.getTime()}`;
       if (seen.has(key)) continue; // the same event on two calendars
       seen.add(key);
@@ -372,15 +394,16 @@ export interface Arrived {
 
 interface Part {
   mimeType?: string;
-  body?: { data?: string };
+  filename?: string;
+  body?: { data?: string; attachmentId?: string; size?: number };
   parts?: Part[];
   headers?: { name: string; value: string }[];
 }
 
-/** The first text/plain part of a message, decoded. */
-export function plainText(part: Part | undefined): string {
+/** The first part of a message of this type (text/plain unless said), decoded. */
+export function plainText(part: Part | undefined, type = "text/plain"): string {
   if (!part) return "";
-  if (part.mimeType === "text/plain" && part.body?.data) {
+  if (part.mimeType === type && part.body?.data) {
     const b64 = part.body.data.replace(/-/g, "+").replace(/_/g, "/");
     try {
       return new TextDecoder().decode(Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0)));
@@ -389,7 +412,7 @@ export function plainText(part: Part | undefined): string {
     }
   }
   for (const p of part.parts ?? []) {
-    const found = plainText(p);
+    const found = plainText(p, type);
     if (found) return found;
   }
   return "";
@@ -449,3 +472,81 @@ export async function mail(query: string, max = 8): Promise<Mail[]> {
 
 /** Gmail's search for email worth your attention: unread, in the inbox, not promotions or social. */
 export const IMPORTANT = "in:inbox is:unread -category:promotions -category:social -category:forums newer_than:2d";
+
+// --- reading new email for heads-ups ------------------------------------------------------------
+
+/** Gmail's search for email a heads-up could be about: anything in the inbox but ads and social. */
+export const HEADS_UP = "in:inbox -category:promotions -category:social -category:forums";
+
+/** A new email, with what Butler needs to judge it: who sent it, how, and both its texts. */
+export interface Fetched {
+  id: string;
+  at: Date;
+  from: string;
+  subject: string;
+  text: string; // the plain text part, or "" when there is none
+  html: string; // the HTML part, or ""
+  snippet: string;
+  /** Sent to a mailing list (it has an unsubscribe header): newsletters, marketing, most notifications. */
+  bulk: boolean;
+  /** Gmail's check of who really sent it: "fail" when the sender's domain says it didn't. */
+  auth: "pass" | "fail" | "unknown";
+  attachments: { name: string; mime: string; id: string; size: number }[];
+}
+
+type Full = { id: string; internalDate: string; snippet?: string; payload?: Part };
+
+/** What Gmail's Authentication-Results header says about DMARC (or SPF and DKIM when there's no DMARC). */
+export function authOf(results: string): Fetched["auth"] {
+  const r = results.toLowerCase();
+  if (/dmarc=pass/.test(r)) return "pass";
+  if (/dmarc=fail/.test(r)) return "fail";
+  if (/spf=fail/.test(r) && /dkim=(fail|none)/.test(r)) return "fail";
+  if (/dkim=pass|spf=pass/.test(r)) return "pass";
+  return "unknown";
+}
+
+function attachmentsOf(part: Part | undefined, found: Fetched["attachments"] = []): Fetched["attachments"] {
+  if (!part) return found;
+  if (part.filename && part.body?.attachmentId) {
+    found.push({ name: part.filename, mime: part.mimeType ?? "application/octet-stream", id: part.body.attachmentId, size: part.body.size ?? 0 });
+  }
+  for (const p of part.parts ?? []) attachmentsOf(p, found);
+  return found;
+}
+
+/** One email in full. */
+export async function fetchMail(id: string): Promise<Fetched> {
+  const m = await google<Full>(`${GMAIL()}/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=full`);
+  const head = (name: string) => m.payload?.headers?.find((h) => h.name.toLowerCase() === name)?.value ?? "";
+  return {
+    id: m.id,
+    at: new Date(Number(m.internalDate)),
+    from: head("from"),
+    subject: head("subject"),
+    text: plainText(m.payload).slice(0, 20_000),
+    html: plainText(m.payload, "text/html").slice(0, 200_000),
+    snippet: (m.snippet ?? "").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&"),
+    bulk: Boolean(head("list-unsubscribe") || head("list-id")),
+    auth: authOf(head("authentication-results")),
+    attachments: attachmentsOf(m.payload),
+  };
+}
+
+/** The ids of email matching a Gmail search that arrived after `after`, newest first, at most `max`. */
+export async function mailIds(query: string, after: Date | null, max = 20): Promise<string[]> {
+  const q = after ? `${query} after:${Math.floor(after.getTime() / 1000)}` : query;
+  const list = await google<{ messages?: { id: string }[] }>(
+    `${GMAIL()}/gmail/v1/users/me/messages?${new URLSearchParams({ q, maxResults: String(max) })}`,
+  );
+  return (list.messages ?? []).map((m) => m.id);
+}
+
+/** An attachment's bytes. */
+export async function attachment(messageId: string, attachmentId: string): Promise<Uint8Array> {
+  const data = await google<{ data?: string }>(
+    `${GMAIL()}/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
+  );
+  const b64 = (data.data ?? "").replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+}
