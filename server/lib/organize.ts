@@ -38,7 +38,32 @@ let client: Anthropic | undefined; // created on first use; reads ANTHROPIC_API_
 /** "local" uses a model running in Ollama on the same machine; anything else uses Claude. */
 const useLocal = () => Deno.env.get("BUTLER_AI") === "local";
 
-export function organize(item: RawItem): Promise<OrganizedItem> {
+// The same item (same words, same picture, same known collections) gets the same answer, so a
+// repeat is answered from memory instead of costing another ~20 s on the CPU. Asking while the first
+// is still running shares that one answer. Failures are not kept, so they can be retried.
+const CACHE_SIZE = 200;
+const answers = new Map<string, Promise<OrganizedItem>>();
+
+async function cacheKey(item: RawItem): Promise<string> {
+  const which = [useLocal() ? localModel() : Deno.env.get("BUTLER_MODEL"), item.image && useLocal() && geminiReady() ? "gemini" : ""];
+  const text = JSON.stringify([which, describe(item), item.image?.mediaType, item.image?.data]);
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export async function organize(item: RawItem): Promise<OrganizedItem> {
+  const key = await cacheKey(item);
+  let answer = answers.get(key);
+  if (!answer) {
+    answer = organizeFresh(item);
+    answers.set(key, answer);
+    answer.catch(() => answers.delete(key));
+    if (answers.size > CACHE_SIZE) answers.delete(answers.keys().next().value!);
+  }
+  return structuredClone(await answer);
+}
+
+function organizeFresh(item: RawItem): Promise<OrganizedItem> {
   // Pictures go to Gemini when there's a key, since the local model may not see.
   if (item.image && useLocal() && geminiReady()) return organizeWithGemini(item);
   return useLocal() ? organizeLocally(item) : organizeWithClaude(item);
