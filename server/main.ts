@@ -40,6 +40,7 @@ import * as memory from "./lib/memory.ts";
 import * as transfers from "./lib/transfers.ts";
 import * as alerts from "./lib/alerts.ts";
 import * as daily from "./lib/daily.ts";
+import * as askmore from "./lib/askmore.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -977,10 +978,78 @@ app.post("/api/command", async (c) => {
       meaning.embedItem(item.id).catch(() => {});
       return json({ action: "edit", say: `${p.reply || "updated."}\n\n${was.join("\n")}` });
     }
+    case "roast": {
+      if (sass === "off") return json({ action: "answer", say: askmore.ROAST_OFF });
+      try {
+        return json({ action: "answer", say: await askmore.roast(p.text || said, await roastFacts(turns, known, timeZone), sass) });
+      } catch (e) {
+        return c.json({ error: String(e).slice(0, 300) }, 502);
+      }
+    }
+    case "research": {
+      try {
+        return json({ action: "answer", say: await askmore.research(p.text || said, answering ?? undefined, sass) });
+      } catch (e) {
+        return json({ action: "answer", say: `couldn't search the web just now: ${String((e as Error).message ?? e).slice(0, 160)}` });
+      }
+    }
+    case "readmail": {
+      if (!google.googleConfigured() || !(await google.account())) {
+        return json({ action: "answer", say: "need your Google account for that. connect it under Integrations on the Butler website, then ask again." });
+      }
+      try {
+        const letter = await letterFor(p.text?.trim() || "in:inbox has:attachment");
+        if (!letter) return json({ action: "answer", say: `couldn't find that email${p.text ? ` (searched "${p.text}")` : ""}. tell me who it's from?` });
+        return json({ action: "answer", say: await askmore.readFor(said, letter, sass) });
+      } catch (e) {
+        return c.json({ error: String(e).slice(0, 300) }, 502);
+      }
+    }
+    case "fact":
+      return json({ action: "answer", say: p.reply || "blanking on facts rn. ask me again in a sec?" });
     default:
       return json({ action: "answer", say: p.reply || "can't do that one yet. try saying it another way?" });
   }
 });
+
+/** What a roast is built on: what Butler remembers, recent email subjects, the library, this month's spending. */
+async function roastFacts(turns: memory.Turn[], known: memory.Memory[], timeZone: string): Promise<askmore.RoastFacts> {
+  const [mail, facets, saves, spent] = await Promise.all([
+    google.googleConfigured() && await google.account().catch(() => null)
+      ? google.mail("in:inbox newer_than:14d -category:promotions", 20).catch(() => [] as google.Mail[])
+      : Promise.resolve([] as google.Mail[]),
+    db.facets().catch(() => []),
+    db.listItems({ limit: 12 }).catch(() => [] as db.Item[]),
+    spending.since(spending.startOf("month", new Date(), timeZone)).catch(() => [] as spending.Row[]),
+  ]);
+  return {
+    memories: memory.memoryText(known),
+    mail: mail.map((m) => `${m.from}: ${m.subject}`),
+    collections: facets.filter((f) => f.facet === "category" && f.value !== "unsorted").sort((a, b) => b.n - a.n).slice(0, 10)
+      .map((f) => `${f.value} (${f.n})`),
+    saves: saves.map((i) => i.title ?? "").filter(Boolean),
+    spending: spent.length ? spending.compose(spent, "month") : undefined,
+    history: memory.historyText(turns, timeZone),
+  };
+}
+
+/** The newest email matching a Gmail search, with the attachments Gemini can read. */
+async function letterFor(query: string): Promise<askmore.Letter | null> {
+  const [id] = await google.mailIds(query, null, 1);
+  if (!id) return null;
+  const m = await google.fetchMail(id);
+  const files: askmore.Letter["files"] = [];
+  const skipped: string[] = [];
+  for (const a of m.attachments) {
+    const mime = a.mime.split(";")[0].toLowerCase();
+    if (files.length >= 3 || !askmore.READABLE.includes(mime) || a.size > askmore.MAX_ATTACHMENT_BYTES) {
+      skipped.push(a.name);
+      continue;
+    }
+    files.push({ name: a.name, picture: { mediaType: mime, data: encodeBase64(await google.attachment(m.id, a.id)) } });
+  }
+  return { from: m.from, subject: m.subject, at: m.at, body: alerts.bodyOf(m), files, skipped };
+}
 
 // Which conversation a yes/no belongs to, so its outcome is kept there too.
 const confirmChat = new Map<string, string | null>();
