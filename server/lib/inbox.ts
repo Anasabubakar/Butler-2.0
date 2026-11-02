@@ -30,6 +30,7 @@ export interface Message {
   job: string | null; // for a 'task': its laptop job (see jobs.ts)
   forget?: boolean; // shown once: deleted as soon as the device has it (a login code)
   expires_at?: string | null; // when it stops being any use
+  card?: Record<string, string> | null; // a link preview (title, site, image) or a code to copy
 }
 
 export interface NewMessage {
@@ -44,6 +45,8 @@ export interface NewMessage {
   forget?: boolean;
   /** Dropped unseen after this, like a code that has stopped working. */
   expires_at?: string | null;
+  /** What the device shows with it: a link preview, or a code to copy with one tap. */
+  card?: Record<string, string> | null;
 }
 
 /** Records that a device is alive, so other devices can send to it. */
@@ -108,7 +111,7 @@ export async function takeDue(name: string) {
       order by due_at
       limit 20
       for update skip locked)
-    returning id, created_at, from_device, kind, body, url, item_id, due_at, job, forget, expires_at`;
+    returning id, created_at, from_device, kind, body, url, item_id, due_at, job, forget, expires_at, card`;
   if (due.some((m) => m.forget || FORGET_ONCE_DELIVERED.includes(m.kind))) {
     await sql`delete from messages where (forget or kind = any(${FORGET_ONCE_DELIVERED}::text[])) and delivered_at is not null`;
   }
@@ -129,6 +132,7 @@ export async function send(to: string[], message: NewMessage) {
     job: message.job ?? null,
     forget: message.forget ?? false,
     expires_at: message.expires_at ?? null,
+    card: message.card ? sql.json(message.card) : null,
   }));
   // Only your latest copy matters: drop older ones still waiting.
   if (message.kind === "sync") await sql`delete from messages where kind = 'sync' and delivered_at is null and to_device = any(${to}::text[])`;
