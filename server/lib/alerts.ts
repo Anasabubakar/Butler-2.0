@@ -181,7 +181,7 @@ export function classify(m: Pick<Fetched, "from" | "subject" | "bulk">, body: st
   if (!m.bulk && fromPerson(m.from)) return { kind: "personal" };
   // Anything else may still matter; the AI decides. Not noise, and never an email that talks
   // about a code the rules couldn't find, so a login code can't reach the AI that way.
-  if NOISE.test(head) || PROMO.test(early) || CODE_WORDS.test(early) return { kind: "skip" };
+  if (NOISE.test(head) || PROMO.test(early) || CODE_WORDS.test(early)) return { kind: "skip" };
   return { kind: "other" };
 }
 
