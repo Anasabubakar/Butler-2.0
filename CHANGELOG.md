@@ -6,6 +6,8 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 
 ## v0.3.0 (2026-11-02)
 
+Butler now texts you first: email heads-ups, login codes, events before they start and a few daily touches, in the app, on the laptop or in a private Telegram bot. It also remembers your conversation, sends real files between phone and laptop, and organizes saves faster on a CPU-only server.
+
 ### Butler texts you first
 
 - **Email heads-ups.** Butler reads new email and texts what matters: login codes and reset links (shown once, never kept, never sent to an AI), failed payments and bills with the pay link, security alerts, deadlines with "want me to put that on your calendar?", people who need an answer, and events an hour before they start with the place and ticket or join link (from email and Google Calendar, told once). Newsletters and receipts stay quiet, phishing that fails Gmail's sender check is called out, and anything that can wait is held overnight.
