@@ -50,21 +50,26 @@ async function organizeWithGemini(item: RawItem): Promise<OrganizedItem> {
   return tidy(await askGemini(prompt, item.image!, Organized), item.collections);
 }
 
-function describe(item: RawItem): string {
+/** How much of each field goes in the prompt. The local model reads ~17 tokens a second on 2 CPU cores, so it gets less. */
+const FULL = { page: 3000, video: 3000, body: 4000, collections: Infinity };
+const SHORT = { page: 1200, video: 1200, body: 1500, collections: 40 };
+
+function describe(item: RawItem, limits = FULL): string {
   const facts = [
     `kind: ${item.kind}`,
     item.platform && `platform: ${item.platform}`,
     item.url && `url: ${item.url}`,
     item.pageTitle && `page title: ${item.pageTitle}`,
     item.pageDescription && `page description: ${item.pageDescription}`,
-    item.pageText && `what the page says: ${item.pageText.slice(0, 3000)}`,
-    item.details && `what the video says: ${item.details.slice(0, 3000)}`,
-    item.body && `shared text: ${item.body.slice(0, 4000)}`,
+    item.pageText && `what the page says: ${item.pageText.slice(0, limits.page)}`,
+    item.details && `what the video says: ${item.details.slice(0, limits.video)}`,
+    item.body && `shared text: ${item.body.slice(0, limits.body)}`,
     item.note && `owner's note: ${item.note}`,
   ].filter(Boolean).join("\n");
 
-  const known = item.collections?.length
-    ? `\n\nCollections already in the library: ${item.collections.map((c) => `"${c}"`).join(", ")}. ` +
+  const collections = item.collections?.slice(0, limits.collections);
+  const known = collections?.length
+    ? `\n\nCollections already in the library: ${collections.map((c) => `"${c}"`).join(", ")}. ` +
       "If one of them is the same topic, use it exactly as written instead of making a near-duplicate."
     : "";
 
