@@ -192,10 +192,29 @@ export interface Event {
   allDay: boolean;
   /** For all-day events, the day after the last one, like Google gives it (2026-10-22 for a one-day event on the 21st). */
   until?: string;
+  /** Where it is, as the event says. */
+  place?: string;
+  /** The video call to join (Meet, Zoom, Teams), when it has one. */
+  link?: string;
 }
 
 type When = { dateTime?: string; date?: string };
-type Listed = { items?: { summary?: string; status?: string; start?: When; end?: When }[] };
+type Listed = {
+  items?: {
+    summary?: string; status?: string; start?: When; end?: When; location?: string; description?: string; hangoutLink?: string;
+    conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] };
+  }[];
+};
+
+/** An event's video call: Google Meet, its conference entry, or a Zoom/Teams/Meet link in the place or notes. */
+export function callLink(e: NonNullable<Listed["items"]>[number]): string | undefined {
+  const video = e.conferenceData?.entryPoints?.find((p) => p.entryPointType === "video" && p.uri?.startsWith("https://"))?.uri;
+  if (e.hangoutLink?.startsWith("https://")) return e.hangoutLink;
+  if (video) return video;
+  const found = `${e.location ?? ""} ${e.description ?? ""}`
+    .match(/https:\/\/(?:[\w-]+\.)?(?:zoom\.us|meet\.google\.com|teams\.microsoft\.com|teams\.live\.com)\/[^\s"'<>]+/i);
+  return found?.[0];
+}
 
 /** The calendars you have ticked in Google Calendar, main one first. Just the main one if Butler can't list them. */
 async function calendarIds(): Promise<string[]> {
@@ -232,6 +251,9 @@ export async function events(from: Date, to: Date): Promise<Event[]> {
       if (!when || e.status === "cancelled") continue;
       const event: Event = { title: e.summary || "(no title)", start: dayOrTime(when), allDay: !e.start?.dateTime };
       if (event.allDay && e.end?.date) event.until = e.end.date;
+      if (e.location?.trim() && !/^https?:\/\//.test(e.location.trim())) event.place = e.location.trim().slice(0, 200);
+      const call = callLink(e);
+      if (call) event.link = call;
       const key = `${event.title}|${event.start.getTime()}`;
       if (seen.has(key)) continue; // the same event on two calendars
       seen.add(key);
