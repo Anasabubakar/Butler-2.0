@@ -117,3 +117,30 @@ test("the model is told to name the real topic, reuse collections and use what t
     await server.shutdown();
   }
 });
+
+test("local model: long pages, videos, text and collection lists are cut down so the CPU reads less", async () => {
+  let prompt = "";
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+    if (new URL(req.url).pathname === "/api/pull") return Response.json({ status: "success" });
+    prompt = (await req.json()).messages[0].content;
+    const answer = { title: "T", summary: "S.", tags: ["a"], category: "x" };
+    return Response.json({ message: { content: JSON.stringify(answer) } });
+  });
+  Deno.env.set("BUTLER_AI", "local");
+  Deno.env.set("OLLAMA_URL", `http://localhost:${server.addr.port}`);
+  try {
+    await organize({
+      kind: "link", platform: null, url: null, note: null,
+      body: "b".repeat(5000), pageText: "p".repeat(5000), details: "v".repeat(5000),
+      collections: Array.from({ length: 60 }, (_, i) => `Collection ${i}`),
+    });
+    assert.equal(prompt.includes("p".repeat(1201)), false);
+    assert.equal(prompt.includes("v".repeat(1201)), false);
+    assert.equal(prompt.includes("b".repeat(1501)), false);
+    assert.match(prompt, /"Collection 39"/);
+    assert.doesNotMatch(prompt, /"Collection 40"/);
+  } finally {
+    Deno.env.delete("BUTLER_AI");
+    await server.shutdown();
+  }
+});
