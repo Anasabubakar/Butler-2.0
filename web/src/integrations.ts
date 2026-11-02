@@ -153,9 +153,16 @@ async function telegram(slot: HTMLElement) {
         const r = await busy(e.currentTarget as HTMLButtonElement, () => api<{ link: string }>("/api/telegram/pair", { method: "POST" }))
           .catch((err) => (box.replaceChildren(inlineError((err as Error).message)), null));
         if (!r) return;
+        const u = new URL(r.link);
+        const code = u.searchParams.get("start") ?? "";
+        const name = u.pathname.slice(1);
+        // t.me links open the Telegram app; this one opens Telegram Web in the browser instead.
+        const web = `https://web.telegram.org/k/#?tgaddr=${encodeURIComponent(`tg://resolve?domain=${name}&start=${code}`)}`;
         box.replaceChildren(
           h("a", { class: "b2-button b2-button--primary b2-button--small", href: r.link, target: "_blank", rel: "noopener" }, icon("external"), `Open ${bot} and tap Start`),
-          h("p", { class: "muted small" }, "The link works once, for 10 minutes. Whoever taps Start with it becomes the only person the bot answers, so don't share it."),
+          h("a", { class: "b2-button b2-button--secondary b2-button--small", href: web, target: "_blank", rel: "noopener" }, icon("external"), "Open in Telegram Web"),
+          h("p", { class: "muted small" }, "Or send the bot this yourself: ", h("code", {}, `/start ${code}`)),
+          h("p", { class: "muted small" }, "It works once, for 10 minutes. Whoever uses it becomes the only person the bot answers, so don't share it."),
         );
         waitForConnect();
       },
