@@ -2,6 +2,20 @@
 
 Everything Butler does today, and how to switch each part on or off. Most settings live in `deploy/butler.env` (see [self-hosting](self-hosting.md)).
 
+## Talking with Butler
+
+Ask Butler first works out whether you want something done (a reminder, an email, a check of your calendar) or just want to talk. Actions are picked by a fast model. A conversation gets its own reply, written by a smarter model (Flash rather than Flash-Lite, `BUTLER_CHAT_MODEL` to choose), which:
+
+- reads the conversation as real back-and-forth turns: the last 40 messages from the past week, since your last **New chat**;
+- finds older chat that shares words with what you just said, so "when is my visa interview again?" finds what you told it last month;
+- knows what it remembers about you, the time, and what it can do for you, so it offers a reminder instead of telling you to set one;
+- can look things up on Google when the question needs today's facts;
+- writes as much as the answer needs: short for small talk, longer for advice or explanations.
+
+After each reply it looks, in the background, for new lasting facts about you (your people, plans, preferences), when **Learn about me** is on. You can see and forget them on the website.
+
+How well it talks is checked on sample conversations in `tests/evals/chat.json`: `deno task eval-chat` runs them against your real AI key and prints the old and new replies with a 1 to 5 score each.
+
 ## Connections (MCP)
 
 Ask Butler can use tools from other services that speak MCP (the Model Context Protocol): Zapier, Notion, GitHub, or a server you wrote. On the website, press **Connections**, give it a name, paste the server's link, and pick how Butler signs in: **Sign in (OAuth)** sends you to the service to log in and allow Butler, like Claude Desktop does; or paste a key (**API key (Bearer)** or **API key in a header**). Butler connects, lists the server's tools, and from then on picks one when it fits what you asked, like "add milk to my shopping list in Notion".
