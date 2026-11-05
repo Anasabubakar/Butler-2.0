@@ -34,6 +34,7 @@ import * as prefs from "./lib/prefs.ts";
 import { addressed } from "./lib/persona.ts";
 import * as mcp from "./lib/mcp.ts";
 import * as recipes from "./lib/recipes.ts";
+import { googleOffers, isGoogleTool, useGoogle } from "./lib/googletools.ts";
 import { vaultReady } from "./lib/vault.ts";
 import * as sync from "./lib/sync.ts";
 import * as memory from "./lib/memory.ts";
@@ -615,6 +616,17 @@ const toolOffers = () => mcp.offers().catch((e) => {
   return [] as mcp.Offer[];
 });
 
+/** The tools a recipe can pick from: your connections, plus your own Google account when it's connected. */
+async function recipeOffers(): Promise<mcp.Offer[]> {
+  const offers = await toolOffers();
+  const connected = google.googleConfigured() && await google.account().catch(() => null);
+  return connected ? [...googleOffers(), ...offers] : offers;
+}
+
+/** Runs a recipe's tool: Google ones here, the rest on their connection. */
+const recipeUse = (timeZone: string) => (offer: mcp.Offer, args: Record<string, unknown>) =>
+  isGoogleTool(offer) ? useGoogle(offer, args, new Date(), timeZone) : mcp.use(offer, args, false);
+
 /** Sends every device a recipe's result as a note when it's done; a step needing your yes waits on the website. */
 function noteWhenDone(recipe: recipes.Recipe, job: Promise<recipes.Done>, said: string) {
   job.then((done) => {
@@ -637,11 +649,11 @@ async function recipesIfDue(now = new Date()) {
   const local = localIso(now, timeZone);
   const due = await recipes.claimDue(local);
   if (!due.length) return;
-  const offers = await toolOffers();
+  const offers = await recipeOffers();
   for (const recipe of due) {
     console.log(`recipe: running ${recipe.name} on schedule`);
     await recipes.ran(recipe.id).catch(() => {});
-    const job = recipes.run(recipe, { said: "", now: local, timeZone, offers, teasing: await teasing(), use: (offer, args) => mcp.use(offer, args, false) });
+    const job = recipes.run(recipe, { said: "", now: local, timeZone, offers, teasing: await teasing(), use: recipeUse(timeZone) });
     noteWhenDone(recipe, job, "");
   }
 }
@@ -659,8 +671,8 @@ async function startOnEvent(recipe: recipes.Recipe, event: string): Promise<bool
   const timeZone = await ownerZone();
   await recipes.ran(recipe.id).catch(() => {});
   const job = recipes.run(recipe, {
-    said: "", event, now: localIso(new Date(), timeZone), timeZone, offers: await toolOffers(), teasing: await teasing(),
-    use: (offer, args) => mcp.use(offer, args, false),
+    said: "", event, now: localIso(new Date(), timeZone), timeZone, offers: await recipeOffers(), teasing: await teasing(),
+    use: recipeUse(timeZone),
   });
   noteWhenDone(recipe, job, "");
   return true;
@@ -700,8 +712,8 @@ async function recipesOnEmail() {
  */
 async function startRecipe(recipe: recipes.Recipe, said: string, timeZone: string): Promise<{ say: string; confirm?: string }> {
   const job = recipes.run(recipe, {
-    said, now: localIso(new Date(), timeZone), timeZone, offers: await toolOffers(), teasing: await teasing(),
-    use: (offer, args) => mcp.use(offer, args, false),
+    said, now: localIso(new Date(), timeZone), timeZone, offers: await recipeOffers(), teasing: await teasing(),
+    use: recipeUse(timeZone),
   });
   await recipes.ran(recipe.id).catch(() => {});
   let timer: number | undefined;
