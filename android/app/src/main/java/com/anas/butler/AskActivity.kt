@@ -223,7 +223,7 @@ class AskActivity : AppCompatActivity() {
         val shot = intent.getStringExtra(EXTRA_SHOT)?.let(::File)?.takeIf { it.exists() }?.readBytes()
         lifecycleScope.launch {
             val message = runCatching {
-                val result = ButlerClient(Config(this@AskActivity)).command(text, shot, replyTo, item)
+                val result = ButlerClient(Config(this@AskActivity)).command(text, shot, replyTo, item, chat())
                 replyTo = null // Butler has it in the conversation now
                 act(result, shot)
             }.getOrElse { getString(R.string.pet_failed, it.message ?: it.toString()) }
@@ -264,6 +264,13 @@ class AskActivity : AppCompatActivity() {
     private suspend fun act(result: JSONObject, shot: ByteArray?): String {
         val say = result.optString("say")
         result.optJSONObject("message")?.let { return handoff(it, shot, say) }
+        if (result.optString("action") == "draft") {
+            // Written into the chat's own box once this sheet is out of the way; you press Send.
+            val pet = PetService.instance ?: throw IllegalStateException(getString(R.string.ask_start_pet))
+            pet.draftSoon(result.optString("instruction").ifBlank { input.text.toString().trim() })
+            finish()
+            return say
+        }
         if (result.optString("action") == "screen") {
             val pet = PetService.instance ?: throw IllegalStateException(getString(R.string.ask_start_pet))
             pet.operateSoon(result.optString("goal"))
@@ -374,6 +381,12 @@ class AskActivity : AppCompatActivity() {
         return PhoneNumberUtils.formatNumberToE164(number, country) ?: number
     }
 
+    /** The chat you came from, if it had a message box. */
+    private fun chat(): ButlerClient.Chat? =
+        if (item == null && intent.getBooleanExtra(EXTRA_HAS_BOX, false)) {
+            ButlerClient.Chat(intent.getStringExtra(EXTRA_APP), intent.getStringExtra(EXTRA_BOX).orEmpty())
+        } else null
+
     private fun clipboardText(): String? =
         getSystemService(ClipboardManager::class.java).primaryClip
             ?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(this)?.toString()?.trim()?.ifEmpty { null }
@@ -385,14 +398,21 @@ class AskActivity : AppCompatActivity() {
         private const val EXTRA_REPLY_TO = "reply_to"
         private const val EXTRA_ITEM = "item"
         private const val EXTRA_ITEM_TITLE = "item_title"
+        private const val EXTRA_HAS_BOX = "has_box"
+        private const val EXTRA_BOX = "box"
+        private const val EXTRA_APP = "app"
         const val EXTRA_LAPTOP = "laptop"
 
         /**
          * Opens the sheet over the current app, with a screenshot file and the page's link if
          * there is one. `laptop` starts it switched to My laptop. `replyTo` is what Butler said
-         * that you're answering, from the pet's bubble.
+         * that you're answering, from the pet's bubble. `chat` is the chat you were in, if its message
+         * box was showing, so "help me respond" can write into it.
          */
-        fun open(context: Context, shot: File?, link: String?, talk: Boolean, laptop: Boolean = false, replyTo: String? = null) {
+        fun open(
+            context: Context, shot: File?, link: String?, talk: Boolean, laptop: Boolean = false, replyTo: String? = null,
+            chat: ButlerClient.Chat? = null,
+        ) {
             context.startActivity(
                 Intent(context, AskActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
@@ -400,7 +420,10 @@ class AskActivity : AppCompatActivity() {
                     .putExtra(EXTRA_LINK, link)
                     .putExtra(EXTRA_TALK, talk)
                     .putExtra(EXTRA_LAPTOP, laptop)
-                    .putExtra(EXTRA_REPLY_TO, replyTo),
+                    .putExtra(EXTRA_REPLY_TO, replyTo)
+                    .putExtra(EXTRA_HAS_BOX, chat != null)
+                    .putExtra(EXTRA_BOX, chat?.box)
+                    .putExtra(EXTRA_APP, chat?.app),
             )
         }
 
