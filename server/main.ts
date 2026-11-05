@@ -46,6 +46,8 @@ import * as links from "./lib/links.ts";
 import * as tg from "./lib/telegram.ts";
 import { ALLOWED_UPDATES, type Answer, Bot, type Butler, type Update } from "./lib/bot.ts";
 import * as privacy from "./lib/privacy.ts";
+import * as act from "./lib/act.ts";
+import type { Picture } from "./lib/gemini.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
@@ -1133,6 +1135,185 @@ app.post("/api/screen/step", async (c) => {
   if (done.length >= limit) return c.json({ do: "stop", say: `stopped after ${limit} steps. your turn from here.` });
   try {
     return c.json(await nextStep(got.picture, goal, done, got.text("kind") === "phone" ? "phone" : "laptop"));
+  } catch (e) {
+    return c.json({ error: String(e).slice(0, 300) }, 502);
+  }
+});
+
+// --- act on this screen -----------------------------------------------------------------
+
+// What "Act on this" found that changes something, waiting for your yes (in memory, 30 minutes).
+interface PendingActs {
+  writes: act.Write[];
+  timeZone: string;
+  device: string;
+  said: string;
+  expires: number;
+}
+const pendingActs = new Map<string, PendingActs>();
+
+function holdActs(p: Omit<PendingActs, "expires">): string {
+  const now = Date.now();
+  for (const [id, old] of pendingActs) if (old.expires < now) pendingActs.delete(id);
+  const id = crypto.randomUUID();
+  pendingActs.set(id, { ...p, expires: now + 30 * 60_000 });
+  return id;
+}
+
+// A screen Butler asked you about, kept 15 minutes so your answer carries on from it.
+interface AskedAbout {
+  question: string;
+  pictures: Picture[];
+  expires: number;
+}
+let askedAbout: AskedAbout[] = [];
+
+/** The screen Butler asked about with this question, if it's still fresh. */
+function findAsked(question: string | null): AskedAbout | null {
+  askedAbout = askedAbout.filter((a) => a.expires > Date.now());
+  const q = question?.trim();
+  return q ? askedAbout.find((a) => a.question === q) ?? null : null;
+}
+
+/** How long a check waits before carrying on in the background (the phone gives up at 60s). */
+const CHECK_WAIT_MS = Number(env("BUTLER_CHECK_WAIT_MS", "35000"));
+
+/** Looks something up with your connections, like a recipe written on the spot. */
+async function runCheck(
+  check: { text: string; tool: string | null }, offers: mcp.Offer[], timeZone: string,
+): Promise<{ say: string; waiting?: { offer: mcp.Offer; args: Record<string, unknown> } }> {
+  const recipe: recipes.Recipe = {
+    id: "act-on-screen", name: "Act on this",
+    instructions: `Check this for the owner and tell them what you found: ${check.text}` +
+      (check.tool ? `\nStart with the tool "${check.tool}".` : ""),
+    connections: [], last_run_at: null, run_at: null, run_days: [], email_query: null, email_error: null, has_hook: false,
+  };
+  const job = recipes.run(recipe, {
+    said: check.text, now: localIso(new Date(), timeZone), timeZone, offers, teasing: await teasing(),
+    use: (offer, args) => mcp.use(offer, args, false),
+  });
+  let timer: number | undefined;
+  const early = await Promise.race([
+    job.catch((e: Error) => ({ say: `couldn't check "${check.text}": ${e.message.slice(0, 160)}` }) as recipes.Done),
+    new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), CHECK_WAIT_MS); }),
+  ]);
+  clearTimeout(timer);
+  if (early) return early;
+  noteWhenDone(recipe, job, check.text);
+  return { say: `still checking "${check.text}". i'll send the result as a note.` };
+}
+
+/**
+ * Reads the screen and does what it can: checks run now, changes wait for your yes. When it
+ * can't tell, it asks for another view (if the phone can scroll) or asks you one question.
+ */
+async function actOn(
+  pictures: Picture[], o: { device: string; timeZone: string; canScroll: boolean; answer?: { question: string; said: string } },
+): Promise<Record<string, unknown>> {
+  const offers = (await toolOffers()).slice(0, 60);
+  const tools = offers.map((t) => ({ key: t.key, description: t.tool.description, args: shortArgs(t.tool.schema) }));
+  const known = await memory.memories().catch(() => [] as memory.Memory[]);
+  const reading = await act.read(pictures, {
+    now: localIso(new Date(), o.timeZone), timeZone: o.timeZone, tools, canScroll: o.canScroll, answer: o.answer,
+    memories: memory.memoryText(known) || undefined, teasing: await teasing(),
+  });
+  const keep = (say: string) => memory.addTurn("butler", say, null, null).catch((e) => console.error("chat", String(e).slice(0, 200)));
+  if (reading.status === "more" && o.canScroll) return { status: "more", scroll: reading.scroll ?? "up" };
+  if (reading.status === "ask" || reading.status === "more") {
+    const question = reading.question?.trim() || "not sure what needs doing here. what should i do with it?";
+    askedAbout = [...askedAbout.slice(-4), { question, pictures, expires: Date.now() + 15 * 60_000 }];
+    await keep(question);
+    return { status: "ask", action: "answer", say: question };
+  }
+  const sorted = act.sort(reading.items, offers.map((t) => t.key), o.timeZone);
+  const lines: string[] = [];
+  if (reading.summary.trim()) lines.push(reading.summary.trim());
+  const found = await Promise.all(sorted.checks.map((ch) => runCheck(ch, offers, o.timeZone)));
+  const writes = [...sorted.writes];
+  for (const f of found) {
+    if (f.say.trim()) lines.push(f.say.trim());
+    if (f.waiting) writes.push({ kind: "tool", text: f.say.trim() || f.waiting.offer.key, tool: f.waiting.offer.key, args: f.waiting.args });
+  }
+  let confirm: string | undefined;
+  if (writes.length) {
+    confirm = holdActs({ writes, timeZone: o.timeZone, device: o.device, said: reading.summary || "Act on this" });
+    lines.push(`Tap Do it and I'll:\n${writes.map((w, i) => `${i + 1}. ${act.describe(w, o.timeZone)}`).join("\n")}`);
+  }
+  if (sorted.skipped.length) lines.push(`Left out: ${sorted.skipped.join("; ")}.`);
+  if (!found.length && !writes.length && !sorted.skipped.length) lines.push("nothing to act on here.");
+  const say = lines.join("\n\n");
+  await keep(say);
+  return { status: reading.status === "none" ? "none" : "ready", action: confirm ? "confirm" : "answer", say, confirm };
+}
+
+/** Does what you said yes to, one line each on how it went. */
+async function carryOut(p: PendingActs): Promise<string> {
+  const googleOn = google.googleConfigured() && Boolean(await google.account().catch(() => null));
+  const everywhere = (await inbox.devices()).map((d) => d.name);
+  const remind = (text: string, at: Date) =>
+    inbox.send(everywhere.length ? everywhere : [p.device], {
+      from_device: p.device, kind: "reminder", body: text, due_at: new Date(Math.max(at.getTime(), Date.now())).toISOString(),
+    });
+  const offers = await toolOffers();
+  const lines: string[] = [];
+  for (const w of p.writes) {
+    const what = act.describe(w, p.timeZone);
+    try {
+      switch (w.kind) {
+        case "reminder":
+          await remind(w.text, w.at);
+          lines.push(`Done: ${what}`);
+          break;
+        case "event":
+          if (googleOn) {
+            await google.addEvent(w.text, w.at, w.end, p.timeZone);
+            lines.push(`Done: ${what}`);
+          } else {
+            lines.push(`Google isn't connected, so tap this to add "${w.text}": ${calendarUrl(w.text, w.at, w.end)}`);
+          }
+          break;
+        case "task":
+          try {
+            if (!googleOn) throw new Error("Google isn't connected");
+            await google.addTask(w.text, w.day, "Added by Butler from your screen.");
+            lines.push(`Done: ${what}`);
+          } catch (e) {
+            // Older sign-ins can only read tasks; a reminder on the day is the next best thing.
+            await remind(`Due today: ${w.text}`, w.due);
+            lines.push(`Google Tasks said no (${(e as Error).message.slice(0, 80)}), so it's a Butler reminder instead. ` +
+              "Press Connect Google again on the website to let me add tasks.");
+          }
+          break;
+        case "tool": {
+          const offer = offers.find((t) => t.key === w.tool);
+          lines.push(offer ? await useTool(offer, w.args, p.said, true) : `${w.tool} has been switched off or removed, so I didn't use it.`);
+          break;
+        }
+      }
+    } catch (e) {
+      lines.push(`Didn't work: ${what} (${(e as Error).message.slice(0, 120)})`);
+    }
+  }
+  return lines.join("\n");
+}
+
+// Act on this: one or more screenshots of the same screen (more after each scroll), oldest first.
+app.post("/api/screen/act", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "bad token" }, 401);
+  if (!geminiReady()) return c.json({ error: "no vision model: set GEMINI_API_KEY on the server" }, 503);
+  const { form, text, deviceKind } = await deviceForm(c);
+  const device = text("device", 100) ?? "phone";
+  if (deviceKind) await inbox.checkIn(device, deviceKind);
+  const files = (form?.getAll("file") ?? []).filter((f): f is File => f instanceof File && f.size > 0);
+  if (!files.length || files.some((f) => !VISION_TYPES.some((t) => t === f.type))) {
+    return c.json({ error: "expected screenshots in the file field" }, 400);
+  }
+  if (files.length > act.MAX_SCROLLS + 1) return c.json({ error: "too many views" }, 400);
+  if (files.some((f) => f.size > MAX_VISION_BYTES)) return c.json({ error: "screenshot too large" }, 413);
+  const pictures = await Promise.all(files.map(async (f) => ({ data: encodeBase64(new Uint8Array(await f.arrayBuffer())), mediaType: f.type })));
+  const timeZone = safeZone(text("tz", 100));
+  try {
+    return c.json(await actOn(pictures, { device, timeZone, canScroll: text("more") === "1" && files.length <= act.MAX_SCROLLS }));
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
