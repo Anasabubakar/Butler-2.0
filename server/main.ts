@@ -49,6 +49,7 @@ import * as tg from "./lib/telegram.ts";
 import { ALLOWED_UPDATES, type Answer, Bot, type Butler, type Update } from "./lib/bot.ts";
 import * as privacy from "./lib/privacy.ts";
 import * as act from "./lib/act.ts";
+import * as draft from "./lib/draft.ts";
 import type { Picture } from "./lib/gemini.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
@@ -1348,6 +1349,63 @@ app.post("/api/screen/act", async (c) => {
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
+});
+
+// --- draft a reply into the chat's own box ---------------------------------------------
+
+// The last draft Butler typed into a chat, so "shorter" a minute later knows what it's about.
+let lastDraft: { app: string | null; text: string; at: number } | null = null;
+
+/** Whether a draft was typed moments ago (in the same app, when the phone says which). */
+function recentDraft(app: string | null): boolean {
+  if (!lastDraft || Date.now() - lastDraft.at > draft.FOLLOW_UP_MS) return false;
+  return !app || !lastDraft.app || lastDraft.app === app;
+}
+
+// Draft a reply: views of the chat (more after each scroll up), what's in its box, and what you asked.
+// Answers status "more" (scroll up and call again) or "ready" with the text to type into the box.
+// Nothing is sent: the phone types it in and you press Send.
+app.post("/api/screen/draft", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "bad token" }, 401);
+  if (!geminiReady()) return c.json({ error: "no AI model: set GEMINI_API_KEY on the server" }, 503);
+  const { form, text, deviceKind } = await deviceForm(c);
+  const device = text("device", 100) ?? "phone";
+  if (deviceKind) await inbox.checkIn(device, deviceKind);
+  const files = (form?.getAll("file") ?? []).filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.some((f) => !VISION_TYPES.some((t) => t === f.type))) return c.json({ error: "expected screenshots in the file field" }, 400);
+  if (files.length > draft.MAX_SCROLLS + 1) return c.json({ error: "too many views" }, 400);
+  if (files.some((f) => f.size > MAX_VISION_BYTES)) return c.json({ error: "screenshot too large" }, 413);
+  const instruction = text("instruction", 1000) || "help me respond";
+  const screenText = text("screen_text", 4000) ?? undefined;
+  if (!files.length && !screenText) return c.json({ error: "send a screenshot or the screen's words" }, 400);
+  const pictures = await Promise.all(files.map(async (f) => ({ data: encodeBase64(new Uint8Array(await f.arrayBuffer())), mediaType: f.type })));
+  const app = text("app", 200);
+  const box = text("box", 4000) ?? "";
+  const timeZone = safeZone(text("tz", 100));
+  const canScroll = text("more") === "1" && files.length <= draft.MAX_SCROLLS;
+  const [turns, known] = await Promise.all([
+    memory.recentTurns(null).catch(() => [] as memory.Turn[]),
+    memory.memories().catch(() => [] as memory.Memory[]),
+  ]);
+  let written;
+  try {
+    written = await draft.write(pictures, {
+      instruction, box, app: app ?? undefined, screenText, canScroll, teasing: await teasing(),
+      previous: recentDraft(app) ? lastDraft?.text : undefined,
+      history: memory.historyText(turns.slice(-8), timeZone) || undefined, memories: memory.memoryText(known) || undefined,
+    });
+  } catch (e) {
+    return c.json({ error: String(e).slice(0, 300) }, 502);
+  }
+  if (written.status === "more" && canScroll) return c.json({ status: "more", scroll: "up" });
+  if (!written.text) return c.json({ error: "couldn't write anything for that chat. try again, or tell me what to say" }, 502);
+  lastDraft = { app, text: written.text, at: Date.now() };
+  // Kept in the conversation, so a follow-up from the bubble or the Ask sheet follows on.
+  const note = written.note.trim() || "typed it in. read it over, then hit send.";
+  memory.addTurn("owner", instruction, device, null)
+    .then(() => memory.addTurn("butler", `${note}\n\nDraft typed into the chat: """${written.text}"""`, null, null))
+    .catch((e) => console.error("chat", String(e).slice(0, 200)));
+  return c.json({ status: "ready", text: written.text, say: note });
 });
 
 app.post("/api/login", async (c) => {
