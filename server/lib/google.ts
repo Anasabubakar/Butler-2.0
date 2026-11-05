@@ -17,7 +17,7 @@ export const SCOPES = [
   "email",
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.readonly", // every calendar you see, not only the main one
-  "https://www.googleapis.com/auth/tasks.readonly", // your Google Tasks, for the brief
+  "https://www.googleapis.com/auth/tasks", // your Google Tasks: read for the brief, add from "Act on this"
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/gmail.readonly", // for recipes that start when an email arrives
   "https://www.googleapis.com/auth/contacts.readonly",
