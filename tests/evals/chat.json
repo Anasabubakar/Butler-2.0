@@ -1,0 +1,80 @@
+{
+  "about": "Sample conversations for Butler's chat replies. Run with: deno run -A server/eval-chat.ts (needs GEMINI_API_KEY). Each case is checked by rules and scored 1-5 by an AI judge, for the old reply (planner only) and the new one.",
+  "cases": [
+    {
+      "name": "follow-up uses what was just said",
+      "turns": [
+        ["owner", "got an offer from Paystack for a backend role"],
+        ["butler", "congrats 🔥 you taking it?"]
+      ],
+      "say": "what should i ask them before i accept?",
+      "mention": ["salary|pay|compensation|equity|remote|team|growth|notice|benefit"],
+      "avoid": ["what (role|offer|company)\\b"]
+    },
+    {
+      "name": "uses remembered facts",
+      "memories": ["Their sister is Aisha", "Is vegetarian"],
+      "say": "what should i cook for my sister this weekend?",
+      "avoid": ["\\b(chicken|beef|goat|fish|meat|turkey|pork)\\b", "who('s| is) your sister"]
+    },
+    {
+      "name": "remembers older chat",
+      "older": [["2026-11-02T10:00:00Z", "owner", "my UK visa interview is on 12 November at 9am"], ["2026-11-02T10:00:04Z", "butler", "noted. want a reminder the day before?"]],
+      "say": "when is my visa interview again?",
+      "mention": ["12"]
+    },
+    {
+      "name": "short answer to Butler's question is an action",
+      "turns": [["butler", "want me to remind you to call Mum at 6pm?"]],
+      "say": "nah, make it 7",
+      "action": "remind"
+    },
+    {
+      "name": "pushes back on a weak plan",
+      "memories": ["Is building Butler, a personal assistant app", "Hasn't tested most features on a real phone yet"],
+      "say": "i'm adding 5 more features tonight before testing anything",
+      "mention": ["test"]
+    },
+    {
+      "name": "explains with substance",
+      "say": "explain how compound interest works with a simple example",
+      "mention": ["interest"],
+      "minChars": 200
+    },
+    {
+      "name": "why follows the thread",
+      "turns": [
+        ["owner", "should i use postgres or mongo for butler?"],
+        ["butler", "postgres. your data is relational and you already run it on the VPS."]
+      ],
+      "say": "why not mongo tho?",
+      "mention": ["mongo|document|relational|join|schema"]
+    },
+    {
+      "name": "answers in Pidgin",
+      "say": "abeg how i fit sleep early? i dey wake 3am every night",
+      "mention": ["\\b(dey|fit|na|abeg|no go|wetin|una)\\b"]
+    },
+    {
+      "name": "drops the jokes when they're stressed",
+      "say": "i'm genuinely stressed, nothing is working and i feel like quitting",
+      "avoid": ["bradar", "😭", "😂", "cooked"]
+    },
+    {
+      "name": "never invents shared history",
+      "say": "what did we talk about yesterday?",
+      "avoid": ["TeenovateX", "gradients", "17 (unfinished )?projects"]
+    },
+    {
+      "name": "gives an opinion when asked",
+      "turns": [["owner", "thinking of naming the pet Little Butler or Bubu"]],
+      "say": "which one?",
+      "mention": ["little butler|bubu"]
+    },
+    {
+      "name": "suggests a next step it can do",
+      "say": "i keep forgetting to drink water during the day",
+      "mention": ["remind"]
+    }
+  ]
+}
