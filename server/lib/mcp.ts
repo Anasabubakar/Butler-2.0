@@ -335,6 +335,11 @@ export function redirectUri(): string {
   return `${base}/api/mcp/oauth/callback`;
 }
 
+/** Butler's client document, which services that read them use as its client ID. */
+export function clientDocumentUrl(): string {
+  return `${new URL(redirectUri()).origin}/oauth/client.json`;
+}
+
 const hash = async (text: string) =>
   Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))),
     (b) => b.toString(16).padStart(2, "0")).join("");
@@ -348,7 +353,7 @@ export async function addOAuth(name: string, link: string, given: oauth.Prepare)
   const url = await checkUrl(link);
   const [taken] = await sql`select 1 from mcp_connections where name = ${name}`;
   if (taken) throw new Error("you already have a connection with that name");
-  const secret: Secret = { url: url.href, headers: {}, oauth: await oauth.prepare(url.href, given, redirectUri(), fetcher) };
+  const secret: Secret = { url: url.href, headers: {}, oauth: await oauth.prepare(url.href, given, redirectUri(), fetcher, clientDocumentUrl()) };
   const [row] = await sql<Connection[]>`
     insert into mcp_connections (name, host, secret, auth, signin_needed)
     values (${name}, ${url.host}, ${await lock(JSON.stringify(secret))}, 'oauth', true)
