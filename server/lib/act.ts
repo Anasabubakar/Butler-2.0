@@ -2,7 +2,9 @@
 // a page), finds what needs doing ("call me tomorrow", "remind me in 2 hours", "send the
 // deck by Friday", "is CI green?") and sorts it: times go to reminders, the calendar or
 // Google Tasks, and checks run through your connections. Anything that writes waits for
-// your yes. It never sends a message for you.
+// your yes. A reply someone is waiting on is typed into the chat's box for you to send, and anything
+// else Butler can do (send to laptop, log spending, focus, open an app...) can be one of the steps.
+// It never sends a message for you.
 import { z } from "npm:zod@4.3.6";
 import { askGemini, type Picture } from "./gemini.ts";
 import { type Teasing, voiceRules } from "./persona.ts";
@@ -11,7 +13,7 @@ import { localIso, type ToolChoice } from "./command.ts";
 /** How many extra views (scrolls) the phone may take before Butler has to decide. */
 export const MAX_SCROLLS = 5;
 
-export const KINDS = ["reminder", "event", "task", "check", "do"] as const;
+export const KINDS = ["reminder", "event", "task", "check", "do", "reply", "butler"] as const;
 export type Kind = typeof KINDS[number];
 
 const blankToNull = (v: unknown) => (typeof v === "string" ? v.trim().toLowerCase() || null : v);
@@ -48,6 +50,8 @@ export interface ReadContext {
   tools: ToolChoice[];
   /** Whether the phone can still scroll for another view. */
   canScroll: boolean;
+  /** Whether the screen has a message box Butler can type a reply into. */
+  hasBox?: boolean;
   /** Their answer to the question Butler asked about this screen. */
   answer?: { question: string; said: string };
   memories?: string;
@@ -74,9 +78,14 @@ Each item is one of:
 - "task": a to-do with a deadline but no set time, like "send Tola the deck by Friday". text = the to-do, when = the day it's due.
 - "check": something to look up for them now with one of their tools, like whether CI passed or a build finished.
   text = what to check, spelled out in full (which repo, branch, project or site, from the screen), tool = the tool that fits best.
-- "do": something one of their tools can do that changes something, like creating an issue. text = what, tool = the tool,
-  args = its arguments. Only with a tool listed below. Never sending or replying to a message or email: those are theirs to send,
-  so make that a "reminder" instead.
+- "do": something one of their tools can do that changes something, like creating an issue, a page or a deploy. text = what,
+  tool = the tool, args = its arguments. Only with a tool listed below. Never sending a message or email for them.
+${ctx.hasBox ? `- "reply": the other person asked or said something that needs an answer now. You'll type a draft into this chat's message box
+  and they press Send themselves. text = what the reply should do, like "say yes to Friday 5pm and ask where". At most one.
+` : ""}- "butler": something Butler itself can do on their phone or laptop that no other kind covers, said as a command to Butler,
+  like "send this link to my laptop", "log 2500 naira on suya", "focus for 25 minutes on the deck", "ring my laptop",
+  "save a note: Tola's address is 12 Allen Ave", "open YouTube and search for jollof rice", "message Tola on WhatsApp saying I'm on my way".
+  text = the command, spelled out in full so it makes sense without the screen.
 ${ctx.tools.length ? `Their tools:\n${ctx.tools.map((t) => `* "${t.key}": ${t.description.replace(/\s+/g, " ").slice(0, 160)} Arguments: ${t.args}`).join("\n")}`
     : 'They have no tools connected, so there\'s no "check" or "do"; say what you would have checked in summary.'}
 
@@ -110,7 +119,8 @@ export type Write =
   | { kind: "reminder"; text: string; at: Date }
   | { kind: "event"; text: string; at: Date; end: Date }
   | { kind: "task"; text: string; day: string; due: Date } // day = YYYY-MM-DD, your time
-  | { kind: "tool"; text: string; tool: string; args: Record<string, unknown> };
+  | { kind: "tool"; text: string; tool: string; args: Record<string, unknown> }
+  | { kind: "butler"; text: string }; // one of Butler's own commands, run as if you'd asked
 
 export interface Sorted {
   /** Look-ups to run now: each is text to check, and maybe the tool to start with. */
@@ -119,11 +129,13 @@ export interface Sorted {
   writes: Write[];
   /** Items left out, and why, said plainly. */
   skipped: string[];
+  /** What the reply typed into the chat's box should do, if there's one to write. Typing needs no yes. */
+  reply: string | null;
 }
 
 /** Sorts what was found into checks that run now and writes that wait for a yes. */
 export function sort(items: Item[], toolKeys: string[], timeZone: string, now = new Date()): Sorted {
-  const out: Sorted = { checks: [], writes: [], skipped: [] };
+  const out: Sorted = { checks: [], writes: [], skipped: [], reply: null };
   const known = new Set(toolKeys);
   for (const item of items.slice(0, 6)) {
     const text = item.text.trim().slice(0, 300);
@@ -156,6 +168,12 @@ export function sort(items: Item[], toolKeys: string[], timeZone: string, now = 
         if (item.tool && known.has(item.tool)) out.writes.push({ kind: "tool", text, tool: item.tool, args: item.args ?? {} });
         else out.skipped.push(`"${text}": none of your connections can do that`);
         break;
+      case "reply":
+        out.reply ??= text;
+        break;
+      case "butler":
+        out.writes.push({ kind: "butler", text });
+        break;
     }
   }
   return out;
@@ -176,5 +194,7 @@ export function describe(w: Write, timeZone: string): string {
       return `Add a task: ${w.text} (due ${at(new Date(`${w.day}T12:00:00Z`), false)})`;
     case "tool":
       return `Use ${w.tool}: ${w.text}`;
+    case "butler":
+      return w.text.charAt(0).toUpperCase() + w.text.slice(1);
   }
 }
