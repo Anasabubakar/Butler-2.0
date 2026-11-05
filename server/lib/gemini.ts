@@ -276,3 +276,161 @@ export async function searchGemini(prompt: string, options: AskOptions = {}): Pr
   }
   throw new Error(errors.join(" | ") || "web search needs a Gemini key on the server");
 }
+
+// --- talking, not planning -------------------------------------------------------------------
+
+/** One turn of a conversation, as the AI sees it. */
+export interface ChatTurn {
+  role: "user" | "model";
+  text: string;
+}
+
+export interface TalkOptions {
+  /** Standing instructions: who Butler is, what it knows, how it sounds. */
+  system: string;
+  /** A picture that goes with the last turn, such as the screenshot they asked about. */
+  picture?: Picture | null;
+  /** Let Gemini look things up on Google when the question needs today's facts. */
+  search?: boolean;
+  timeoutMs?: number;
+}
+
+/**
+ * The models best at holding a conversation, out of `names`: Flash before Flash-Lite, then
+ * stable before preview, newest first. Planning picks the fastest; talking picks the smartest
+ * fast model, because a reply is the one thing the owner actually reads.
+ */
+export function smartest(names: string[]): string[] {
+  const lite = (n: string) => n.includes("lite") ? 1 : 0;
+  return [...fastest(names)].sort((a, b) => lite(a) - lite(b));
+}
+
+/** The models a conversation tries, in order: BUTLER_CHAT_MODEL if set, then the smartest fast ones. */
+export async function chatModels(key = geminiKeys()[0] ?? ""): Promise<string[]> {
+  const chosen = Deno.env.get("BUTLER_CHAT_MODEL");
+  const names = await available(key);
+  const ranked = smartest(names ?? FALLBACK);
+  const first = chosen && (!names || names.includes(chosen)) ? [chosen] : [];
+  return [...new Set([...first, ...ranked])].slice(0, 3);
+}
+
+/** Turns that take turns: same-speaker neighbours joined, and a conversation that starts with the owner. */
+export function alternate(turns: ChatTurn[]): ChatTurn[] {
+  const out: ChatTurn[] = [];
+  for (const t of turns) {
+    const text = t.text.trim();
+    if (!text) continue;
+    const last = out.at(-1);
+    if (last?.role === t.role) last.text += `\n\n${text}`;
+    else out.push({ role: t.role, text });
+  }
+  if (out[0]?.role === "model") out.unshift({ role: "user", text: "(earlier)" });
+  return out;
+}
+
+/**
+ * Has a real conversation: the turns go to the AI as turns (not pasted into one prompt), and
+ * the answer comes back as plain text, not squeezed into a JSON field. Gemini first, with a
+ * little thinking and Google Search when allowed; then the backups. Throws if none answers.
+ */
+export async function talk(turns: ChatTurn[], options: TalkOptions): Promise<string> {
+  const said = alternate(turns);
+  if (said.at(-1)?.role !== "user") throw new Error("a conversation has to end with the owner");
+  const providers = aiProviders();
+  if (!providers.length) throw new Error("no AI provider is set: add GEMINI_API_KEY (or a backup) on the server");
+  const errors: string[] = [];
+  for (const provider of providers) {
+    try {
+      if (provider !== "gemini") return await talkBackup(provider, said, options);
+      for (const [i, key] of geminiKeys().entries()) {
+        try {
+          return await talkGemini(key, said, options);
+        } catch (e) {
+          errors.push(`Gemini key ${i + 1}: ${(e as Error).message}`);
+        }
+      }
+    } catch (e) {
+      errors.push(`${provider}: ${(e as Error).message}`);
+    }
+  }
+  throw new Error(errors.join(" | "));
+}
+
+/** How much a conversation reply may think before it answers: enough to follow the thread, still quick. */
+const CHAT_THINKING = 1024;
+
+async function talkGemini(key: string, turns: ChatTurn[], options: TalkOptions): Promise<string> {
+  const contents = turns.map((t, i) => {
+    const parts: unknown[] = [];
+    if (i === turns.length - 1 && options.picture) {
+      parts.push({ inline_data: { mime_type: options.picture.mediaType, data: options.picture.data } });
+    }
+    parts.push({ text: t.text });
+    return { role: t.role, parts };
+  });
+  let lastError = "no Gemini model answered";
+  for (const model of await chatModels(key)) {
+    // Each try drops one extra: search first (some keys or models don't allow it), then the thinking setting.
+    const tries = [
+      { search: Boolean(options.search), thinking: true },
+      { search: false, thinking: true },
+      { search: false, thinking: false },
+    ].filter((t, n, all) => all.findIndex((o) => o.search === t.search && o.thinking === t.thinking) === n);
+    for (const t of tries) {
+      const res = await fetch(`${base()}/models/${model}:generateContent`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify({
+          contents,
+          systemInstruction: { parts: [{ text: options.system }] },
+          ...(t.search && { tools: [{ google_search: {} }] }),
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 4096,
+            ...(t.thinking && { thinkingConfig: { thinkingBudget: CHAT_THINKING } }),
+          },
+        }),
+        signal: AbortSignal.timeout(options.timeoutMs ?? 45_000),
+      }).catch((e) => new Response(String(e), { status: 599 }));
+      if (res.ok) {
+        const data = await res.json() as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
+        const text = data.candidates?.[0]?.content?.parts?.filter((p) => !p.thought).map((p) => p.text ?? "").join("").trim() ?? "";
+        if (text) return text;
+        lastError = `${model} gave an empty answer`;
+        break;
+      }
+      const body = await res.text();
+      lastError = `${model} answered ${res.status}: ${body.slice(0, 300)}`;
+      if (/API key/i.test(body)) throw new Error(lastError); // a bad key fails on every model
+      if (res.status !== 400 && res.status !== 403) break; // 404, 429, 5xx: try the next model
+    }
+  }
+  throw new Error(lastError);
+}
+
+async function talkBackup(provider: string, turns: ChatTurn[], options: TalkOptions): Promise<string> {
+  const backup = BACKUPS[provider];
+  const name = provider.toUpperCase();
+  const url = Deno.env.get(`${name}_URL`) ?? backup.url;
+  const model = Deno.env.get(`BUTLER_${name}_MODEL`) ?? backup.model;
+  const messages = [
+    { role: "system", content: options.system },
+    ...turns.map((t, i) => ({
+      role: t.role === "model" ? "assistant" : "user",
+      content: i === turns.length - 1 && options.picture
+        ? [{ type: "text", text: t.text }, { type: "image_url", image_url: { url: `data:${options.picture.mediaType};base64,${options.picture.data}` } }]
+        : t.text,
+    })),
+  ];
+  const res = await fetch(`${url}/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${Deno.env.get(backup.key)}` },
+    body: JSON.stringify({ model, temperature: 0.7, max_tokens: 1500, messages }),
+    signal: AbortSignal.timeout(options.timeoutMs ?? 45_000),
+  });
+  if (!res.ok) throw new Error(`${model} answered ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const data = await res.json() as { choices?: { message?: { content?: string } }[] };
+  const text = (data.choices?.[0]?.message?.content ?? "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  if (!text) throw new Error(`${model} gave an empty answer`);
+  return text;
+}
