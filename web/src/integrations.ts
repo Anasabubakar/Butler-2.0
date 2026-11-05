@@ -6,7 +6,17 @@ import { ago, api, busy, button, fill, h, icon, inlineError, modal, SignedOut, s
 
 type Rule = "auto" | "ask" | "off";
 interface Tool { name: string; description: string; readOnly: boolean; rule: Rule }
-interface Connection { id: string; name: string; host: string; checked_at: string | null; error: string | null; tools: Tool[] }
+interface Connection {
+  id: string;
+  name: string;
+  host: string;
+  auth: "key" | "oauth"; // a pasted key, or signed in in the browser
+  signin_needed: boolean; // not signed in yet, or the sign-in ran out
+  checked_at: string | null;
+  error: string | null;
+  tools: Tool[];
+  signin?: string; // where to go to sign in, right after adding one
+}
 interface Call { at: string; connection: string; tool: string; asked: boolean; status: "done" | "failed"; result: string | null }
 interface McpStatus { ready: boolean; connections: Connection[]; calls: Call[] }
 interface GoogleStatus {
@@ -21,7 +31,18 @@ type View = "all" | "accounts" | "other";
 
 const RULE_NAMES: Record<Rule, string> = { auto: "Just do it", ask: "Ask me first", off: "Off" };
 
+/** Says how signing in to a connection went, when the service has just sent you back. */
+function signInResult() {
+  const q = new URLSearchParams(location.search);
+  const result = q.get("mcp");
+  if (!result) return;
+  history.replaceState(null, "", location.pathname + location.hash);
+  if (result === "connected") toast(`Signed in to ${q.get("name") ?? "the connection"}.`);
+  else toast(`Sign-in didn't work: ${q.get("why") ?? "something went wrong"}.`);
+}
+
 export async function renderIntegrations(app: HTMLElement) {
+  signInResult();
   const googleSlot = h("div", { class: "integ-group" });
   const telegramSlot = h("div", { class: "integ-group" });
   const accounts = h("section", { class: "integ-group" }, googleSlot, telegramSlot);
@@ -221,29 +242,42 @@ function scope(iconName: string, name: string, text: string): HTMLElement {
   return h("li", {}, h("span", { class: "row__icon" }, icon(iconName)), h("span", {}, h("strong", {}, name), h("span", { class: "muted" }, text)));
 }
 
-/** Adds an MCP server by its link and key. */
+/** Adds an MCP server by its link: you sign in to it in the browser, or paste its key. */
 function addConnection(done: () => unknown) {
-  const name = h("input", { name: "name", required: true, maxlength: "40", placeholder: "Zapier", autocomplete: "off" });
+  const name = h("input", { name: "name", required: true, maxlength: "40", placeholder: "GitHub", autocomplete: "off" });
   const url = h("input", { name: "url", type: "url", required: true, placeholder: "https://…", autocomplete: "off" });
   const auth = h("select", { name: "auth" },
-    h("option", { value: "none" }, "No key"),
-    h("option", { value: "bearer", selected: true }, "API key (Bearer)"),
+    h("option", { value: "oauth", selected: true }, "Sign in (OAuth)"),
+    h("option", { value: "bearer" }, "API key (Bearer)"),
     h("option", { value: "header" }, "API key in a header"),
+    h("option", { value: "none" }, "No sign-in"),
   );
-  const key = h("input", { name: "key", type: "password", placeholder: "Key", autocomplete: "new-password", "aria-label": "Key" });
+  const key = h("input", { name: "key", type: "password", placeholder: "Key", autocomplete: "new-password", "aria-label": "Key", hidden: true });
   const header = h("input", { name: "header", placeholder: "Header name, e.g. X-API-Key", autocomplete: "off", hidden: true, "aria-label": "Header name" });
-  const go = button("Connect", { kind: "primary", type: "submit" });
+  const clientId = h("input", { name: "client_id", placeholder: "Client ID", autocomplete: "off", "aria-label": "Client ID" });
+  const clientSecret = h("input", { name: "client_secret", type: "password", placeholder: "Client secret (if it gave you one)", autocomplete: "new-password", "aria-label": "Client secret" });
+  const scope = h("input", { name: "scope", placeholder: "Scopes, e.g. repo read:user (optional)", autocomplete: "off", "aria-label": "Scopes" });
+  const more = h("details", { class: "form-more" },
+    h("summary", {}, "More options"),
+    h("p", { class: "muted small" },
+      "Most services let Butler sign up by itself. Some, like GitHub, want you to make an OAuth app first. Set its callback to ",
+      h("code", {}, `${location.origin}/api/mcp/oauth/callback`), " and paste its client ID here."),
+    clientId, clientSecret, scope,
+  );
+  const go = button("Sign in", { kind: "primary", type: "submit" });
   const note = h("p", { class: "muted small", role: "status" });
   auth.addEventListener("change", () => {
-    key.hidden = auth.value === "none";
+    key.hidden = auth.value === "none" || auth.value === "oauth";
     header.hidden = auth.value !== "header";
+    more.hidden = auth.value !== "oauth";
+    go.textContent = auth.value === "oauth" ? "Sign in" : "Connect";
   });
   const form = h("form", { class: "form" },
     h("p", { class: "muted" }, "Tools that only read run straight away; anything that could send, change or delete asks you first. You can change that per tool."),
     h("label", { class: "b2-field" }, h("span", { class: "b2-field__label" }, "Name"), name),
     h("label", { class: "b2-field" }, h("span", { class: "b2-field__label" }, "Server link"), url),
     h("label", { class: "b2-field" }, h("span", { class: "b2-field__label" }, "Sign-in"), auth),
-    key, header,
+    key, header, more,
     h("div", { class: "actions" }, go),
     note,
   );
@@ -251,12 +285,20 @@ function addConnection(done: () => unknown) {
   name.focus();
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    note.textContent = "Connecting…";
+    note.textContent = auth.value === "oauth" ? "Finding how to sign in…" : "Connecting…";
     try {
       const added = await busy(go, () => api<Connection>("/api/mcp", {
         method: "POST",
-        body: JSON.stringify({ name: name.value, url: url.value, auth: auth.value, key: key.value, header: header.value }),
+        body: JSON.stringify({
+          name: name.value, url: url.value, auth: auth.value, key: key.value, header: header.value,
+          client_id: clientId.value, client_secret: clientSecret.value, scope: scope.value,
+        }),
       }));
+      if (added.signin) {
+        note.textContent = `Taking you to ${added.host} to sign in…`;
+        location.href = added.signin;
+        return;
+      }
       toast(`Connected ${added.name}: ${added.tools.length} tools.`);
       d.close();
       await done();
@@ -274,10 +316,16 @@ function connectionCard(conn: Connection, reload: () => unknown): HTMLElement {
       await reload();
     },
   });
+  const signIn = conn.auth === "oauth"
+    ? button(conn.signin_needed ? (conn.checked_at ? "Reconnect" : "Sign in") : "Sign in again", {
+      kind: conn.signin_needed ? "primary" : "ghost", small: true,
+      onclick: () => { location.href = `/api/mcp/${conn.id}/signin`; },
+    })
+    : null;
   const remove = button("Remove", {
     kind: "ghost", small: true,
     onclick: async () => {
-      if (!confirm(`Remove ${conn.name}? Butler forgets its link and key.`)) return;
+      if (!confirm(`Remove ${conn.name}? Butler forgets its link and ${conn.auth === "oauth" ? "sign-in" : "key"}.`)) return;
       await api(`/api/mcp/${conn.id}`, { method: "DELETE" }).catch(() => {});
       await reload();
     },
@@ -287,14 +335,20 @@ function connectionCard(conn: Connection, reload: () => unknown): HTMLElement {
       h("span", { class: "integ__logo" }, h("span", {}, conn.name.charAt(0).toUpperCase())),
       h("span", { class: "row__text" },
         h("span", { class: "row__title" }, conn.name),
-        h("span", { class: "row__sub" }, [conn.host, `${conn.tools.length} tools`, conn.checked_at ? `checked ${ago(conn.checked_at)}` : ""].filter(Boolean).join(" · "))),
-      conn.error ? status("failed", "Check failed") : status("connected"),
+        h("span", { class: "row__sub" }, [conn.host, conn.auth === "oauth" ? "signed in with OAuth" : "", `${conn.tools.length} tools`,
+          conn.checked_at ? `checked ${ago(conn.checked_at)}` : ""].filter(Boolean).join(" · "))),
+      conn.signin_needed ? status("review", conn.checked_at ? "Reconnect" : "Sign in")
+      : conn.error ? status("failed", "Check failed") : status("connected"),
       h("span", { class: "auto__chevron", "aria-hidden": "true" }, icon("chevron")),
     ),
     h("div", { class: "auto__body" },
-      conn.error ? inlineError(`Last check failed: ${conn.error}`) : null,
+      conn.signin_needed
+        ? h("p", { class: "muted" }, conn.checked_at
+          ? "The sign-in ran out, so Butler can't use these tools until you sign in again."
+          : "Finish signing in so Butler can see what this service offers.")
+        : conn.error ? inlineError(`Last check failed: ${conn.error}`) : null,
       h("ul", { class: "tools" }, ...conn.tools.map((t) => toolRow(conn, t))),
-      h("div", { class: "actions" }, recheck, remove),
+      h("div", { class: "actions" }, signIn, conn.signin_needed ? null : recheck, remove),
     ),
   );
 }

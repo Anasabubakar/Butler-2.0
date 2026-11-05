@@ -6,7 +6,7 @@ import { googleOffers } from "../server/lib/googletools.ts";
 
 const offer = (connection: string, name: string, readOnly: boolean, rule: Rule = readOnly ? "auto" : "ask"): Offer => ({
   key: `${connection}/${name}`,
-  connection: { id: connection, name: connection, host: "x", tools: [], rules: {}, checked_at: null, error: null },
+  connection: { id: connection, name: connection, host: "x", auth: "key", signin_needed: false, tools: [], rules: {}, checked_at: null, error: null },
   tool: { name, description: `${name} tool`, schema: { type: "object", properties: { q: { type: "string" } } }, readOnly },
   rule,
 });

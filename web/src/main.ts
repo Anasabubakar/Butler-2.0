@@ -47,8 +47,9 @@ applyTheme();
 applyMotion();
 whenSignedOut(() => signIn("Your session ended. Sign in again to carry on."));
 addEventListener("hashchange", () => api("/api/me").then(route, () => {}));
-// Coming back from connecting Google lands on Integrations, where the result shows.
-if (new URLSearchParams(location.search).has("google")) location.hash = "#/integrations";
+// Coming back from connecting Google, or signing in to a connection, lands on Integrations,
+// where the result shows.
+if (["google", "mcp"].some((k) => new URLSearchParams(location.search).has(k))) location.hash = "#/integrations";
 
 /**
  * Opened from the Butler Library button in Telegram: Telegram puts what it signed about who

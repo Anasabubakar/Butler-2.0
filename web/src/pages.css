@@ -100,6 +100,11 @@
 .linkbox__area { display: grid; gap: 10px; margin-top: 12px; }
 .linkbox__area input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 
+.form-more { display: block; }
+.form-more summary { cursor: pointer; font-size: 14px; font-weight: 500; color: var(--muted); }
+.form-more code { overflow-wrap: anywhere; font-size: 12px; }
+.form-more > * + * { display: block; width: 100%; margin-top: 10px; }
+
 .integ-group { display: grid; gap: 12px; }
 .integ-group > .section-title:first-child { margin-top: 8px; }
 .integ { display: grid; gap: 16px; }
