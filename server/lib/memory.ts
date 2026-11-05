@@ -18,9 +18,9 @@ export interface Memory {
   source: "learned" | "told";
 }
 
-/** How many turns of the conversation a reply sees, and how far back (main chat only). */
-export const HISTORY_TURNS = 20;
-export const HISTORY_HOURS = 48;
+/** How many turns of the conversation a reply sees, and how far back (main chat only): a week, so yesterday still counts. */
+export const HISTORY_TURNS = 40;
+export const HISTORY_HOURS = 7 * 24;
 /** The most facts kept; past this the oldest learned ones go first. */
 export const MAX_MEMORIES = 200;
 /** How much of what Butler knows fits in one prompt, newest first. */
@@ -73,7 +73,7 @@ export async function addTurn(role: Turn["role"], text: string, device: string |
 
 /**
  * The latest turns, oldest first, since the last "new chat": for the main conversation only
- * those from the last two days (older ones are what memories are for), for a save all of them.
+ * those from the last week (older ones are what memories are for), for a save all of them.
  */
 export async function recentTurns(itemId: string | null, limit = HISTORY_TURNS): Promise<Turn[]> {
   const rows = await sql<Turn[]>`
