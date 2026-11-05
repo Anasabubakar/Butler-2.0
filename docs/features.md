@@ -4,14 +4,17 @@ Everything Butler does today, and how to switch each part on or off. Most settin
 
 ## Connections (MCP)
 
-Ask Butler can use tools from other services that speak MCP (the Model Context Protocol): Zapier, Notion, GitHub, or a server you wrote. On the website, press **Connections**, give it a name, paste the server's link, and add its key if it needs one (most use **API key (Bearer)**). Butler connects, lists the server's tools, and from then on picks one when it fits what you asked, like "add milk to my shopping list in Notion".
+Ask Butler can use tools from other services that speak MCP (the Model Context Protocol): Zapier, Notion, GitHub, or a server you wrote. On the website, press **Connections**, give it a name, paste the server's link, and pick how Butler signs in: **Sign in (OAuth)** sends you to the service to log in and allow Butler, like Claude Desktop does; or paste a key (**API key (Bearer)** or **API key in a header**). Butler connects, lists the server's tools, and from then on picks one when it fits what you asked, like "add milk to my shopping list in Notion".
 
 - Tools the server marks as read-only run straight away. Anything that could send, change or delete shows you exactly what it will do and waits for your yes on the phone or laptop. You can change this per tool: **Just do it**, **Ask me first** or **Off**.
 - One tool per request, and what a tool sends back is only shown to you, never acted on, so a tool's reply can't make Butler use another tool.
 - Links and keys are encrypted in the database (see `BUTLER_VAULT_KEY`) and never sent back to the browser.
 - Only public `https://` addresses are allowed: nothing on your home network, the Docker network, or this server's own machine.
 - **What Butler used lately** lists every call, whether you said yes first, and hovering shows what came back.
-- Not yet: servers that only sign in with OAuth, and local (stdio) servers.
+- **Signing in with OAuth** follows the MCP authorization spec. Butler reads the server's description to find its sign-in server, then signs in as: the app you made there (paste its client ID under **More options**), else Butler's own client document at `/oauth/client.json` when the service reads those (Vercel does), else an app Butler signs up for by itself. Sign-in uses a one-time PKCE code and comes back to `PUBLIC_URL/api/mcp/oauth/callback`. Tokens are encrypted like keys and refreshed shortly before they run out. If the service stops accepting them, the connection shows **Reconnect** and Butler stops offering its tools until you sign in again.
+- Not yet: local (stdio) servers.
+
+**GitHub:** GitHub doesn't let apps sign up by themselves, so make one first: GitHub → Settings → Developer settings → OAuth Apps → New OAuth App, homepage `https://YOUR-BUTLER`, callback `https://YOUR-BUTLER/api/mcp/oauth/callback`. Generate a client secret. In Butler, use the link `https://api.githubcopilot.com/mcp/`, **Sign in (OAuth)**, and under **More options** paste the client ID, the secret, and scopes such as `repo read:user`.
 
 **Zapier:** at [mcp.zapier.com](https://mcp.zapier.com), make a server, pick the actions you want, and generate a connection token (it's shown once). In Butler, use the link `https://mcp.zapier.com/api/v1/connect`, sign-in **API key (Bearer)**, and the token as the key.
 
