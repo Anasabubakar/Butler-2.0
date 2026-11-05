@@ -1100,6 +1100,12 @@ app.post("/api/command/confirm", async (c) => {
     memory.addTurn("butler", say, null, talk).catch((e) => console.error("chat", String(e).slice(0, 200)));
     return c.json({ say });
   };
+  const acts = pendingActs.get(id);
+  pendingActs.delete(id);
+  if (acts) {
+    if (acts.expires < Date.now()) return c.json({ error: "that expired, tap Act on this again" }, 410);
+    return said(await carryOut(acts));
+  }
   const tool = pendingTools.get(id);
   pendingTools.delete(id);
   if (tool) {
