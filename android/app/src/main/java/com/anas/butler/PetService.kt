@@ -740,9 +740,11 @@ class PetService : Service() {
         val done = JSONObject(ButlerClient(Config(this)).post("/api/command/confirm", mapOf("confirm" to confirm), null))
         val step = done.optJSONArray("steps")?.optJSONObject(0)
         val next = done.optString("confirm").takeIf { it.isNotBlank() && it != "null" }
+        val stepAction = step?.optString("action")
+        val stepText = step?.optString(if (stepAction == "screen") "goal" else "instruction").orEmpty()
         afterTell = when {
-            step?.optString("action") == "screen" -> ({ operate(step.optString("goal")) })
-            step?.optString("action") == "draft" -> ({ draftReply(step.optString("instruction")) })
+            stepAction == "screen" -> ({ operate(stepText) })
+            stepAction == "draft" -> ({ draftReply(stepText) })
             next != null -> ({ bubble.offer(getString(R.string.pet_do_it)) { doActs(next) } })
             else -> null
         }
