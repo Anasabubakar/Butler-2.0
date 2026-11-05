@@ -316,10 +316,16 @@ function connectionCard(conn: Connection, reload: () => unknown): HTMLElement {
       await reload();
     },
   });
+  const signIn = conn.auth === "oauth"
+    ? button(conn.signin_needed ? (conn.checked_at ? "Reconnect" : "Sign in") : "Sign in again", {
+      kind: conn.signin_needed ? "primary" : "ghost", small: true,
+      onclick: () => { location.href = `/api/mcp/${conn.id}/signin`; },
+    })
+    : null;
   const remove = button("Remove", {
     kind: "ghost", small: true,
     onclick: async () => {
-      if (!confirm(`Remove ${conn.name}? Butler forgets its link and key.`)) return;
+      if (!confirm(`Remove ${conn.name}? Butler forgets its link and ${conn.auth === "oauth" ? "sign-in" : "key"}.`)) return;
       await api(`/api/mcp/${conn.id}`, { method: "DELETE" }).catch(() => {});
       await reload();
     },
@@ -329,14 +335,20 @@ function connectionCard(conn: Connection, reload: () => unknown): HTMLElement {
       h("span", { class: "integ__logo" }, h("span", {}, conn.name.charAt(0).toUpperCase())),
       h("span", { class: "row__text" },
         h("span", { class: "row__title" }, conn.name),
-        h("span", { class: "row__sub" }, [conn.host, `${conn.tools.length} tools`, conn.checked_at ? `checked ${ago(conn.checked_at)}` : ""].filter(Boolean).join(" · "))),
-      conn.error ? status("failed", "Check failed") : status("connected"),
+        h("span", { class: "row__sub" }, [conn.host, conn.auth === "oauth" ? "signed in with OAuth" : "", `${conn.tools.length} tools`,
+          conn.checked_at ? `checked ${ago(conn.checked_at)}` : ""].filter(Boolean).join(" · "))),
+      conn.signin_needed ? status("review", conn.checked_at ? "Reconnect" : "Sign in")
+      : conn.error ? status("failed", "Check failed") : status("connected"),
       h("span", { class: "auto__chevron", "aria-hidden": "true" }, icon("chevron")),
     ),
     h("div", { class: "auto__body" },
-      conn.error ? inlineError(`Last check failed: ${conn.error}`) : null,
+      conn.signin_needed
+        ? h("p", { class: "muted" }, conn.checked_at
+          ? "The sign-in ran out, so Butler can't use these tools until you sign in again."
+          : "Finish signing in so Butler can see what this service offers.")
+        : conn.error ? inlineError(`Last check failed: ${conn.error}`) : null,
       h("ul", { class: "tools" }, ...conn.tools.map((t) => toolRow(conn, t))),
-      h("div", { class: "actions" }, recheck, remove),
+      h("div", { class: "actions" }, signIn, conn.signin_needed ? null : recheck, remove),
     ),
   );
 }
