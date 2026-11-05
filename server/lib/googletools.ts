@@ -51,19 +51,19 @@ const allDayOn = (e: google.Event, day: string) => {
 const when = (e: google.Event, timeZone: string) =>
   e.allDay ? "all day" : new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit" }).format(e.start);
 
-/** The events from `day` for `days` days, a line each, or why Google couldn't say. */
-export async function calendarNote(args: Record<string, unknown>, now: Date, timeZone: string): Promise<string> {
+/** The days a calendar look covers: `day` (or today) and the `days` after it, at most 14. */
+export function daysFrom(args: Record<string, unknown>, now: Date, timeZone: string): string[] {
   const first = typeof args.day === "string" && DAY_RE.test(args.day) ? args.day : today(now, timeZone);
   const days = Math.min(14, Math.max(1, Math.round(Number(args.days) || 1)));
-  const dayList = Array.from({ length: days }, (_, i) =>
+  return Array.from({ length: days }, (_, i) =>
     new Date(new Date(`${first}T12:00:00Z`).getTime() + i * 86_400_000).toISOString().slice(0, 10));
-  const from = startOfDay(first, timeZone);
-  const to = endOfDay(new Date(`${dayList.at(-1)}T12:00:00Z`), timeZone);
-  const found = await fromGoogle("calendar", () => google.events(from, to));
-  if (failed(found)) return `couldn't read the calendar: ${found.error}`;
+}
+
+/** Events laid out day by day, a line each; a day with none says so. */
+export function byDay(events: google.Event[], days: string[], now: Date, timeZone: string): string {
   const lines: string[] = [];
-  for (const day of dayList) {
-    const on = (found ?? []).filter((e) => e.allDay ? allDayOn(e, day) : localIso(e.start, timeZone).slice(0, 10) === day);
+  for (const day of days) {
+    const on = events.filter((e) => e.allDay ? allDayOn(e, day) : localIso(e.start, timeZone).slice(0, 10) === day);
     lines.push(`${day}${day === today(now, timeZone) ? " (today)" : ""}:`);
     if (!on.length) lines.push("  nothing on the calendar");
     for (const e of on) {
@@ -71,6 +71,15 @@ export async function calendarNote(args: Record<string, unknown>, now: Date, tim
     }
   }
   return lines.join("\n");
+}
+
+/** The events on the days asked for, or why Google couldn't say. */
+export async function calendarNote(args: Record<string, unknown>, now: Date, timeZone: string): Promise<string> {
+  const days = daysFrom(args, now, timeZone);
+  const found = await fromGoogle("calendar", () =>
+    google.events(startOfDay(days[0], timeZone), endOfDay(new Date(`${days.at(-1)}T12:00:00Z`), timeZone)));
+  if (failed(found)) return `couldn't read the calendar: ${found.error}`;
+  return byDay(found ?? [], days, now, timeZone);
 }
 
 const notConnected = "Google isn't connected; connect it under Integrations on the Butler website.";
