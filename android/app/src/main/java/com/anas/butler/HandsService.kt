@@ -2,11 +2,14 @@ package com.anas.butler
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.ColorSpace
 import android.graphics.Path
+import android.graphics.Rect
 import android.os.Build
 import android.view.Display
 import android.view.accessibility.AccessibilityEvent
@@ -107,6 +110,73 @@ class HandsService : AccessibilityService() {
         }
         return field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
     }
+
+    /**
+     * The message box of the chat on screen (WhatsApp, Telegram, Messages, Instagram, Gmail…):
+     * the text field with focus, else the lowest text field showing, since chat apps keep their
+     * box at the bottom. Never a password field, never Butler's own, and nothing in money apps.
+     */
+    private fun chatBox(): AccessibilityNodeInfo? {
+        val root = rootInActiveWindow ?: return null
+        val app = root.packageName?.toString().orEmpty()
+        if (app == packageName || MONEY_APPS.containsMatchIn(app)) return null
+        root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.takeIf { it.isEditable && !it.isPassword }?.let { return it }
+        var best: AccessibilityNodeInfo? = null
+        var bottom = -1
+        val box = Rect()
+        fun walk(node: AccessibilityNodeInfo, depth: Int) {
+            if (depth > 40 || !node.isVisibleToUser) return
+            if (node.isEditable && !node.isPassword) {
+                node.getBoundsInScreen(box)
+                if (box.bottom > bottom) {
+                    best = node
+                    bottom = box.bottom
+                }
+            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { walk(it, depth + 1) }
+        }
+        walk(root, 0)
+        return best
+    }
+
+    /** Whether a message box is showing that Butler could type a draft into. */
+    fun hasChatBox(): Boolean = chatBox() != null
+
+    /** What the chat's message box holds now ("" when empty), or null when there's no box. */
+    fun boxText(): String? {
+        val field = chatBox() ?: return null
+        return field.text?.toString().takeUnless { field.isShowingHintText }.orEmpty()
+    }
+
+    /**
+     * Puts `text` in the chat's message box in place of what's there, cursor at the end. It never
+     * presses Send. If the app refuses to have its text set, it pastes instead (the draft is
+     * then on the clipboard too). False if there's no box or neither worked.
+     */
+    fun fillBox(text: String): Boolean {
+        val field = chatBox() ?: return false
+        field.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        val set = android.os.Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+        }
+        if (!field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, set)) {
+            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Butler draft", text))
+            val now = field.text?.length ?: 0
+            field.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, android.os.Bundle().apply {
+                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, 0)
+                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, now)
+            })
+            if (!field.performAction(AccessibilityNodeInfo.ACTION_PASTE)) return false
+        }
+        field.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, android.os.Bundle().apply {
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, text.length)
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, text.length)
+        })
+        return true
+    }
+
+    /** Presses the chat's Send button, for when you tap Send it on the pet. False if none is showing. */
+    fun pressSend(): Boolean = pressLabelled(SEND)
 
     /** Presses the keyboard's Enter (Search, Go, Send…) on the field that has focus. Android 11+. */
     fun enter(): Boolean {
@@ -254,6 +324,9 @@ class HandsService : AccessibilityService() {
 
         /** Banking, payments and crypto apps: Butler never reads their screens. */
         private val MONEY_APPS = Regex("bank|pay|wallet|finance|money|opay|kuda|moniepoint|fairmoney|chipper|binance|crypto|bybit|cowrywise|piggyvest|risevest|bamboo", RegexOption.IGNORE_CASE)
+
+        /** The Send button in a chat app. */
+        private val SEND = Regex("^send( message)?$", RegexOption.IGNORE_CASE)
 
         private val COPY = Regex("\\bcopy\\b", RegexOption.IGNORE_CASE)
         private val COPIED = Regex("\\bcopied\\b", RegexOption.IGNORE_CASE)
