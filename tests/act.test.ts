@@ -111,3 +111,27 @@ test("describe says each write plainly", () => {
   assert.match(describe({ kind: "task", text: "Send deck", day: "2026-11-07", due: at }, "Africa/Lagos"), /^Add a task: Send deck \(due Sat,? 7 Nov\)$/);
   assert.equal(describe({ kind: "tool", text: "Open an issue", tool: "GitHub/create_issue", args: {} }, "UTC"), "Use GitHub/create_issue: Open an issue");
 });
+
+test("sort keeps one reply to draft and turns Butler commands into writes", () => {
+  const s = sort([
+    { kind: "reply", text: "say yes to Friday 5pm" },
+    { kind: "reply", text: "a second reply" },
+    { kind: "butler", text: "send this link to my laptop" },
+  ], [], "Africa/Lagos");
+  assert.equal(s.reply, "say yes to Friday 5pm");
+  assert.deepEqual(s.writes, [{ kind: "butler", text: "send this link to my laptop" }]);
+  assert.equal(describe(s.writes[0], "Africa/Lagos"), "Send this link to my laptop");
+});
+
+test("read offers a reply only when the chat has a box", async () => {
+  const gemini = fakeGemini([{ status: "none" }, { status: "none" }]);
+  try {
+    await read([shot], { ...ctx, hasBox: true });
+    await read([shot], ctx);
+    assert.match(gemini.calls[0].contents[0].parts.at(-1).text, /- "reply": the other person/);
+    assert.doesNotMatch(gemini.calls[1].contents[0].parts.at(-1).text, /- "reply": the other person/);
+    assert.match(gemini.calls[1].contents[0].parts.at(-1).text, /- "butler": something Butler itself can do/);
+  } finally {
+    await gemini.close();
+  }
+});
