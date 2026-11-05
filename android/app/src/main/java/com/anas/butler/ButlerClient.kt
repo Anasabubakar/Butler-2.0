@@ -20,13 +20,18 @@ class ButlerClient(private val config: Config) {
     /** A file to send along: a screenshot, usually. */
     class Attachment(val name: String, val bytes: ByteArray, val mime: String)
 
+    /** The chat you were in when you opened Ask Butler: its app and what its message box held. */
+    data class Chat(val app: String?, val box: String)
+
     private val base get() = config.saveUrl.trimEnd('/').removeSuffix("/api/save")
 
     /**
      * What Butler decided to do with what you typed or said. `replyTo` is what Butler said that
      * you're answering (from the pet's bubble); `item` is the save you're talking about.
      */
-    suspend fun command(text: String, screenshot: ByteArray?, replyTo: String? = null, item: String? = null): JSONObject = JSONObject(
+    suspend fun command(
+        text: String, screenshot: ByteArray?, replyTo: String? = null, item: String? = null, chat: Chat? = null,
+    ): JSONObject = JSONObject(
         post(
             "/api/command",
             buildMap {
@@ -36,6 +41,11 @@ class ButlerClient(private val config: Config) {
                 put("tz", TimeZone.getDefault().id)
                 replyTo?.let { put("reply_to", it.take(4000)) }
                 item?.let { put("item", it) }
+                chat?.let {
+                    put("has_box", "1")
+                    put("box", it.box.take(4000))
+                    it.app?.let { app -> put("app", app) }
+                }
             },
             screenshot?.let { Attachment("screenshot.jpg", it, "image/jpeg") },
         ),

@@ -4,7 +4,7 @@ import { z } from "npm:zod@4.3.6";
 import { askGemini, type Picture } from "./gemini.ts";
 import { type Teasing, voiceRules } from "./persona.ts";
 
-export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "screen", "recall", "brief", "inbox", "tasks", "recap", "spend", "spending", "focus", "unfocus", "ring", "tool", "recipe", "edit", "roast", "research", "readmail", "fact", "answer"] as const;
+export const ACTIONS = ["remind", "calendar", "send", "save", "email", "message", "screen", "draft", "recall", "brief", "inbox", "tasks", "recap", "spend", "spending", "focus", "unfocus", "ring", "tool", "recipe", "edit", "roast", "research", "readmail", "fact", "answer"] as const;
 export const APPS = ["whatsapp", "telegram"] as const;
 export const CONTENTS = ["text", "clipboard", "link", "screen"] as const;
 
@@ -56,6 +56,8 @@ export interface Context {
   answering?: string;
   /** True when they tapped reply on that message, so it surely is what they're answering. */
   replied?: boolean;
+  /** They're in a chat with a message box: what it holds, the app, and the draft Butler just typed into it. */
+  chatBox?: { text: string; app?: string; lastDraft?: string };
 }
 
 /** A tool from one of your MCP connections, as the planner sees it. */
@@ -166,7 +168,11 @@ Choose exactly one action:
   text = the message, written as the owner in their own voice, not yours, attach_screen = true if they want the screenshot sent too.
 - "screen": do something on the screen they're looking at for them: click, type, scroll, fill in, open, select.
   text = the goal in plain words, e.g. "open the first video" or "search YouTube for jollof rice".
-- "recall": find or ask about something they saved in their Butler library before, like "that jollof recipe I saved",
+${ctx.chatBox ? `- "draft": they're in a chat${ctx.chatBox.app ? ` (${ctx.chatBox.app})` : ""} and want you to write, reply, refine or rewrite the
+  message in its box, like "what do i tell her?", "answer this nicely" or, about the draft you just typed, "shorter" or "say no".
+  You don't write it here: text = what they asked for, spelled out, e.g. "reply to Tola saying yes to Friday".
+  The box now holds: """${ctx.chatBox.text.slice(0, 600) || "(empty)"}"""${ctx.chatBox.lastDraft ? `\n  You typed this draft into it moments ago: """${ctx.chatBox.lastDraft.slice(0, 600)}"""` : ""}
+` : ""}- "recall": find or ask about something they saved in their Butler library before, like "that jollof recipe I saved",
   "what did I save about visas?" or "open that TikTok about budgeting". text = what to look for, as a short search.
 - "brief": they want a rundown of a day or ask what's on their calendar, like "what's my day?", "brief me",
   "what's on today?", "am I free tomorrow?" or "what's on Friday?". when = that day (any time on it) if it isn't today.

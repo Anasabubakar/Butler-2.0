@@ -54,7 +54,7 @@ import java.util.UUID
 
 /**
  * Little Butler on your phone: peeks from the bottom-right corner over every app.
- * Tap it for Act on this, Save this, Copy this, Analyze this, Solve this, Send to laptop and Ask Butler;
+ * Tap it for Act on this, Draft a reply, Save this, Copy this, Analyze this, Solve this, Send to laptop and Ask Butler;
  * hold it to type a command straight away. A bubble over its head says what it's doing.
  * It also checks for reminders and things sent from your laptop.
  */
@@ -185,12 +185,19 @@ class PetService : Service() {
                 textSize = 12f
                 setPadding((4 * dp).toInt(), (12 * dp).toInt(), 0, (4 * dp).toInt())
             })
-            // Act on this: the one most worth a single tap, so it gets a whole row.
-            addView(tile(ui, R.drawable.ic_check, getString(R.string.pet_act), ::actOnScreen),
-                // As wide as a row of two, whose tiles sit 3 dp in from each side.
-                LinearLayout.LayoutParams(wide - (6 * dp).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    setMargins((3 * dp).toInt(), (3 * dp).toInt(), (3 * dp).toInt(), (3 * dp).toInt())
-                })
+            // Act on this and Draft a reply: the two most worth a single tap, side by side at the top.
+            addView(LinearLayout(ui).apply {
+                orientation = LinearLayout.HORIZONTAL
+                for ((iconRes, label, action) in listOf<Triple<Int, Int, () -> Unit>>(
+                    Triple(R.drawable.ic_check, R.string.pet_act, ::actOnScreen),
+                    Triple(R.drawable.ic_reply, R.string.pet_draft, { draftReply(getString(R.string.pet_draft_default)) }),
+                )) {
+                    addView(tile(ui, iconRes, getString(label), action),
+                        LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                            setMargins((3 * dp).toInt(), (3 * dp).toInt(), (3 * dp).toInt(), (3 * dp).toInt())
+                        })
+                }
+            }, LinearLayout.LayoutParams(wide, LinearLayout.LayoutParams.WRAP_CONTENT))
             // Quick actions, two to a row.
             val actions = listOf<Triple<Int, Int, () -> Unit>>(
                 Triple(R.drawable.ic_bookmark, R.string.pet_save, ::saveThis),
@@ -686,17 +693,18 @@ class PetService : Service() {
      * the screen back where it was. Checks run straight away; anything that changes
      * something waits for Do it; a question comes back in the bubble for you to reply to.
      */
-    private fun actOnScreen() = work(getString(R.string.pet_reading_screen), face = "think") {
+    private fun actOnScreen(): Unit = work(getString(R.string.pet_reading_screen), face = "think") {
         val config = Config(this)
         if (!config.isReady) throw IllegalStateException(getString(R.string.setup_first))
         val client = ScreenClient(config)
+        val hasBox = hands().hasChatBox()
         val first = snap()
         val views = mutableListOf(first.jpeg)
         val moves = mutableListOf<String>()
         var answer = JSONObject()
         try {
             while (true) {
-                answer = client.act(views, more = moves.size < MAX_ACT_SCROLLS, device = config.deviceName)
+                answer = client.act(views, more = moves.size < MAX_ACT_SCROLLS, device = config.deviceName, hasBox = hasBox)
                 if (answer.optString("status") != "more" || moves.size >= MAX_ACT_SCROLLS) break
                 val way = if (answer.optString("scroll") == "down") "down" else "up"
                 progressNote(getString(R.string.pet_reading_more, moves.size + 1))
@@ -713,13 +721,123 @@ class PetService : Service() {
             }
         }
         val confirm = answer.optString("confirm").takeIf { it.isNotBlank() && it != "null" }
-        if (confirm != null) afterTell = { bubble.offer(getString(R.string.pet_do_it)) { doActs(confirm) } }
-        answer.optString("say").ifBlank { getString(R.string.pet_nothing_to_act) }
+        val say = answer.optString("say").ifBlank { getString(R.string.pet_nothing_to_act) }
+        val reply = answer.optString("draft").takeIf { it.isNotBlank() && it != "null" }
+        afterTell = when {
+            // A reply they owe: typed straight into the box (no yes needed), with Do it kept for the rest.
+            reply != null -> ({ draftReply(reply, before = say, confirm = confirm) })
+            confirm != null -> ({ bubble.offer(getString(R.string.pet_do_it)) { doActs(confirm) } })
+            else -> null
+        }
+        say
     }
 
-    /** Do it: what Act on this found, done now that you've said yes. */
-    private fun doActs(confirm: String) = work(getString(R.string.pet_doing_it)) {
-        JSONObject(ButlerClient(Config(this)).post("/api/command/confirm", mapOf("confirm" to confirm), null)).optString("say")
+    /**
+     * Do it: what Act on this found, done now that you've said yes. Butler commands that need the
+     * screen come back as a step: a draft to type, or a goal to work on.
+     */
+    private fun doActs(confirm: String): Unit = work(getString(R.string.pet_doing_it)) {
+        val done = JSONObject(ButlerClient(Config(this)).post("/api/command/confirm", mapOf("confirm" to confirm), null))
+        val step = done.optJSONArray("steps")?.optJSONObject(0)
+        val next = done.optString("confirm").takeIf { it.isNotBlank() && it != "null" }
+        val stepAction = step?.optString("action")
+        val stepText = step?.optString(if (stepAction == "screen") "goal" else "instruction").orEmpty()
+        afterTell = when {
+            stepAction == "screen" -> ({ operate(stepText) })
+            stepAction == "draft" -> ({ draftReply(stepText) })
+            next != null -> ({ bubble.offer(getString(R.string.pet_do_it)) { doActs(next) } })
+            else -> null
+        }
+        done.optString("say")
+    }
+
+    /** Writes a draft into the chat's box once the Ask sheet has closed. */
+    fun draftSoon(instruction: String) {
+        scope.launch {
+            delay(700)
+            draftReply(instruction)
+        }
+    }
+
+    /**
+     * Draft a reply: reads the chat (scrolling up for older messages if Butler needs them, then
+     * back down), writes the message as you and types it into the chat's own box, in place of
+     * what's there. `instruction` is what you asked: "help me respond", "refine this", "shorter".
+     * It never presses Send: you do, or you tap Send it on the bubble. Reply to the bubble to
+     * have the draft rewritten. `before` and `confirm` carry over what Act on this said and its Do it.
+     */
+    private fun draftReply(instruction: String, before: String? = null, confirm: String? = null): Unit =
+        work(getString(R.string.pet_drafting), face = "think") {
+            val config = Config(this)
+            if (!config.isReady) throw IllegalStateException(getString(R.string.setup_first))
+            val hands = hands()
+            val box = hands.boxText() ?: throw IllegalStateException(getString(R.string.pet_no_chat_box))
+            val app = hands.foregroundApp()
+            val words = hands.screenText()
+            // A chat that hides its picture still has its words.
+            val first = runCatching { snap() }.getOrElse { if (it is ScreenHidden && words != null) null else throw it }
+            val views = listOfNotNull(first?.jpeg).toMutableList()
+            val client = ScreenClient(config)
+            var moves = 0
+            var answer = JSONObject()
+            try {
+                while (true) {
+                    val canScroll = first != null && moves < MAX_DRAFT_SCROLLS
+                    answer = client.draft(views, canScroll, config.deviceName, instruction, box, app, words)
+                    if (answer.optString("status") != "more" || first == null || !canScroll) break
+                    progressNote(getString(R.string.pet_reading_more, moves + 1))
+                    olderMessages(first, true)
+                    moves++
+                    delay(700) // let the chat settle before the next picture
+                    views += snap().jpeg
+                }
+            } finally {
+                if (first != null) repeat(moves) {
+                    runCatching { olderMessages(first, false) }
+                    delay(250)
+                }
+            }
+            val text = answer.optString("text").trim()
+            if (text.isEmpty()) throw IllegalStateException(getString(R.string.pet_draft_empty))
+            val said = if (hands.fillBox(text)) {
+                afterTell = when {
+                    confirm != null -> ({ bubble.offer(getString(R.string.pet_do_it)) { doActs(confirm) } })
+                    app != null -> ({ bubble.offer(getString(R.string.pet_send_it)) { sendDraft(app) } })
+                    else -> null
+                }
+                answer.optString("say").ifBlank { getString(R.string.pet_draft_typed) }
+            } else {
+                copyToClipboard(text)
+                getString(R.string.pet_draft_copied, text)
+            }
+            listOfNotNull(before?.takeIf { it.isNotBlank() }, said).joinToString("\n\n")
+        }
+
+    /**
+     * Scrolls a chat to older messages (or back), swiping in the top half of the screen so the
+     * keyboard, which may be up for the message box, never gets the swipe.
+     */
+    private suspend fun olderMessages(shot: Shot, older: Boolean) {
+        val x = shot.width / 2f
+        val top = shot.height * 0.18f
+        val bottom = shot.height * 0.45f
+        touchThrough(true)
+        try {
+            if (older) hands().drag(x, top, x, bottom, 350) else hands().drag(x, bottom, x, top, 350)
+        } finally {
+            touchThrough(false)
+        }
+    }
+
+    /** Send it: presses the chat's Send button, only if you're still in that chat and the box isn't empty. */
+    private fun sendDraft(app: String): Unit = work(getString(R.string.pet_sending_draft)) {
+        val hands = hands()
+        when {
+            hands.foregroundApp() != app -> getString(R.string.pet_left_chat)
+            hands.boxText().isNullOrBlank() -> getString(R.string.pet_box_empty)
+            hands.pressSend() -> getString(R.string.pet_sent)
+            else -> getString(R.string.pet_no_send_button)
+        }
     }
 
     /** One swipe that shows more of the screen: "up" for older messages or the top of a page, "down" for further on. */
@@ -999,6 +1117,8 @@ class PetService : Service() {
         if (busy) return
         busy = true
         pet.setState("listen")
+        // The chat you're in, if its message box is showing, so "help me respond" can write into it.
+        val chat = HandsService.instance?.let { h -> h.boxText()?.let { ButlerClient.Chat(h.foregroundApp(), it) } }
         scope.launch {
             val shot = runCatching { snap() }.getOrNull()?.let { s ->
                 File(cacheDir, "ask-${UUID.randomUUID()}.jpg").apply { writeBytes(s.jpeg) }
@@ -1006,7 +1126,7 @@ class PetService : Service() {
             val link = HandsService.instance?.browserUrl()
             busy = false
             closeMenu()
-            AskActivity.open(this@PetService, shot, link, talk, replyTo = replyTo)
+            AskActivity.open(this@PetService, shot, link, talk, replyTo = replyTo, chat = chat)
         }
     }
 
@@ -1024,7 +1144,7 @@ class PetService : Service() {
      * Works towards `goal` one step at a time: a screenshot, Butler picks the next tap,
      * swipe or typing, the pet does it, repeat. Tap the pet to stop.
      */
-    private fun operate(goal: String) = work(getString(R.string.pet_thinking), face = "work", stoppable = true) {
+    private fun operate(goal: String): Unit = work(getString(R.string.pet_thinking), face = "work", stoppable = true) {
         val config = Config(this)
         val done = mutableListOf<String>()
         operating = true
@@ -1392,6 +1512,8 @@ class PetService : Service() {
         private const val MENU_WIDTH_DP = 280
         /** How many extra views Act on this may scroll for; the server allows the same. */
         private const val MAX_ACT_SCROLLS = 5
+        /** How many times Draft a reply may scroll up for older messages; the server allows the same. */
+        private const val MAX_DRAFT_SCROLLS = 3
         private const val LAPTOP_QUIET_MS = 15 * 60_000L
         private const val INBOX_EVERY_MS = 20_000L
         private const val AHEAD_EVERY_MS = 5 * 60_000L

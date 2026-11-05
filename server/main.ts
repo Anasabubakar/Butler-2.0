@@ -49,6 +49,7 @@ import * as tg from "./lib/telegram.ts";
 import { ALLOWED_UPDATES, type Answer, Bot, type Butler, type Update } from "./lib/bot.ts";
 import * as privacy from "./lib/privacy.ts";
 import * as act from "./lib/act.ts";
+import * as draft from "./lib/draft.ts";
 import type { Picture } from "./lib/gemini.ts";
 
 const env = (k: string, fallback?: string) => Deno.env.get(k) ?? fallback;
@@ -782,14 +783,22 @@ app.post("/api/command", async (c) => {
 
   const timeZone = safeZone(text("tz", 100));
   if (timeZone !== "UTC" && timeZone === text("tz", 100)) await settings.set("time_zone", timeZone); // for the morning brief
+  // In a chat with a message box: "help me respond", "refine this", or "shorter" right after a draft.
+  // The phone writes it straight into the box, so no planning is needed.
+  const chatApp = text("app", 200);
+  const hasBox = talk === null && text("has_box") === "1";
+  const box = text("box", 4000) ?? "";
+  if (typed && draft.isDraftAsk(typed, { hasBox, recentDraft: recentDraft(chatApp) })) {
+    return c.json({ action: "draft", say: "on it. writing it into the box.", instruction: typed });
+  }
   // Answering the question Act on this asked about a screen: carry on with that screen.
-  const asked = talk === null && typed ? findAsked(answering) : null;
+  const asked = talk === null && typed && text("from_act") !== "1" ? findAsked(answering) : null;
   if (asked && typed) {
     askedAbout = askedAbout.filter((a) => a !== asked);
     await memory.addTurn("owner", typed, device, null).catch((e) => console.error("chat", String(e).slice(0, 200)));
     try {
-      const done = await actOn(asked.pictures, { device, timeZone, canScroll: false, answer: { question: asked.question, said: typed } });
-      return c.json({ action: done.action, say: done.say, confirm: done.confirm });
+      const done = await actOn(asked.pictures, { device, timeZone, canScroll: false, hasBox, answer: { question: asked.question, said: typed } });
+      return c.json({ action: done.draft ? "draft" : done.action, say: done.say, confirm: done.confirm, instruction: done.draft });
     } catch (e) {
       return c.json({ error: String(e).slice(0, 300) }, 502);
     }
@@ -805,6 +814,7 @@ app.post("/api/command", async (c) => {
       history: memory.historyText(turns, timeZone) || undefined, memories: memory.memoryText(known) || undefined,
       learn, save: item ? saveText(item, await pageOf(item)) : undefined,
       answering: answering || undefined, replied: Boolean(replyTo),
+      chatBox: hasBox ? { text: box, app: chatApp ?? undefined, lastDraft: recentDraft(chatApp) ? lastDraft?.text : undefined } : undefined,
     }, picture, voice);
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
@@ -896,6 +906,9 @@ app.post("/api/command", async (c) => {
     }
     case "screen":
       return json({ action: "screen", say: p.reply, goal: p.text || said });
+    case "draft":
+      if (!hasBox) return json({ action: "answer", say: "open the chat and tap its message box first, then ask me again." });
+      return json({ action: "draft", say: p.reply || "on it. writing it into the box.", instruction: p.text || said });
     case "brief": {
       const now = new Date();
       const asked = parseWhen(p.when);
@@ -1129,7 +1142,10 @@ app.post("/api/command/confirm", async (c) => {
   pendingActs.delete(id);
   if (acts) {
     if (acts.expires < Date.now()) return c.json({ error: "that expired, tap Act on this again" }, 410);
-    return said(await carryOut(acts));
+    const done = await carryOut(acts);
+    if (done.confirm) confirmChat.set(done.confirm, talk);
+    memory.addTurn("butler", done.say, null, talk).catch((e) => console.error("chat", String(e).slice(0, 200)));
+    return c.json(done);
   }
   const tool = pendingTools.get(id);
   pendingTools.delete(id);
@@ -1239,13 +1255,14 @@ async function runCheck(
  * can't tell, it asks for another view (if the phone can scroll) or asks you one question.
  */
 async function actOn(
-  pictures: Picture[], o: { device: string; timeZone: string; canScroll: boolean; answer?: { question: string; said: string } },
+  pictures: Picture[],
+  o: { device: string; timeZone: string; canScroll: boolean; hasBox?: boolean; answer?: { question: string; said: string } },
 ): Promise<Record<string, unknown>> {
   const offers = (await toolOffers()).slice(0, 60);
   const tools = offers.map((t) => ({ key: t.key, description: t.tool.description, args: shortArgs(t.tool.schema) }));
   const known = await memory.memories().catch(() => [] as memory.Memory[]);
   const reading = await act.read(pictures, {
-    now: localIso(new Date(), o.timeZone), timeZone: o.timeZone, tools, canScroll: o.canScroll, answer: o.answer,
+    now: localIso(new Date(), o.timeZone), timeZone: o.timeZone, tools, canScroll: o.canScroll, answer: o.answer, hasBox: o.hasBox,
     memories: memory.memoryText(known) || undefined, teasing: await teasing(),
   });
   const keep = (say: string) => memory.addTurn("butler", say, null, null).catch((e) => console.error("chat", String(e).slice(0, 200)));
@@ -1271,14 +1288,46 @@ async function actOn(
     lines.push(`Tap Do it and I'll:\n${writes.map((w, i) => `${i + 1}. ${act.describe(w, o.timeZone)}`).join("\n")}`);
   }
   if (sorted.skipped.length) lines.push(`Left out: ${sorted.skipped.join("; ")}.`);
-  if (!found.length && !writes.length && !sorted.skipped.length) lines.push("nothing to act on here.");
+  // A reply they owe goes straight into the chat's box (the phone does it); they still press Send.
+  const reply = o.hasBox ? sorted.reply : null;
+  if (reply) lines.push(`Typing a reply into the box for you to check: ${reply}`);
+  if (!found.length && !writes.length && !sorted.skipped.length && !reply) lines.push("nothing to act on here.");
   const say = lines.join("\n\n");
   await keep(say);
-  return { status: reading.status === "none" ? "none" : "ready", action: confirm ? "confirm" : "answer", say, confirm };
+  const status = reading.status === "none" && !reply ? "none" : "ready";
+  return { status, action: confirm ? "confirm" : "answer", say, confirm, draft: reply ?? undefined };
+}
+
+/** What the phone still has to do after Do it: type a draft, or work on the screen. */
+type PhoneStep = { action: "draft"; instruction: string } | { action: "screen"; goal: string };
+
+/**
+ * One of Butler's own commands ("send this link to my laptop", "focus for 25 minutes"), run as if
+ * you'd typed it in Ask Butler. Says how it went; anything only the phone can do comes back as a step.
+ */
+async function runCommand(
+  command: string, p: PendingActs,
+): Promise<{ say: string; step?: PhoneStep; confirm?: string }> {
+  const form = new FormData();
+  form.set("device", p.device);
+  form.set("text", command);
+  form.set("tz", p.timeZone);
+  form.set("from_act", "1");
+  const res = await app.request("/api/command", { method: "POST", body: form, headers: { "x-butler-token": TOKEN } });
+  const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+  if (!res.ok || typeof body.error === "string") throw new Error(String(body.error ?? `status ${res.status}`));
+  const say = typeof body.say === "string" ? body.say.trim() : "";
+  if (body.action === "screen" && typeof body.goal === "string") return { say: say || `Doing it: ${command}`, step: { action: "screen", goal: body.goal } };
+  if (body.confirm && typeof body.confirm === "string") return { say: `${say}\n(Needs your yes: tap Do it again.)`, confirm: body.confirm };
+  // Opening WhatsApp or picking from the phone's clipboard happens in the Ask sheet.
+  if (body.message || body.send) return { say: `Open Ask Butler and say "${command}" to finish this one; it needs the Ask sheet.` };
+  return { say: say || `Done: ${command}` };
 }
 
 /** Does what you said yes to, one line each on how it went. */
-async function carryOut(p: PendingActs): Promise<string> {
+async function carryOut(p: PendingActs): Promise<{ say: string; confirm?: string; steps: PhoneStep[] }> {
+  const steps: PhoneStep[] = [];
+  let confirm: string | undefined;
   const googleOn = google.googleConfigured() && Boolean(await google.account().catch(() => null));
   const everywhere = (await inbox.devices()).map((d) => d.name);
   const remind = (text: string, at: Date) =>
@@ -1320,12 +1369,19 @@ async function carryOut(p: PendingActs): Promise<string> {
           lines.push(offer ? await useTool(offer, w.args, p.said, true) : `${w.tool} has been switched off or removed, so I didn't use it.`);
           break;
         }
+        case "butler": {
+          const done = await runCommand(w.text, p);
+          lines.push(done.say);
+          if (done.step) steps.push(done.step);
+          confirm ??= done.confirm;
+          break;
+        }
       }
     } catch (e) {
       lines.push(`Didn't work: ${what} (${(e as Error).message.slice(0, 120)})`);
     }
   }
-  return lines.join("\n");
+  return { say: lines.join("\n"), confirm, steps };
 }
 
 // Act on this: one or more screenshots of the same screen (more after each scroll), oldest first.
@@ -1344,10 +1400,69 @@ app.post("/api/screen/act", async (c) => {
   const pictures = await Promise.all(files.map(async (f) => ({ data: encodeBase64(new Uint8Array(await f.arrayBuffer())), mediaType: f.type })));
   const timeZone = safeZone(text("tz", 100));
   try {
-    return c.json(await actOn(pictures, { device, timeZone, canScroll: text("more") === "1" && files.length <= act.MAX_SCROLLS }));
+    return c.json(await actOn(pictures, {
+      device, timeZone, canScroll: text("more") === "1" && files.length <= act.MAX_SCROLLS, hasBox: text("has_box") === "1",
+    }));
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
+});
+
+// --- draft a reply into the chat's own box ---------------------------------------------
+
+// The last draft Butler typed into a chat, so "shorter" a minute later knows what it's about.
+let lastDraft: { app: string | null; text: string; at: number } | null = null;
+
+/** Whether a draft was typed moments ago (in the same app, when the phone says which). */
+function recentDraft(app: string | null): boolean {
+  if (!lastDraft || Date.now() - lastDraft.at > draft.FOLLOW_UP_MS) return false;
+  return !app || !lastDraft.app || lastDraft.app === app;
+}
+
+// Draft a reply: views of the chat (more after each scroll up), what's in its box, and what you asked.
+// Answers status "more" (scroll up and call again) or "ready" with the text to type into the box.
+// Nothing is sent: the phone types it in and you press Send.
+app.post("/api/screen/draft", async (c) => {
+  if (!(await signedIn(c))) return c.json({ error: "bad token" }, 401);
+  if (!geminiReady()) return c.json({ error: "no AI model: set GEMINI_API_KEY on the server" }, 503);
+  const { form, text, deviceKind } = await deviceForm(c);
+  const device = text("device", 100) ?? "phone";
+  if (deviceKind) await inbox.checkIn(device, deviceKind);
+  const files = (form?.getAll("file") ?? []).filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.some((f) => !VISION_TYPES.some((t) => t === f.type))) return c.json({ error: "expected screenshots in the file field" }, 400);
+  if (files.length > draft.MAX_SCROLLS + 1) return c.json({ error: "too many views" }, 400);
+  if (files.some((f) => f.size > MAX_VISION_BYTES)) return c.json({ error: "screenshot too large" }, 413);
+  const instruction = text("instruction", 1000) || "help me respond";
+  const screenText = text("screen_text", 4000) ?? undefined;
+  if (!files.length && !screenText) return c.json({ error: "send a screenshot or the screen's words" }, 400);
+  const pictures = await Promise.all(files.map(async (f) => ({ data: encodeBase64(new Uint8Array(await f.arrayBuffer())), mediaType: f.type })));
+  const app = text("app", 200);
+  const box = text("box", 4000) ?? "";
+  const timeZone = safeZone(text("tz", 100));
+  const canScroll = text("more") === "1" && files.length <= draft.MAX_SCROLLS;
+  const [turns, known] = await Promise.all([
+    memory.recentTurns(null).catch(() => [] as memory.Turn[]),
+    memory.memories().catch(() => [] as memory.Memory[]),
+  ]);
+  let written;
+  try {
+    written = await draft.write(pictures, {
+      instruction, box, app: app ?? undefined, screenText, canScroll, teasing: await teasing(),
+      previous: recentDraft(app) ? lastDraft?.text : undefined,
+      history: memory.historyText(turns.slice(-8), timeZone) || undefined, memories: memory.memoryText(known) || undefined,
+    });
+  } catch (e) {
+    return c.json({ error: String(e).slice(0, 300) }, 502);
+  }
+  if (written.status === "more" && canScroll) return c.json({ status: "more", scroll: "up" });
+  if (!written.text) return c.json({ error: "couldn't write anything for that chat. try again, or tell me what to say" }, 502);
+  lastDraft = { app, text: written.text, at: Date.now() };
+  // Kept in the conversation, so a follow-up from the bubble or the Ask sheet follows on.
+  const note = written.note.trim() || "typed it in. read it over, then hit send.";
+  memory.addTurn("owner", instruction, device, null)
+    .then(() => memory.addTurn("butler", `${note}\n\nDraft typed into the chat: """${written.text}"""`, null, null))
+    .catch((e) => console.error("chat", String(e).slice(0, 200)));
+  return c.json({ status: "ready", text: written.text, say: note });
 });
 
 app.post("/api/login", async (c) => {

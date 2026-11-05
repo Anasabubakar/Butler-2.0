@@ -29,10 +29,37 @@ class ScreenClient(config: Config) {
      * still scroll. The answer's status is "more" (scroll that way and call again), "ask",
      * "ready" or "none", with what to say and maybe a `confirm` id for Do it.
      */
-    suspend fun act(views: List<ByteArray>, more: Boolean, device: String): JSONObject = JSONObject(
+    suspend fun act(views: List<ByteArray>, more: Boolean, device: String, hasBox: Boolean = false): JSONObject = JSONObject(
         butler.post(
             "/api/screen/act",
-            mapOf("device" to device, "kind" to "phone", "tz" to TimeZone.getDefault().id, "more" to if (more) "1" else "0"),
+            mapOf(
+                "device" to device, "kind" to "phone", "tz" to TimeZone.getDefault().id, "more" to if (more) "1" else "0",
+                "has_box" to if (hasBox) "1" else "0",
+            ),
+            views.mapIndexed { i, jpeg -> ButlerClient.Attachment("view-$i.jpg", jpeg, "image/jpeg") },
+        ),
+    )
+
+    /**
+     * Draft a reply: every view of the chat so far (oldest first), what its box holds, the words
+     * on screen and what you asked ("help me respond", "shorter"). The answer's status is "more"
+     * (scroll up and call again) or "ready" with `text` to type into the box and `say` for you.
+     */
+    suspend fun draft(
+        views: List<ByteArray>, more: Boolean, device: String, instruction: String, box: String, app: String?, screenText: String?,
+    ): JSONObject = JSONObject(
+        butler.post(
+            "/api/screen/draft",
+            buildMap {
+                put("device", device)
+                put("kind", "phone")
+                put("tz", TimeZone.getDefault().id)
+                put("more", if (more) "1" else "0")
+                put("instruction", instruction.take(1000))
+                put("box", box.take(4000))
+                app?.let { put("app", it) }
+                screenText?.let { put("screen_text", it.take(4000)) }
+            },
             views.mapIndexed { i, jpeg -> ButlerClient.Attachment("view-$i.jpg", jpeg, "image/jpeg") },
         ),
     )
