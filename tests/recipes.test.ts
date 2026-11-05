@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Offer, Rule } from "../server/lib/mcp.ts";
 import { checkedQuery, checkedSchedule, describeSchedule, due, EventLimit, type Recipe, run, runsFreely, toolsFor } from "../server/lib/recipes.ts";
+import { googleOffers } from "../server/lib/googletools.ts";
 
 const offer = (connection: string, name: string, readOnly: boolean, rule: Rule = readOnly ? "auto" : "ask"): Offer => ({
   key: `${connection}/${name}`,
@@ -165,4 +166,17 @@ test("events can't start a recipe too often", () => {
   assert.equal(limit.allow("a", t + 62_000), true);
   assert.equal(limit.allow("a", t + 93_000), false); // 3 a day
   assert.equal(limit.allow("a", t + 86_400_000 + 1), true); // the next day
+});
+
+test("a recipe is told to say what it couldn't check, and to use your Google tools", async () => {
+  const { server, prompts } = fakeAi([{ do: "finish", reply: "ok" }]);
+  try {
+    await run(recipe(), { ...ctx([]), offers: [...googleOffers(), ...offers] });
+    assert.match(prompts[0], /never call a calendar clear or a list empty that you didn't actually read/);
+    assert.match(prompts[0], /"Google\/calendar" \(reads only\)/);
+    assert.match(prompts[0], /use the "Google\/\.\.\." tools/);
+  } finally {
+    Deno.env.delete("GEMINI_API_KEY");
+    await server.shutdown();
+  }
 });
