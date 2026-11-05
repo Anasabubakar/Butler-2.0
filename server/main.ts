@@ -1768,11 +1768,32 @@ app.use("/api/mcp/*", requireSession);
 const shown = (conn: mcp.Connection) => ({
   id: conn.id, name: conn.name, host: conn.host, checked_at: conn.checked_at, error: conn.error,
   auth: conn.auth, signin_needed: conn.signin_needed,
+  logo: conn.logo_at ? `/api/mcp/${conn.id}/logo?v=${Date.parse(conn.logo_at)}` : null,
   tools: conn.tools.map((t) => ({ name: t.name, description: t.description, readOnly: t.readOnly, rule: mcp.ruleFor(conn, t) })),
 });
 
-app.get("/api/mcp", async (c) =>
-  c.json({ ready: vaultReady(), connections: (await mcp.list()).map(shown), calls: await mcp.recentCalls(20) }));
+app.get("/api/mcp", async (c) => {
+  const connections = await mcp.list();
+  mcp.refreshLogos(connections); // finds missing or week-old logos behind the scenes
+  return c.json({ ready: vaultReady(), connections: connections.map(shown), calls: await mcp.recentCalls(20) });
+});
+
+// The logo found for a connection. It came from the web, so the browser is told never to run
+// it as a page, even if someone opens the link directly.
+app.get("/api/mcp/:id/logo", async (c) => {
+  const id = c.req.param("id");
+  const logo = UUID_RE.test(id) ? await mcp.logoOf(id) : null;
+  if (!logo) return c.notFound();
+  return new Response(logo.bytes, {
+    headers: {
+      "content-type": logo.type,
+      "content-length": String(logo.bytes.length),
+      "cache-control": "private, max-age=86400",
+      "x-content-type-options": "nosniff",
+      "content-security-policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'",
+    },
+  });
+});
 
 app.post("/api/mcp", async (c) => {
   if (!vaultReady()) return c.json({ error: "set BUTLER_VAULT_KEY on the server first" }, 503);
