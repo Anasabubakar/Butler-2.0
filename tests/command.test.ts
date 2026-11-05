@@ -187,3 +187,28 @@ test("a reply to a pushed message is read as an answer to it, and the screenshot
     await server.shutdown();
   }
 });
+
+test("the planner offers a draft only when a chat box is showing", async () => {
+  const prompts: string[] = [];
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+    prompts.push((await req.json()).contents[0].parts.at(-1).text);
+    return Response.json({ candidates: [{ content: { parts: [{ text: '{"action":"draft","text":"reply to Tola saying yes"}' }] } }] });
+  });
+  Deno.env.set("GEMINI_URL", `http://localhost:${server.addr.port}`);
+  Deno.env.set("GEMINI_API_KEY", "test-key");
+  try {
+    const got = await plan("what do i tell her?", {
+      device: "phone", timeZone: "UTC", devices: [],
+      chatBox: { text: "", app: "com.whatsapp", lastDraft: "sure, friday works" },
+    }, null);
+    assert.equal(got.action, "draft");
+    assert.match(prompts[0], /"draft": they're in a chat \(com\.whatsapp\)/);
+    assert.match(prompts[0], /holds: """\(empty\)"""/);
+    assert.match(prompts[0], /moments ago: """sure, friday works"""/);
+    await plan("hi", { device: "phone", timeZone: "UTC", devices: [] }, null);
+    assert.doesNotMatch(prompts[1], /"draft": they're in a chat/);
+  } finally {
+    Deno.env.delete("GEMINI_API_KEY");
+    await server.shutdown();
+  }
+});
