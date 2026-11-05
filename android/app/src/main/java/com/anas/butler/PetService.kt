@@ -693,7 +693,7 @@ class PetService : Service() {
      * the screen back where it was. Checks run straight away; anything that changes
      * something waits for Do it; a question comes back in the bubble for you to reply to.
      */
-    private fun actOnScreen() = work(getString(R.string.pet_reading_screen), face = "think") {
+    private fun actOnScreen(): Unit = work(getString(R.string.pet_reading_screen), face = "think") {
         val config = Config(this)
         if (!config.isReady) throw IllegalStateException(getString(R.string.setup_first))
         val client = ScreenClient(config)
@@ -736,7 +736,7 @@ class PetService : Service() {
      * Do it: what Act on this found, done now that you've said yes. Butler commands that need the
      * screen come back as a step: a draft to type, or a goal to work on.
      */
-    private fun doActs(confirm: String) = work(getString(R.string.pet_doing_it)) {
+    private fun doActs(confirm: String): Unit = work(getString(R.string.pet_doing_it)) {
         val done = JSONObject(ButlerClient(Config(this)).post("/api/command/confirm", mapOf("confirm" to confirm), null))
         val step = done.optJSONArray("steps")?.optJSONObject(0)
         val next = done.optString("confirm").takeIf { it.isNotBlank() && it != "null" }
@@ -766,7 +766,7 @@ class PetService : Service() {
      * It never presses Send: you do, or you tap Send it on the bubble. Reply to the bubble to
      * have the draft rewritten. `before` and `confirm` carry over what Act on this said and its Do it.
      */
-    private fun draftReply(instruction: String, before: String? = null, confirm: String? = null) =
+    private fun draftReply(instruction: String, before: String? = null, confirm: String? = null): Unit =
         work(getString(R.string.pet_drafting), face = "think") {
             val config = Config(this)
             if (!config.isReady) throw IllegalStateException(getString(R.string.setup_first))
@@ -830,7 +830,7 @@ class PetService : Service() {
     }
 
     /** Send it: presses the chat's Send button, only if you're still in that chat and the box isn't empty. */
-    private fun sendDraft(app: String) = work(getString(R.string.pet_sending_draft)) {
+    private fun sendDraft(app: String): Unit = work(getString(R.string.pet_sending_draft)) {
         val hands = hands()
         when {
             hands.foregroundApp() != app -> getString(R.string.pet_left_chat)
@@ -1144,7 +1144,7 @@ class PetService : Service() {
      * Works towards `goal` one step at a time: a screenshot, Butler picks the next tap,
      * swipe or typing, the pet does it, repeat. Tap the pet to stop.
      */
-    private fun operate(goal: String) = work(getString(R.string.pet_thinking), face = "work", stoppable = true) {
+    private fun operate(goal: String): Unit = work(getString(R.string.pet_thinking), face = "work", stoppable = true) {
         val config = Config(this)
         val done = mutableListOf<String>()
         operating = true
