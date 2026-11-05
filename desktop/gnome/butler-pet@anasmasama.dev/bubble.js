@@ -1,23 +1,22 @@
 // B2/PetBubble over the pet's head (Figma B2 · 17), like the phone pet's (PetBubble.kt):
-// where and what state on top ("My laptop • Working"), one short line of what it's doing,
-// and Stop. When it's done: a tick (or a "!"), the first line of the answer, Copy and ×, and a
-// reply box under it to answer back. Click the line to read all of it.
+// where and what state on top ("My laptop • Working") beside Stop, and what it's doing under
+// that. When it's done: a tick (or a "!"), Copy and × on top, the answer under them, wrapped
+// over as many lines as it needs, and a reply box to answer back. A long answer shows its first
+// lines and "Show more"; open, it scrolls inside the bubble so every word can be read.
 import Clutter from 'gi://Clutter';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
 
 import * as Animation from 'resource:///org/gnome/shell/ui/animation.js';
 
-const LONGEST = 1200;
+import {preview, whole} from './fit.js';
 
-/** The first non-empty line; the label cuts it short with "…" if it's long. */
+/** The text's width: wide enough to read comfortably, narrow enough to sit over the pet. */
+const TEXT_W = 320;
+
+/** The first non-empty line. */
 export function firstLine(text) {
     return String(text ?? '').trim().split('\n').find(line => line.trim())?.trim() ?? '';
-}
-
-/** Up to about a screenful; Copy still gets all of it. */
-function shortened(text) {
-    return text.length > LONGEST ? `${text.slice(0, LONGEST)}…` : text;
 }
 
 function chip(label, styleClass, onClick) {
@@ -41,24 +40,18 @@ export class Bubble {
         this._stopAction = null;
 
         this.actor = new St.BoxLayout({vertical: true, style_class: 'butler-bubble', visible: false, reactive: true});
-        this._heading = new St.Label({style_class: 'butler-bubble-heading', visible: false});
-        this.actor.add_child(this._heading);
 
+        // Top row: spinner or tick, where and what state, then the buttons. The text goes under
+        // it at the bubble's full width, so the buttons never squeeze it down to a few words.
         const top = new St.BoxLayout({style_class: 'butler-bubble-top'});
         this._spinner = new Animation.Spinner(16, {animate: true, hideOnStop: true});
         this._spinner.y_align = Clutter.ActorAlign.CENTER;
         top.add_child(this._spinner);
         this._mark = new St.Label({style_class: 'butler-bubble-mark', visible: false, y_align: Clutter.ActorAlign.CENTER});
         top.add_child(this._mark);
-
-        this._line = new St.Label({style_class: 'butler-bubble-line', reactive: true, y_align: Clutter.ActorAlign.CENTER});
-        this._line.clutter_text.single_line_mode = true;
-        this._line.clutter_text.ellipsize = Pango.EllipsizeMode.END;
-        this._line.connect('button-release-event', () => {
-            this._tapped();
-            return Clutter.EVENT_STOP;
-        });
-        top.add_child(this._line);
+        this._heading = new St.Label({style_class: 'butler-bubble-heading', x_expand: true, y_align: Clutter.ActorAlign.CENTER});
+        this._heading.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+        top.add_child(this._heading);
 
         this._stop = chip('Stop', 'butler-bubble-stop', () => this._stopAction?.());
         this._copy = chip('Copy', '', () => this.onCopy?.(this._full));
@@ -66,6 +59,33 @@ export class Bubble {
         for (const button of [this._stop, this._copy, this._close])
             top.add_child(button);
         this.actor.add_child(top);
+
+        // What Butler says: wrapped, never cut to one line. Closed, the first few lines; open,
+        // all of it, scrolling once it's taller than about half the screen.
+        this._line = new St.Label({style_class: 'butler-bubble-line', reactive: true, x_align: Clutter.ActorAlign.START});
+        this._line.clutter_text.line_wrap = true;
+        this._line.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
+        this._line.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+        this._line.connect('button-release-event', () => {
+            this._tapped();
+            return Clutter.EVENT_STOP;
+        });
+        const holder = new St.BoxLayout({vertical: true});
+        holder.add_child(this._line);
+        this._scroll = new St.ScrollView({
+            style_class: 'butler-bubble-scroll',
+            hscrollbar_policy: St.PolicyType.NEVER,
+            vscrollbar_policy: St.PolicyType.AUTOMATIC,
+            overlay_scrollbars: true,
+            child: holder,
+        });
+        this.actor.add_child(this._scroll);
+
+        // Only there when something is hidden, or to close it again.
+        this._more = chip('Show more', 'butler-bubble-more', () => this._tapped(true));
+        this._more.x_align = Clutter.ActorAlign.START;
+        this.actor.add_child(this._more);
+        this._cut = false;
 
         // Files on their way: a bar that fills, and how far along under it ("45% · 12 MB of 27 MB").
         this._track = new St.Widget({style_class: 'butler-bubble-track', x_expand: true, visible: false});
@@ -81,17 +101,6 @@ export class Bubble {
         this._action = chip('', 'butler-bubble-action', () => this._actionRun?.());
         this._action.x_align = Clutter.ActorAlign.START;
         this.actor.add_child(this._action);
-
-        this._body = new St.Label({style_class: 'butler-bubble-body', reactive: true, x_align: Clutter.ActorAlign.START});
-        this._body.clutter_text.line_wrap = true;
-        this._body.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
-        this._body.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
-        this._body.connect('button-release-event', () => {
-            this._tapped();
-            return Clutter.EVENT_STOP;
-        });
-        this._body.visible = false;
-        this.actor.add_child(this._body);
 
         // Answer back: a follow-up, a correction, a new order. Butler remembers the conversation.
         this._reply = new St.Entry({hint_text: 'Reply to Butler…', style_class: 'butler-bubble-reply', can_focus: true, x_expand: true, visible: false});
@@ -171,8 +180,7 @@ export class Bubble {
         if (!this._working)
             return this.working(text);
         this._full = text;
-        this._line.text = firstLine(text);
-        this._setBody(text);
+        this._setText();
         this._changed();
     }
 
@@ -217,9 +225,6 @@ export class Bubble {
         this._copy.visible = text.length > 40;
         this._close.visible = true;
         this._showReply(Boolean(this.onReply));
-        // Long answers open up straight away; short ones fit on the line.
-        if (text.length > 90 || text.includes('\n'))
-            this._setExpanded(true);
         this._changed();
     }
 
@@ -232,8 +237,8 @@ export class Bubble {
 
     /** The top line: where it's happening and its state word. Null hides it. */
     heading(text) {
+        // Stays in the row even when empty, so the buttons keep to the right.
         this._heading.text = text ?? '';
-        this._heading.visible = Boolean(text);
         this._changed();
     }
 
@@ -253,8 +258,8 @@ export class Bubble {
             this.bar(null);
         this.offer(null, null);
         this._full = text;
-        this._line.text = firstLine(text);
-        this._setBody(text);
+        this._expanded = false;
+        this._setText();
         if (spinning)
             this._spinner.play();
         else
@@ -283,29 +288,39 @@ export class Bubble {
         this.onTyping?.(on);
     }
 
-    _tapped() {
-        if (this.onTap?.())
+    /** The text was clicked (or `more`: Show more / Show less was). */
+    _tapped(more = false) {
+        if (!more && this.onTap?.())
             return;
-        this._setExpanded(!this._expanded && this._full.trim().length > firstLine(this._full).length);
+        this._setExpanded(!this._expanded && this._cut);
         this._changed();
     }
 
     /**
-     * Sets the full text. Its height is worked out at the width it's shown at: the bubble
-     * would otherwise ask at its own (wider) width and cut the last lines off.
+     * Shows the text, closed or open. Its size is worked out at the width it's shown at: the
+     * bubble would otherwise ask at its own width and cut the last lines off. Open and taller
+     * than about half the screen, it scrolls.
      */
-    _setBody(text) {
-        this._body.text = shortened(text);
-        this._body.height = -1;
-        const [, width] = this._body.get_preferred_width(-1);
-        const [, height] = this._body.get_preferred_height(width);
-        this._body.height = height;
+    _setText() {
+        const shown = preview(this._full);
+        this._cut = shown.cut;
+        this._line.text = this._expanded ? whole(this._full) : shown.text;
+        this._line.width = -1;
+        this._line.height = -1;
+        const [, natural] = this._line.get_preferred_width(-1);
+        const width = Math.min(natural, TEXT_W);
+        const [, height] = this._line.get_preferred_height(width);
+        this._line.set_size(width, height);
+        const cap = Math.min(440, Math.round((global.stage?.height || 900) * 0.45));
+        this._scroll.set_size(width + 6, Math.min(height, cap));
+        this._scroll.vadjustment?.set_value(0);
+        this._more.label = this._expanded ? 'Show less' : 'Show more';
+        this._more.visible = this._cut;
     }
 
     _setExpanded(on) {
         this._expanded = on;
-        this._body.visible = on;
-        this._line.opacity = on ? 150 : 255;
+        this._setText();
     }
 
     _changed() {
