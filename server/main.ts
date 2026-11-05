@@ -1452,6 +1452,7 @@ app.use("/api/mcp/*", requireSession);
 /** A connection as the website sees it: never its link or key. */
 const shown = (conn: mcp.Connection) => ({
   id: conn.id, name: conn.name, host: conn.host, checked_at: conn.checked_at, error: conn.error,
+  auth: conn.auth, signin_needed: conn.signin_needed,
   tools: conn.tools.map((t) => ({ name: t.name, description: t.description, readOnly: t.readOnly, rule: mcp.ruleFor(conn, t) })),
 });
 
@@ -1463,11 +1464,50 @@ app.post("/api/mcp", async (c) => {
   const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
   const str = (k: string, max: number) => (typeof body[k] === "string" ? (body[k] as string).trim().slice(0, max) : "");
   try {
+    if (str("auth", 20) === "oauth") {
+      const added = await mcp.addOAuth(str("name", 40), str("url", 2000), {
+        clientId: str("client_id", 500), clientSecret: str("client_secret", 2000), scope: str("scope", 1000),
+      });
+      return c.json({ ...shown(added), signin: `/api/mcp/${added.id}/signin` });
+    }
     const headers = mcp.headersFor(str("auth", 20) || "none", str("key", 4000), str("header", 60));
     return c.json(shown(await mcp.add(str("name", 40), str("url", 2000), headers)));
   } catch (e) {
     const message = (e as Error).message;
     return c.json({ error: /duplicate key/.test(message) ? "you already have a connection with that name" : message.slice(0, 300) }, 400);
+  }
+});
+
+// Signing in to a connection: off to the service, then back here with a one-time code.
+app.get("/api/mcp/:id/signin", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) return c.json({ error: "not found" }, 404);
+  const state = crypto.randomUUID();
+  try {
+    const link = await mcp.signInLink(id, state);
+    setCookie(c, "butler_mcp_state", state, { httpOnly: true, secure: COOKIE_SECURE, sameSite: "Lax", path: "/api/mcp", maxAge: 600 });
+    return c.redirect(link);
+  } catch (e) {
+    return c.redirect(`/?mcp=failed&why=${encodeURIComponent((e as Error).message.slice(0, 200))}`);
+  }
+});
+
+app.get("/api/mcp/oauth/callback", async (c) => {
+  const state = getCookie(c, "butler_mcp_state");
+  deleteCookie(c, "butler_mcp_state", { path: "/api/mcp", secure: COOKIE_SECURE });
+  const failed = (why: string) => c.redirect(`/?mcp=failed&why=${encodeURIComponent(why.slice(0, 200))}`);
+  const given = c.req.query("state") ?? "";
+  if (!state || !sameSecret(state, given)) return failed("the sign-in didn't come from this browser; press Reconnect to try again");
+  const refused = c.req.query("error");
+  if (refused) return failed(refused === "access_denied" ? "you didn't allow Butler" : `the service said ${refused.slice(0, 60)}`);
+  const code = c.req.query("code");
+  if (!code) return failed("the service didn't send a sign-in code back");
+  try {
+    const conn = await mcp.finishSignIn(given, code);
+    return c.redirect(`/?mcp=connected&name=${encodeURIComponent(conn.name)}`);
+  } catch (e) {
+    console.error("mcp sign-in:", String((e as Error).message).slice(0, 200));
+    return failed((e as Error).message);
   }
 });
 
