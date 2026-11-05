@@ -4,7 +4,7 @@ import { encodeBase64Url } from "jsr:@std/encoding@1.0.10/base64url";
 import { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.1/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/server/webStandardStreamableHttp.js";
 import { discover, useFetch } from "../server/lib/mcp.ts";
-import { begin, finish, plain, prepare, renew, SignInNeeded, stale } from "../server/lib/mcpauth.ts";
+import { begin, clientDocument, finish, plain, prepare, renew, SignInNeeded, stale } from "../server/lib/mcpauth.ts";
 
 const REDIRECT = "https://butler.example/api/mcp/oauth/callback";
 
@@ -16,7 +16,7 @@ const challengeOf = async (verifier: string) =>
  * its sign-in server, which lets apps sign up, hands out codes with PKCE, and rotates
  * refresh tokens. `dcr: false` makes it one where you must make an app first (like GitHub).
  */
-function service({ dcr = true, broken = false } = {}) {
+function service({ dcr = true, broken = false, cimd = false } = {}) {
   const codes = new Map<string, { challenge: string; client: string; resource: string | null }>();
   const access = new Set<string>();
   const refresh = new Set<string>();
@@ -35,6 +35,7 @@ function service({ dcr = true, broken = false } = {}) {
         authorization_endpoint: `${base}/auth/authorize`,
         token_endpoint: `${base}/auth/token`,
         ...(dcr ? { registration_endpoint: `${base}/auth/register` } : {}),
+        ...(cimd ? { client_id_metadata_document_supported: true } : {}),
         response_types_supported: ["code"],
         code_challenge_methods_supported: ["S256"],
         token_endpoint_auth_methods_supported: ["none", "client_secret_post"],
@@ -204,4 +205,24 @@ test("a service that's down is not mistaken for a dead sign-in", async () => {
 
 test("error words never carry a token", () => {
   assert.equal(plain(new Error("bad token eyJhbGciOiJIUzI1NiJ9abcdefghijklmnopqrstuvwxyz0123")), "bad token …");
+});
+
+test("services that read client documents get Butler's link as its client ID, without signing up", async () => {
+  const s = service({ cimd: true });
+  const doc = "https://butler.example/oauth/client.json";
+  try {
+    const prepared = await prepare(s.url, {}, REDIRECT, fetch, doc);
+    assert.deepEqual(prepared.client, { client_id: doc, token_endpoint_auth_method: "none" });
+    assert.equal(s.registered.length, 0);
+    const { url, verifier } = await begin(prepared, REDIRECT, "x");
+    const signedIn = await finish(prepared, s.signIn(url).code, verifier, REDIRECT, fetch);
+    assert.ok(signedIn.tokens?.access_token);
+    // Without a document link Butler falls back to signing up.
+    assert.equal((await prepare(s.url, {}, REDIRECT, fetch)).registered, true);
+  } finally {
+    await s.server.shutdown();
+  }
+  const published = clientDocument(doc, REDIRECT, "https://butler.example");
+  assert.equal(published.client_id, doc);
+  assert.deepEqual(published.redirect_uris, [REDIRECT]);
 });
