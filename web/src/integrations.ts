@@ -6,7 +6,17 @@ import { ago, api, busy, button, fill, h, icon, inlineError, modal, SignedOut, s
 
 type Rule = "auto" | "ask" | "off";
 interface Tool { name: string; description: string; readOnly: boolean; rule: Rule }
-interface Connection { id: string; name: string; host: string; checked_at: string | null; error: string | null; tools: Tool[] }
+interface Connection {
+  id: string;
+  name: string;
+  host: string;
+  auth: "key" | "oauth"; // a pasted key, or signed in in the browser
+  signin_needed: boolean; // not signed in yet, or the sign-in ran out
+  checked_at: string | null;
+  error: string | null;
+  tools: Tool[];
+  signin?: string; // where to go to sign in, right after adding one
+}
 interface Call { at: string; connection: string; tool: string; asked: boolean; status: "done" | "failed"; result: string | null }
 interface McpStatus { ready: boolean; connections: Connection[]; calls: Call[] }
 interface GoogleStatus {
@@ -21,7 +31,18 @@ type View = "all" | "accounts" | "other";
 
 const RULE_NAMES: Record<Rule, string> = { auto: "Just do it", ask: "Ask me first", off: "Off" };
 
+/** Says how signing in to a connection went, when the service has just sent you back. */
+function signInResult() {
+  const q = new URLSearchParams(location.search);
+  const result = q.get("mcp");
+  if (!result) return;
+  history.replaceState(null, "", location.pathname + location.hash);
+  if (result === "connected") toast(`Signed in to ${q.get("name") ?? "the connection"}.`);
+  else toast(`Sign-in didn't work: ${q.get("why") ?? "something went wrong"}.`);
+}
+
 export async function renderIntegrations(app: HTMLElement) {
+  signInResult();
   const googleSlot = h("div", { class: "integ-group" });
   const telegramSlot = h("div", { class: "integ-group" });
   const accounts = h("section", { class: "integ-group" }, googleSlot, telegramSlot);
