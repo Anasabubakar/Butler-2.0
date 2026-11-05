@@ -17,7 +17,7 @@ test("Google tools only read, so a recipe runs them without asking", () => {
 test("a recipe limited to other connections still gets your Google tools", () => {
   const apollo: Offer = {
     key: "Apollo/list_tasks",
-    connection: { id: "c1", name: "Apollo", host: "x", tools: [], rules: {}, checked_at: null, error: null },
+    connection: { id: "c1", name: "Apollo", host: "x", auth: "key", signin_needed: false, tools: [], rules: {}, checked_at: null, error: null },
     tool: { name: "list_tasks", description: "", schema: {}, readOnly: true },
     rule: "auto",
   };
