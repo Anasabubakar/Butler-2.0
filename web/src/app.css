@@ -148,6 +148,9 @@
 .row__text { flex: 1; min-width: 0; display: grid; gap: 1px; }
 .row__title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row__sub { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Something Butler said: wrapped to three lines, and all of it once clicked. */
+.row__title--said { white-space: pre-wrap; overflow-wrap: anywhere; text-overflow: clip; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; cursor: pointer; }
+.row__title--said.open { display: block; -webkit-line-clamp: unset; }
 a.row { color: inherit; text-decoration: none; }
 a.row:hover .row__title { text-decoration: underline; text-underline-offset: 3px; }
 
