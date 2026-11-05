@@ -64,6 +64,12 @@ export function headersFor(auth: string, key: string, header = ""): Record<strin
   throw new Error("unknown sign-in type");
 }
 
+/** The headers that sign Butler in: your key, or the current OAuth token. */
+export function headersOf(secret: Secret): Record<string, string> {
+  const token = secret.oauth?.tokens?.access_token;
+  return token ? { ...secret.headers, Authorization: `Bearer ${token}` } : secret.headers;
+}
+
 /** The rule a tool gets until you choose: read-only tools run, the rest ask first. */
 export const defaultRule = (t: Tool): Rule => (t.readOnly ? "auto" : "ask");
 
@@ -80,7 +86,7 @@ const unauthorized = (e: unknown) => {
 /** Opens a session with the server: the current way (Streamable HTTP), then the older SSE way. */
 async function open(secret: Secret): Promise<Client> {
   const url = new URL(secret.url);
-  const options = { requestInit: { headers: secret.headers }, fetch: fetcher };
+  const options = { requestInit: { headers: headersOf(secret) }, fetch: fetcher };
   let first: unknown;
   for (const transport of [new StreamableHTTPClientTransport(url, options), new SSEClientTransport(url, options)]) {
     const client = new Client({ name: "Butler", version: "2.0" });
