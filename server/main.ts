@@ -16,6 +16,7 @@ import { LOOK_MODES, type LookMode, locate, look, MAX_STEPS, nextStep } from "./
 import * as inbox from "./lib/inbox.ts";
 import * as jobs from "./lib/jobs.ts";
 import { calendarUrl, explain, localIso, parseWhen, plan, safeZone, shortArgs } from "./lib/command.ts";
+import { converse, learnFacts } from "./lib/chat.ts";
 import * as google from "./lib/google.ts";
 import * as backup from "./lib/backup.ts";
 import * as meaning from "./lib/meaning.ts";
@@ -31,7 +32,7 @@ import * as spending from "./lib/spending.ts";
 import * as streaks from "./lib/streaks.ts";
 import * as laptop from "./lib/laptop.ts";
 import * as prefs from "./lib/prefs.ts";
-import { addressed } from "./lib/persona.ts";
+import { addressed, type Teasing } from "./lib/persona.ts";
 import * as mcp from "./lib/mcp.ts";
 import * as mcpauth from "./lib/mcpauth.ts";
 import * as recipes from "./lib/recipes.ts";
@@ -1060,10 +1061,45 @@ app.post("/api/command", async (c) => {
     }
     case "fact":
       return json({ action: "answer", say: p.reply || "blanking on facts rn. ask me again in a sec?" });
-    default:
-      return json({ action: "answer", say: p.reply || "can't do that one yet. try saying it another way?" });
+    default: {
+      // A conversation, not an action: the reply gets its own, better-informed answer.
+      const say = said ? await talkBack(said, {
+        device, timeZone, teasing: sass, talk, known, learn, picture,
+        save: item ? saveText(item, await pageOf(item)) : undefined,
+        answering: replyTo ? answering ?? undefined : undefined,
+        connections: [...new Set(offers.map((o) => o.connection.name))], recipes: saved.map((r) => r.name),
+      }).catch((e) => {
+        console.error("chat", String(e).slice(0, 300));
+        return null;
+      }) : null;
+      return json({ action: "answer", say: say || p.reply || "can't do that one yet. try saying it another way?" });
+    }
   }
 });
+
+/**
+ * Butler's reply in a conversation (chat.converse): the longer conversation, older chat that
+ * matches, and what it remembers. Afterwards, in the background, it learns what's new about you.
+ */
+async function talkBack(said: string, ctx: {
+  device: string; timeZone: string; teasing: Teasing; talk: string | null; known: memory.Memory[]; learn: boolean;
+  picture: Picture | null; save?: string; answering?: string; connections: string[]; recipes: string[];
+}): Promise<string> {
+  const turns = await memory.recentTurns(ctx.talk, memory.TALK_TURNS, memory.TALK_HOURS).catch(() => [] as memory.Turn[]);
+  const older = ctx.talk ? [] : await memory.olderTurns(said, turns[0]?.created_at ?? null).catch(() => [] as memory.Turn[]);
+  const known = memory.memoryText(ctx.known);
+  const reply = await converse(said, {
+    device: ctx.device, timeZone: ctx.timeZone, teasing: ctx.teasing,
+    turns: turns.filter((t) => !(t.role === "owner" && t.text === said && Date.now() - Date.parse(t.created_at) < 60_000)),
+    older: memory.olderText(older, ctx.timeZone) || undefined, memories: known || undefined, save: ctx.save,
+    answering: ctx.answering, connections: ctx.connections, recipes: ctx.recipes,
+  }, ctx.picture);
+  if (ctx.learn) {
+    learnFacts(said, reply, known).then((facts) => facts.length ? memory.remember(facts) : [])
+      .catch((e) => console.error("memory", String(e).slice(0, 200)));
+  }
+  return reply;
+}
 
 /** What a roast is built on: what Butler remembers, recent email subjects, the library, this month's spending. */
 async function roastFacts(turns: memory.Turn[], known: memory.Memory[], timeZone: string): Promise<askmore.RoastFacts> {
