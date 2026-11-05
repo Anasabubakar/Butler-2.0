@@ -187,7 +187,8 @@ class PetService : Service() {
             })
             // Act on this: the one most worth a single tap, so it gets a whole row.
             addView(tile(ui, R.drawable.ic_check, getString(R.string.pet_act), ::actOnScreen),
-                LinearLayout.LayoutParams(wide, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                // As wide as a row of two, whose tiles sit 3 dp in from each side.
+                LinearLayout.LayoutParams(wide - (6 * dp).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                     setMargins((3 * dp).toInt(), (3 * dp).toInt(), (3 * dp).toInt(), (3 * dp).toInt())
                 })
             // Quick actions, two to a row.
