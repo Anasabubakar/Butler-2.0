@@ -1252,13 +1252,14 @@ async function runCheck(
  * can't tell, it asks for another view (if the phone can scroll) or asks you one question.
  */
 async function actOn(
-  pictures: Picture[], o: { device: string; timeZone: string; canScroll: boolean; answer?: { question: string; said: string } },
+  pictures: Picture[],
+  o: { device: string; timeZone: string; canScroll: boolean; hasBox?: boolean; answer?: { question: string; said: string } },
 ): Promise<Record<string, unknown>> {
   const offers = (await toolOffers()).slice(0, 60);
   const tools = offers.map((t) => ({ key: t.key, description: t.tool.description, args: shortArgs(t.tool.schema) }));
   const known = await memory.memories().catch(() => [] as memory.Memory[]);
   const reading = await act.read(pictures, {
-    now: localIso(new Date(), o.timeZone), timeZone: o.timeZone, tools, canScroll: o.canScroll, answer: o.answer,
+    now: localIso(new Date(), o.timeZone), timeZone: o.timeZone, tools, canScroll: o.canScroll, answer: o.answer, hasBox: o.hasBox,
     memories: memory.memoryText(known) || undefined, teasing: await teasing(),
   });
   const keep = (say: string) => memory.addTurn("butler", say, null, null).catch((e) => console.error("chat", String(e).slice(0, 200)));
@@ -1284,10 +1285,14 @@ async function actOn(
     lines.push(`Tap Do it and I'll:\n${writes.map((w, i) => `${i + 1}. ${act.describe(w, o.timeZone)}`).join("\n")}`);
   }
   if (sorted.skipped.length) lines.push(`Left out: ${sorted.skipped.join("; ")}.`);
-  if (!found.length && !writes.length && !sorted.skipped.length) lines.push("nothing to act on here.");
+  // A reply they owe goes straight into the chat's box (the phone does it); they still press Send.
+  const reply = o.hasBox ? sorted.reply : null;
+  if (reply) lines.push(`Typing a reply into the box for you to check: ${reply}`);
+  if (!found.length && !writes.length && !sorted.skipped.length && !reply) lines.push("nothing to act on here.");
   const say = lines.join("\n\n");
   await keep(say);
-  return { status: reading.status === "none" ? "none" : "ready", action: confirm ? "confirm" : "answer", say, confirm };
+  const status = reading.status === "none" && !reply ? "none" : "ready";
+  return { status, action: confirm ? "confirm" : "answer", say, confirm, draft: reply ?? undefined };
 }
 
 /** Does what you said yes to, one line each on how it went. */
@@ -1357,7 +1362,9 @@ app.post("/api/screen/act", async (c) => {
   const pictures = await Promise.all(files.map(async (f) => ({ data: encodeBase64(new Uint8Array(await f.arrayBuffer())), mediaType: f.type })));
   const timeZone = safeZone(text("tz", 100));
   try {
-    return c.json(await actOn(pictures, { device, timeZone, canScroll: text("more") === "1" && files.length <= act.MAX_SCROLLS }));
+    return c.json(await actOn(pictures, {
+      device, timeZone, canScroll: text("more") === "1" && files.length <= act.MAX_SCROLLS, hasBox: text("has_box") === "1",
+    }));
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
   }
