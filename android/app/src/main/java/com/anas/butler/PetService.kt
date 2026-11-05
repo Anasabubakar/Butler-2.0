@@ -532,7 +532,8 @@ class PetService : Service() {
     private fun lingerThenHide(text: String) {
         val mine = bubbleTurn
         scope.launch {
-            val until = SystemClock.uptimeMillis() + (text.length * 60L).coerceIn(4000L, 30_000L)
+            // Time to read it at a relaxed pace; open ("Show more") it stays until you close it.
+            val until = SystemClock.uptimeMillis() + (text.length * 80L).coerceIn(6000L, 60_000L)
             while (bubbleTurn == mine && (bubble.expanded || SystemClock.uptimeMillis() < until)) delay(250)
             if (bubbleTurn == mine) hideBubble()
         }
