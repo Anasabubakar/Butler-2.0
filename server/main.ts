@@ -1784,7 +1784,7 @@ app.get("/api/mcp/:id/logo", async (c) => {
   const id = c.req.param("id");
   const logo = UUID_RE.test(id) ? await mcp.logoOf(id) : null;
   if (!logo) return c.notFound();
-  return new Response(logo.bytes, {
+  return new Response(logo.bytes as BodyInit, {
     headers: {
       "content-type": logo.type,
       "content-length": String(logo.bytes.length),
