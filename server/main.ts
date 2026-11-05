@@ -19,7 +19,8 @@ import { calendarUrl, explain, localIso, parseWhen, plan, safeZone, shortArgs } 
 import * as google from "./lib/google.ts";
 import * as backup from "./lib/backup.ts";
 import * as meaning from "./lib/meaning.ts";
-import { linkFor, recall, saveText } from "./lib/recall.ts";
+import { describe, linkFor, recall, saveText } from "./lib/recall.ts";
+import * as chat from "./lib/chat.ts";
 import * as brief from "./lib/brief.ts";
 import * as recap from "./lib/recap.ts";
 import * as settings from "./lib/settings.ts";
@@ -1020,10 +1021,38 @@ app.post("/api/command", async (c) => {
     }
     case "fact":
       return json({ action: "answer", say: p.reply || "blanking on facts rn. ask me again in a sec?" });
+    case "answer": {
+      // A conversation, not a job: Butler answers as itself, with the whole chat in front of it.
+      const reply = await chat.talk({
+        said, device, timeZone, turns, teasing: sass,
+        memories: memory.memoryText(known) || undefined,
+        saves: item ? undefined : await relatedSaves(said),
+        save: item ? saveText(item, await pageOf(item)) : undefined,
+        answering: replyTo ? answering ?? undefined : undefined, screen: Boolean(picture && !item),
+      }, picture ? [picture] : []).catch((e) => {
+        console.error("chat", String(e).slice(0, 300));
+        return "";
+      });
+      return json({ action: "answer", say: reply || p.reply || "lost my train of thought there. say that again?" });
+    }
     default:
       return json({ action: "answer", say: p.reply || "can't do that one yet. try saying it another way?" });
   }
 });
+
+/** Saves that look related to what was said, for Butler to bring up if they help. */
+async function relatedSaves(said: string): Promise<string | undefined> {
+  if (!meaning.meaningReady() || said.trim().length < 12) return undefined;
+  try {
+    const near = (await meaning.nearest(await meaning.embed(said, "query"), 4)).filter((r) => r.score > 0.6);
+    if (!near.length) return undefined;
+    const found = await db.itemsById(near.map((r) => r.id));
+    const items = near.flatMap((r) => found.filter((it) => it.id === r.id));
+    return items.map((it, i) => describe(it, i + 1).slice(0, 900)).join("\n\n") || undefined;
+  } catch {
+    return undefined; // the conversation goes on without them
+  }
+}
 
 /** What a roast is built on: what Butler remembers, recent email subjects, the library, this month's spending. */
 async function roastFacts(turns: memory.Turn[], known: memory.Memory[], timeZone: string): Promise<askmore.RoastFacts> {
