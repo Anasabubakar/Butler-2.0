@@ -199,6 +199,7 @@ class AskActivity : AppCompatActivity() {
         working.visibility = View.GONE
         answer.text = text
         answer.visibility = View.VISIBLE
+        findViewById<View>(R.id.ask_answer_scroll).scrollTo(0, 0)
     }
 
     /** A finished answer: shown, and spoken too if Voice replies is on. */
