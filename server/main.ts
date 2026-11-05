@@ -769,6 +769,18 @@ app.post("/api/command", async (c) => {
 
   const timeZone = safeZone(text("tz", 100));
   if (timeZone !== "UTC" && timeZone === text("tz", 100)) await settings.set("time_zone", timeZone); // for the morning brief
+  // Answering the question Act on this asked about a screen: carry on with that screen.
+  const asked = talk === null && typed ? findAsked(answering) : null;
+  if (asked && typed) {
+    askedAbout = askedAbout.filter((a) => a !== asked);
+    await memory.addTurn("owner", typed, device, null).catch((e) => console.error("chat", String(e).slice(0, 200)));
+    try {
+      const done = await actOn(asked.pictures, { device, timeZone, canScroll: false, answer: { question: asked.question, said: typed } });
+      return c.json({ action: done.action, say: done.say, confirm: done.confirm });
+    } catch (e) {
+      return c.json({ error: String(e).slice(0, 300) }, 502);
+    }
+  }
   const offers = (await toolOffers()).slice(0, 60);
   const tools = offers.map((o) => ({ key: o.key, description: o.tool.description, args: shortArgs(o.tool.schema) }));
   const saved = await recipes.list().catch(() => []);
