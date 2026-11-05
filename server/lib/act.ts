@@ -6,7 +6,7 @@
 import { z } from "npm:zod@4.3.6";
 import { askGemini, type Picture } from "./gemini.ts";
 import { type Teasing, voiceRules } from "./persona.ts";
-import type { ToolChoice } from "./command.ts";
+import { localIso, type ToolChoice } from "./command.ts";
 
 /** How many extra views (scrolls) the phone may take before Butler has to decide. */
 export const MAX_SCROLLS = 5;
@@ -109,7 +109,7 @@ export function when(s: string | null | undefined): Date | null {
 export type Write =
   | { kind: "reminder"; text: string; at: Date }
   | { kind: "event"; text: string; at: Date; end: Date }
-  | { kind: "task"; text: string; due: Date }
+  | { kind: "task"; text: string; day: string; due: Date } // day = YYYY-MM-DD, your time
   | { kind: "tool"; text: string; tool: string; args: Record<string, unknown> };
 
 export interface Sorted {
@@ -122,7 +122,7 @@ export interface Sorted {
 }
 
 /** Sorts what was found into checks that run now and writes that wait for a yes. */
-export function sort(items: Item[], toolKeys: string[], now = new Date()): Sorted {
+export function sort(items: Item[], toolKeys: string[], timeZone: string, now = new Date()): Sorted {
   const out: Sorted = { checks: [], writes: [], skipped: [] };
   const known = new Set(toolKeys);
   for (const item of items.slice(0, 6)) {
@@ -143,7 +143,11 @@ export function sort(items: Item[], toolKeys: string[], now = new Date()): Sorte
         break;
       }
       case "task":
-        out.writes.push({ kind: "task", text, due: at ?? now });
+        out.writes.push({
+          kind: "task", text, due: at && at > now ? at : now,
+          // The day as written, so a date isn't moved by a time zone.
+          day: item.when?.trim().match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? localIso(at ?? now, timeZone).slice(0, 10),
+        });
         break;
       case "check":
         out.checks.push({ text, tool: item.tool && known.has(item.tool) ? item.tool : null });
@@ -169,7 +173,7 @@ export function describe(w: Write, timeZone: string): string {
     case "event":
       return `Add to your calendar: ${w.text} (${at(w.at)})`;
     case "task":
-      return `Add a task: ${w.text} (due ${at(w.due, false)})`;
+      return `Add a task: ${w.text} (due ${at(new Date(`${w.day}T12:00:00Z`), false)})`;
     case "tool":
       return `Use ${w.tool}: ${w.text}`;
   }
