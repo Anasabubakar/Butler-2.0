@@ -409,7 +409,7 @@ export const useLogoFetch = (get: Get | undefined) => { logoGet = get; };
  * the logo it already has, and never fails the caller.
  */
 export async function updateLogo(id: string, host: string): Promise<boolean> {
-  let timer: number | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const logo = await Promise.race([
       findLogo(host, logoGet),
