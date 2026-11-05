@@ -292,6 +292,14 @@ export async function tasks(): Promise<Task[]> {
   return found;
 }
 
+/** Adds a task to your default Google Tasks list, due on `day` (like 2026-11-07; Google keeps no time). */
+export async function addTask(title: string, day: string, notes?: string): Promise<void> {
+  await google(`${TASKS()}/tasks/v1/lists/@default/tasks`, {
+    method: "POST",
+    body: JSON.stringify({ title, due: `${day}T00:00:00.000Z`, ...(notes ? { notes } : {}) }),
+  });
+}
+
 // --- people ---------------------------------------------------------------------------------
 
 export interface Person {
