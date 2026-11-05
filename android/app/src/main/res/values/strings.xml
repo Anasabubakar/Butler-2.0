@@ -27,6 +27,12 @@
     <string name="pet_menu_heading">What needs handling?</string>
     <string name="pet_menu_name">Little Butler</string>
     <string name="close">Close</string>
+    <string name="pet_act">Act on this</string>
+    <string name="pet_reading_screen">Reading your screen…</string>
+    <string name="pet_reading_more">Scrolling for more context (%1$d)…</string>
+    <string name="pet_nothing_to_act">nothing to act on here.</string>
+    <string name="pet_do_it">Do it</string>
+    <string name="pet_doing_it">On it…</string>
     <string name="pet_save">Save this</string>
     <string name="pet_copy">Copy this</string>
     <string name="pet_analyze">Analyze this</string>

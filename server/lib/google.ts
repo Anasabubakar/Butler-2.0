@@ -17,7 +17,7 @@ export const SCOPES = [
   "email",
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.readonly", // every calendar you see, not only the main one
-  "https://www.googleapis.com/auth/tasks.readonly", // your Google Tasks, for the brief
+  "https://www.googleapis.com/auth/tasks", // your Google Tasks: read for the brief, add from "Act on this"
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/gmail.readonly", // for recipes that start when an email arrives
   "https://www.googleapis.com/auth/contacts.readonly",
@@ -290,6 +290,14 @@ export async function tasks(): Promise<Task[]> {
     }
   }
   return found;
+}
+
+/** Adds a task to your default Google Tasks list, due on `day` (like 2026-11-07; Google keeps no time). */
+export async function addTask(title: string, day: string, notes?: string): Promise<void> {
+  await google(`${TASKS()}/tasks/v1/lists/@default/tasks`, {
+    method: "POST",
+    body: JSON.stringify({ title, due: `${day}T00:00:00.000Z`, ...(notes ? { notes } : {}) }),
+  });
 }
 
 // --- people ---------------------------------------------------------------------------------

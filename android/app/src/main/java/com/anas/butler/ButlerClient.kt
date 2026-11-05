@@ -138,10 +138,13 @@ class ButlerClient(private val config: Config) {
     }
 
     /** Posts a form and returns the answer's body, or throws with Butler's error message. */
-    suspend fun post(path: String, fields: Map<String, String>, file: Attachment?): String = withContext(Dispatchers.IO) {
+    suspend fun post(path: String, fields: Map<String, String>, file: Attachment?): String = post(path, fields, listOfNotNull(file))
+
+    /** The same, with several files in the file field, in order. */
+    suspend fun post(path: String, fields: Map<String, String>, files: List<Attachment>): String = withContext(Dispatchers.IO) {
         val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply {
             fields.forEach { (name, value) -> addFormDataPart(name, value) }
-            file?.let { addFormDataPart("file", it.name, it.bytes.toRequestBody(it.mime.toMediaType())) }
+            files.forEach { addFormDataPart("file", it.name, it.bytes.toRequestBody(it.mime.toMediaType())) }
         }.build()
         val request = Request.Builder().url(base + path).header("x-butler-token", config.token).post(body).build()
         client.newCall(request).execute().use { res ->
