@@ -783,6 +783,14 @@ app.post("/api/command", async (c) => {
 
   const timeZone = safeZone(text("tz", 100));
   if (timeZone !== "UTC" && timeZone === text("tz", 100)) await settings.set("time_zone", timeZone); // for the morning brief
+  // In a chat with a message box: "help me respond", "refine this", or "shorter" right after a draft.
+  // The phone writes it straight into the box, so no planning is needed.
+  const chatApp = text("app", 200);
+  const hasBox = talk === null && text("has_box") === "1";
+  const box = text("box", 4000) ?? "";
+  if (typed && draft.isDraftAsk(typed, { hasBox, recentDraft: recentDraft(chatApp) })) {
+    return c.json({ action: "draft", say: "on it. writing it into the box.", instruction: typed });
+  }
   // Answering the question Act on this asked about a screen: carry on with that screen.
   const asked = talk === null && typed ? findAsked(answering) : null;
   if (asked && typed) {
@@ -806,6 +814,7 @@ app.post("/api/command", async (c) => {
       history: memory.historyText(turns, timeZone) || undefined, memories: memory.memoryText(known) || undefined,
       learn, save: item ? saveText(item, await pageOf(item)) : undefined,
       answering: answering || undefined, replied: Boolean(replyTo),
+      chatBox: hasBox ? { text: box, app: chatApp ?? undefined, lastDraft: recentDraft(chatApp) ? lastDraft?.text : undefined } : undefined,
     }, picture, voice);
   } catch (e) {
     return c.json({ error: String(e).slice(0, 300) }, 502);
@@ -897,6 +906,9 @@ app.post("/api/command", async (c) => {
     }
     case "screen":
       return json({ action: "screen", say: p.reply, goal: p.text || said });
+    case "draft":
+      if (!hasBox) return json({ action: "answer", say: "open the chat and tap its message box first, then ask me again." });
+      return json({ action: "draft", say: p.reply || "on it. writing it into the box.", instruction: p.text || said });
     case "brief": {
       const now = new Date();
       const asked = parseWhen(p.when);
