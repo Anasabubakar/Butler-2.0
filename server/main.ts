@@ -792,7 +792,7 @@ app.post("/api/command", async (c) => {
     return c.json({ action: "draft", say: "on it. writing it into the box.", instruction: typed });
   }
   // Answering the question Act on this asked about a screen: carry on with that screen.
-  const asked = talk === null && typed ? findAsked(answering) : null;
+  const asked = talk === null && typed && text("from_act") !== "1" ? findAsked(answering) : null;
   if (asked && typed) {
     askedAbout = askedAbout.filter((a) => a !== asked);
     await memory.addTurn("owner", typed, device, null).catch((e) => console.error("chat", String(e).slice(0, 200)));
@@ -1142,7 +1142,10 @@ app.post("/api/command/confirm", async (c) => {
   pendingActs.delete(id);
   if (acts) {
     if (acts.expires < Date.now()) return c.json({ error: "that expired, tap Act on this again" }, 410);
-    return said(await carryOut(acts));
+    const done = await carryOut(acts);
+    if (done.confirm) confirmChat.set(done.confirm, talk);
+    memory.addTurn("butler", done.say, null, talk).catch((e) => console.error("chat", String(e).slice(0, 200)));
+    return c.json(done);
   }
   const tool = pendingTools.get(id);
   pendingTools.delete(id);
@@ -1295,8 +1298,36 @@ async function actOn(
   return { status, action: confirm ? "confirm" : "answer", say, confirm, draft: reply ?? undefined };
 }
 
+/** What the phone still has to do after Do it: type a draft, or work on the screen. */
+type PhoneStep = { action: "draft"; instruction: string } | { action: "screen"; goal: string };
+
+/**
+ * One of Butler's own commands ("send this link to my laptop", "focus for 25 minutes"), run as if
+ * you'd typed it in Ask Butler. Says how it went; anything only the phone can do comes back as a step.
+ */
+async function runCommand(
+  command: string, p: PendingActs,
+): Promise<{ say: string; step?: PhoneStep; confirm?: string }> {
+  const form = new FormData();
+  form.set("device", p.device);
+  form.set("text", command);
+  form.set("tz", p.timeZone);
+  form.set("from_act", "1");
+  const res = await app.request("/api/command", { method: "POST", body: form, headers: { "x-butler-token": TOKEN } });
+  const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+  if (!res.ok || typeof body.error === "string") throw new Error(String(body.error ?? `status ${res.status}`));
+  const say = typeof body.say === "string" ? body.say.trim() : "";
+  if (body.action === "screen" && typeof body.goal === "string") return { say: say || `Doing it: ${command}`, step: { action: "screen", goal: body.goal } };
+  if (body.confirm && typeof body.confirm === "string") return { say: `${say}\n(Needs your yes: tap Do it again.)`, confirm: body.confirm };
+  // Opening WhatsApp or picking from the phone's clipboard happens in the Ask sheet.
+  if (body.message || body.send) return { say: `Open Ask Butler and say "${command}" to finish this one; it needs the Ask sheet.` };
+  return { say: say || `Done: ${command}` };
+}
+
 /** Does what you said yes to, one line each on how it went. */
-async function carryOut(p: PendingActs): Promise<string> {
+async function carryOut(p: PendingActs): Promise<{ say: string; confirm?: string; steps: PhoneStep[] }> {
+  const steps: PhoneStep[] = [];
+  let confirm: string | undefined;
   const googleOn = google.googleConfigured() && Boolean(await google.account().catch(() => null));
   const everywhere = (await inbox.devices()).map((d) => d.name);
   const remind = (text: string, at: Date) =>
@@ -1338,12 +1369,19 @@ async function carryOut(p: PendingActs): Promise<string> {
           lines.push(offer ? await useTool(offer, w.args, p.said, true) : `${w.tool} has been switched off or removed, so I didn't use it.`);
           break;
         }
+        case "butler": {
+          const done = await runCommand(w.text, p);
+          lines.push(done.say);
+          if (done.step) steps.push(done.step);
+          confirm ??= done.confirm;
+          break;
+        }
       }
     } catch (e) {
       lines.push(`Didn't work: ${what} (${(e as Error).message.slice(0, 120)})`);
     }
   }
-  return lines.join("\n");
+  return { say: lines.join("\n"), confirm, steps };
 }
 
 // Act on this: one or more screenshots of the same screen (more after each scroll), oldest first.
