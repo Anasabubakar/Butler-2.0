@@ -54,6 +54,19 @@ export interface Prepare {
   scope?: string;
 }
 
+/** What Butler says about itself when it signs up or publishes its client document. */
+export function clientDocument(clientId: string, redirectUri: string, home: string) {
+  return {
+    client_id: clientId,
+    client_name: "Butler",
+    client_uri: home,
+    redirect_uris: [redirectUri],
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+    token_endpoint_auth_method: "none",
+  };
+}
+
 /** How Butler should prove who it is at the token endpoint, from what the service supports. */
 function authMethod(metadata: AuthorizationServerMetadata, hasSecret: boolean): string | undefined {
   const supported = metadata.token_endpoint_auth_methods_supported;
@@ -63,10 +76,14 @@ function authMethod(metadata: AuthorizationServerMetadata, hasSecret: boolean): 
 }
 
 /**
- * Finds how to sign in to the MCP server at `serverUrl` and which app to sign in as.
+ * Finds how to sign in to the MCP server at `serverUrl` and which app to sign in as: the app
+ * you made there, else Butler's own client document at `documentUrl` (when the service reads
+ * those), else one Butler signs up for itself.
  * Throws with a plain reason when the server has no sign-in, or needs you to make an app.
  */
-export async function prepare(serverUrl: string, given: Prepare, redirectUri: string, fetchFn: Fetch): Promise<OAuth> {
+export async function prepare(
+  serverUrl: string, given: Prepare, redirectUri: string, fetchFn: Fetch, documentUrl?: string,
+): Promise<OAuth> {
   const info = await discoverOAuthServerInfo(serverUrl, { fetchFn }).catch(() => null);
   const metadata = info?.authorizationServerMetadata;
   if (!info || !metadata) {
@@ -85,6 +102,9 @@ export async function prepare(serverUrl: string, given: Prepare, redirectUri: st
       ...(given.clientSecret ? { client_secret: given.clientSecret } : {}),
       token_endpoint_auth_method: authMethod(metadata, Boolean(given.clientSecret)),
     };
+  } else if (documentUrl && metadata.client_id_metadata_document_supported) {
+    // The newer way (CIMD): Butler's client ID is the link to a page describing it.
+    client = { client_id: documentUrl, token_endpoint_auth_method: "none" };
   } else if (metadata.registration_endpoint) {
     const method = authMethod(metadata, false);
     const full = await registerClient(info.authorizationServerUrl, {
