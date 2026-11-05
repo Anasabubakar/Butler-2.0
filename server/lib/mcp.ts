@@ -325,3 +325,60 @@ export interface Call {
 
 export const recentCalls = (limit = 30) =>
   sql<Call[]>`select at, connection, tool, args, asked, status, result from mcp_calls order by at desc limit ${limit}`;
+
+// --- signing in with OAuth ------------------------------------------------------------------
+
+/** Where the service sends you back after you sign in: PUBLIC_URL/api/mcp/oauth/callback. */
+export function redirectUri(): string {
+  const base = (Deno.env.get("PUBLIC_URL") ?? "").replace(/\/$/, "");
+  if (!base) throw new Error("set PUBLIC_URL on the server first, so the service knows where to send you back");
+  return `${base}/api/mcp/oauth/callback`;
+}
+
+const hash = async (text: string) =>
+  Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))),
+    (b) => b.toString(16).padStart(2, "0")).join("");
+
+/**
+ * Keeps a connection you'll sign in to. It has no tools until you finish signing in.
+ * `given` is the app you made on the service, for services that don't let Butler sign up itself.
+ */
+export async function addOAuth(name: string, link: string, given: oauth.Prepare): Promise<Connection> {
+  if (!NAME_RE.test(name)) throw new Error("give it a short name: letters, numbers, spaces, . _ -");
+  const url = await checkUrl(link);
+  const [taken] = await sql`select 1 from mcp_connections where name = ${name}`;
+  if (taken) throw new Error("you already have a connection with that name");
+  const secret: Secret = { url: url.href, headers: {}, oauth: await oauth.prepare(url.href, given, redirectUri(), fetcher) };
+  const [row] = await sql<Connection[]>`
+    insert into mcp_connections (name, host, secret, auth, signin_needed)
+    values (${name}, ${url.host}, ${await lock(JSON.stringify(secret))}, 'oauth', true)
+    returning ${COLUMNS}`;
+  return row;
+}
+
+/** The service's sign-in page for this connection, with `state` to match when you come back. */
+export async function signInLink(id: string, state: string): Promise<string> {
+  const secret = await secretOf(id);
+  if (!secret.oauth) throw new Error("that connection uses a key, not a sign-in");
+  const { url, verifier } = await oauth.begin(secret.oauth, redirectUri(), state);
+  await sql`delete from mcp_oauth_pending where created_at < now() - interval '10 minutes'`;
+  await sql`insert into mcp_oauth_pending (state_hash, connection_id, verifier)
+    values (${await hash(state)}, ${id}, ${await lock(verifier)})`;
+  return url;
+}
+
+/** Finishes a sign-in you started in the last 10 minutes, then asks the server for its tools. */
+export async function finishSignIn(state: string, code: string): Promise<Connection> {
+  const [pending] = await sql<{ connection_id: string; verifier: string }[]>`
+    delete from mcp_oauth_pending where state_hash = ${await hash(state)}
+      and created_at > now() - interval '10 minutes'
+    returning connection_id, verifier`;
+  if (!pending) throw new Error("that sign-in is too old or was already used; press Reconnect to try again");
+  const id = pending.connection_id;
+  const secret = await secretOf(id);
+  if (!secret.oauth) throw new Error("that connection uses a key, not a sign-in");
+  const signedIn = { ...secret, oauth: await oauth.finish(secret.oauth, code, await unlock(pending.verifier), redirectUri(), fetcher) };
+  await saveSecret(id, signedIn);
+  await sql`update mcp_connections set signin_needed = false, error = null where id = ${id}`;
+  return refresh(id);
+}
