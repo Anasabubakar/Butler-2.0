@@ -79,6 +79,8 @@ class PetService : Service() {
     private var bubbleTurn = 0 // goes up whenever the bubble says something new
     private var panelShown = false
     private var busy = false
+    /** Runs once the next result is showing, to add a button under it (like Do it). */
+    private var afterTell: (() -> Unit)? = null
     private lateinit var syncButton: TextView
     private var lastSynced: String? = null
     private var syncing = false
@@ -550,6 +552,9 @@ class PetService : Service() {
             )
             busy = false
             tell(message, ok, here)
+            val then = afterTell
+            afterTell = null
+            if (ok) then?.invoke()
         }
     }
 
