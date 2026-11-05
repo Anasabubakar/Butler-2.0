@@ -797,8 +797,8 @@ app.post("/api/command", async (c) => {
     askedAbout = askedAbout.filter((a) => a !== asked);
     await memory.addTurn("owner", typed, device, null).catch((e) => console.error("chat", String(e).slice(0, 200)));
     try {
-      const done = await actOn(asked.pictures, { device, timeZone, canScroll: false, answer: { question: asked.question, said: typed } });
-      return c.json({ action: done.action, say: done.say, confirm: done.confirm });
+      const done = await actOn(asked.pictures, { device, timeZone, canScroll: false, hasBox, answer: { question: asked.question, said: typed } });
+      return c.json({ action: done.draft ? "draft" : done.action, say: done.say, confirm: done.confirm, instruction: done.draft });
     } catch (e) {
       return c.json({ error: String(e).slice(0, 300) }, 502);
     }
