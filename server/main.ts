@@ -33,6 +33,7 @@ import * as laptop from "./lib/laptop.ts";
 import * as prefs from "./lib/prefs.ts";
 import { addressed } from "./lib/persona.ts";
 import * as mcp from "./lib/mcp.ts";
+import * as mcpauth from "./lib/mcpauth.ts";
 import * as recipes from "./lib/recipes.ts";
 import { googleOffers, isGoogleTool, useGoogle } from "./lib/googletools.ts";
 import { vaultReady } from "./lib/vault.ts";
@@ -1945,6 +1946,16 @@ const privacyPage = (c: Context) => {
   }));
 };
 app.get("/privacy-policy", privacyPage);
+
+// Who Butler is, for MCP services that take a link to this as Butler's client ID (CIMD).
+app.get("/oauth/client.json", (c) => {
+  try {
+    return c.json(mcpauth.clientDocument(mcp.clientDocumentUrl(), mcp.redirectUri(), new URL(mcp.redirectUri()).origin),
+      200, { "cache-control": "public, max-age=3600" });
+  } catch {
+    return c.json({ error: "set PUBLIC_URL on the server" }, 503);
+  }
+});
 app.get("/privacy", privacyPage);
 
 /** Starts the bot: who it is, its menu, then updates by webhook (or polling without PUBLIC_URL). */
