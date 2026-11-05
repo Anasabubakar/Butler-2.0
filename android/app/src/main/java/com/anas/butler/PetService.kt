@@ -675,6 +675,62 @@ class PetService : Service() {
     }
 
     /**
+     * Act on this: reads the screen (a chat, an email, a page) and handles what needs doing.
+     * If Butler can't tell yet, it scrolls for more (up to MAX_ACT_SCROLLS views), then puts
+     * the screen back where it was. Checks run straight away; anything that changes
+     * something waits for Do it; a question comes back in the bubble for you to reply to.
+     */
+    private fun actOnScreen() = work(getString(R.string.pet_reading_screen), face = "think") {
+        val config = Config(this)
+        if (!config.isReady) throw IllegalStateException(getString(R.string.setup_first))
+        val client = ScreenClient(config)
+        val first = snap()
+        val views = mutableListOf(first.jpeg)
+        val moves = mutableListOf<String>()
+        var answer = JSONObject()
+        try {
+            while (true) {
+                answer = client.act(views, more = moves.size < MAX_ACT_SCROLLS, device = config.deviceName)
+                if (answer.optString("status") != "more" || moves.size >= MAX_ACT_SCROLLS) break
+                val way = if (answer.optString("scroll") == "down") "down" else "up"
+                progressNote(getString(R.string.pet_reading_more, moves.size + 1))
+                swipe(way, first)
+                moves += way
+                delay(700) // let the list settle before the next picture
+                views += snap().jpeg
+            }
+        } finally {
+            // Back to where you were, roughly: the same swipes the other way.
+            for (way in moves.asReversed()) {
+                runCatching { swipe(if (way == "up") "down" else "up", first) }
+                delay(250)
+            }
+        }
+        val confirm = answer.optString("confirm").takeIf { it.isNotBlank() && it != "null" }
+        if (confirm != null) afterTell = { bubble.offer(getString(R.string.pet_do_it)) { doActs(confirm) } }
+        answer.optString("say").ifBlank { getString(R.string.pet_nothing_to_act) }
+    }
+
+    /** Do it: what Act on this found, done now that you've said yes. */
+    private fun doActs(confirm: String) = work(getString(R.string.pet_doing_it)) {
+        JSONObject(ButlerClient(Config(this)).post("/api/command/confirm", mapOf("confirm" to confirm), null)).optString("say")
+    }
+
+    /** One swipe that shows more of the screen: "up" for older messages or the top of a page, "down" for further on. */
+    private suspend fun swipe(way: String, shot: Shot) {
+        val x = shot.width / 2f
+        val middle = shot.height / 2f
+        val half = shot.height * 0.35f / 2
+        touchThrough(true)
+        try {
+            if (way == "down") hands().drag(x, middle + half, x, middle - half, 350)
+            else hands().drag(x, middle - half, x, middle + half, 350)
+        } finally {
+            touchThrough(false)
+        }
+    }
+
+    /**
      * Send to laptop: the page in a browser, else the selected text, else the real file you're
      * looking at or picked (the pet presses the app's own Share button and chooses Butler's
      * "Send to laptop", since Android only hands files over through Share), else a screenshot.
@@ -1328,6 +1384,8 @@ class PetService : Service() {
         private const val QUIET_GROUP = "butler-updates"
         private const val PREFS_EVERY_MS = 10 * 60_000L
         private const val MENU_WIDTH_DP = 280
+        /** How many extra views Act on this may scroll for; the server allows the same. */
+        private const val MAX_ACT_SCROLLS = 5
         private const val LAPTOP_QUIET_MS = 15 * 60_000L
         private const val INBOX_EVERY_MS = 20_000L
         private const val AHEAD_EVERY_MS = 5 * 60_000L
