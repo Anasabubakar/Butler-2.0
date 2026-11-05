@@ -167,7 +167,7 @@ export async function run(secret: Secret, tool: string, args: Record<string, unk
 
 // --- stored connections --------------------------------------------------------------
 
-const COLUMNS = sql`id, name, host, tools, rules, checked_at, error`;
+const COLUMNS = sql`id, name, host, auth, signin_needed, tools, rules, checked_at, error`;
 
 export const list = () => sql<Connection[]>`select ${COLUMNS} from mcp_connections order by created_at`;
 
@@ -177,12 +177,74 @@ async function secretOf(id: string): Promise<Secret> {
   return JSON.parse(await unlock(row.secret)) as Secret;
 }
 
+async function saveSecret(id: string, secret: Secret) {
+  await sql`update mcp_connections set secret = ${await lock(JSON.stringify(secret))} where id = ${id}`;
+}
+
+async function markSignInNeeded(id: string, message: string) {
+  await sql`update mcp_connections set signin_needed = true, error = ${message.slice(0, 300)} where id = ${id}`;
+}
+
+/** Refreshes running right now, per connection, so two calls don't both spend a refresh token. */
+const renewing = new Map<string, Promise<Secret>>();
+
+/** Swaps the connection's OAuth tokens for fresh ones and keeps them. */
+function renewSecret(id: string, secret: Secret): Promise<Secret> {
+  const running = renewing.get(id);
+  if (running) return running;
+  const job = (async () => {
+    const fresh = { ...secret, oauth: await oauth.renew(secret.oauth!, fetcher) };
+    await saveSecret(id, fresh);
+    return fresh;
+  })().finally(() => renewing.delete(id));
+  renewing.set(id, job);
+  return job;
+}
+
+/**
+ * Runs `work` with the connection's link and sign-in. OAuth tokens are refreshed first when
+ * they're about to run out, and once more if the server says no. When only signing in again
+ * will help, the connection is marked "Reconnect" and the error says so.
+ */
+async function withSecret<T>(id: string, work: (secret: Secret) => Promise<T>): Promise<T> {
+  let secret = await secretOf(id);
+  if (!secret.oauth) return work(secret);
+  try {
+    if (oauth.stale(secret.oauth)) secret = await renewSecret(id, secret);
+    try {
+      return await work(secret);
+    } catch (e) {
+      if (!(e instanceof Unauthorized)) throw e;
+      secret = await renewSecret(id, secret);
+      return await work(secret).catch((again) => {
+        throw again instanceof Unauthorized ? new oauth.SignInNeeded() : again;
+      });
+    }
+  } catch (e) {
+    if (e instanceof oauth.SignInNeeded) {
+      await markSignInNeeded(id, e.message);
+      throw new Error(`${await nameOf(id)} needs you to sign in again: open Integrations and press Reconnect`);
+    }
+    throw e;
+  }
+}
+
+async function nameOf(id: string): Promise<string> {
+  const [row] = await sql<{ name: string }[]>`select name from mcp_connections where id = ${id}`;
+  return row?.name ?? "that connection";
+}
+
 /** Checks the link, connects, and keeps the connection with the tools it offers. */
 export async function add(name: string, link: string, headers: Record<string, string>): Promise<Connection> {
   if (!NAME_RE.test(name)) throw new Error("give it a short name: letters, numbers, spaces, . _ -");
   const url = await checkUrl(link);
   const secret: Secret = { url: url.href, headers };
-  const tools = await discover(secret);
+  const tools = await discover(secret).catch((e) => {
+    if (e instanceof Unauthorized && !Object.keys(headers).length) {
+      throw new Error("that server wants you to sign in: pick Sign in with OAuth, or paste a key");
+    }
+    throw e;
+  });
   const [row] = await sql<Connection[]>`
     insert into mcp_connections (name, host, secret, tools, checked_at)
     values (${name}, ${url.host}, ${await lock(JSON.stringify(secret))}, ${sql.json(tools as never)}, now())
@@ -195,7 +257,7 @@ export async function refresh(id: string): Promise<Connection> {
   let tools: Tool[] | null = null;
   let error: string | null = null;
   try {
-    tools = await discover(await secretOf(id));
+    tools = await withSecret(id, discover);
   } catch (e) {
     error = String(e instanceof Error ? e.message : e).slice(0, 300);
   }
@@ -230,7 +292,7 @@ export async function offers(): Promise<Offer[]> {
   return (await list()).flatMap((c) =>
     c.tools.map((t) => ({ key: `${c.name}/${t.name}`, connection: c, tool: t, rule: ruleFor(c, t) }))
       .filter((o) => o.rule !== "off")
-  );
+  ).filter((o) => !o.connection.signin_needed);
 }
 
 /** Runs a tool you chose (or said yes to), and writes it in the log. */
@@ -238,7 +300,7 @@ export async function use(offer: Offer, args: Record<string, unknown>, asked: bo
   let status: "done" | "failed" = "done";
   let result: string;
   try {
-    result = await run(await secretOf(offer.connection.id), offer.tool.name, args);
+    result = await withSecret(offer.connection.id, (secret) => run(secret, offer.tool.name, args));
     return result;
   } catch (e) {
     status = "failed";
