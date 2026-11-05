@@ -8,6 +8,7 @@ import { SSEClientTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/client/
 import { sql } from "./db.ts";
 import { checkUrl, guardedFetch } from "./outbound.ts";
 import { lock, unlock } from "./vault.ts";
+import * as oauth from "./mcpauth.ts";
 
 export const RULES = ["auto", "ask", "off"] as const;
 export type Rule = typeof RULES[number];
@@ -23,6 +24,8 @@ export interface Connection {
   id: string;
   name: string;
   host: string;
+  auth: "key" | "oauth"; // a key you pasted, or a sign-in in the browser
+  signin_needed: boolean; // the sign-in ran out or hasn't happened yet: press Reconnect
   tools: Tool[];
   rules: Record<string, Rule>;
   checked_at: string | null;
@@ -33,6 +36,7 @@ export interface Connection {
 export interface Secret {
   url: string;
   headers: Record<string, string>;
+  oauth?: oauth.OAuth; // only for connections you sign in to
 }
 
 export const NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,39}$/u;
@@ -65,6 +69,14 @@ export const defaultRule = (t: Tool): Rule => (t.readOnly ? "auto" : "ask");
 
 export const ruleFor = (c: Connection, t: Tool): Rule => c.rules[t.name] ?? defaultRule(t);
 
+/** The server said Butler isn't signed in (HTTP 401). */
+export class Unauthorized extends Error {}
+
+const unauthorized = (e: unknown) => {
+  const code = (e as { code?: unknown } | null)?.code;
+  return code === 401 || /\b401\b|unauthori[sz]ed/i.test(e instanceof Error ? e.message : String(e));
+};
+
 /** Opens a session with the server: the current way (Streamable HTTP), then the older SSE way. */
 async function open(secret: Secret): Promise<Client> {
   const url = new URL(secret.url);
@@ -80,6 +92,7 @@ async function open(secret: Secret): Promise<Client> {
       await client.close().catch(() => {});
     }
   }
+  if (unauthorized(first)) throw new Unauthorized(`couldn't connect: ${plainError(first)}`);
   throw new Error(`couldn't connect: ${plainError(first)}`);
 }
 
