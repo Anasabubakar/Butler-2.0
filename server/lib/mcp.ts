@@ -7,6 +7,7 @@ import { StreamableHTTPClientTransport } from "npm:@modelcontextprotocol/sdk@1.3
 import { SSEClientTransport } from "npm:@modelcontextprotocol/sdk@1.32.1/client/sse.js";
 import { sql } from "./db.ts";
 import { checkUrl, guardedFetch } from "./outbound.ts";
+import { findLogo, type Get } from "./logo.ts";
 import { lock, unlock } from "./vault.ts";
 import * as oauth from "./mcpauth.ts";
 
@@ -30,6 +31,7 @@ export interface Connection {
   rules: Record<string, Rule>;
   checked_at: string | null;
   error: string | null;
+  logo_at?: string | null; // when its logo was last found; null when there is none yet
 }
 
 /** Where the server is and how to sign in to it. Only ever stored locked. */
@@ -167,7 +169,7 @@ export async function run(secret: Secret, tool: string, args: Record<string, unk
 
 // --- stored connections --------------------------------------------------------------
 
-const COLUMNS = sql`id, name, host, auth, signin_needed, tools, rules, checked_at, error`;
+const COLUMNS = sql`id, name, host, auth, signin_needed, tools, rules, checked_at, error, logo_at`;
 
 export const list = () => sql<Connection[]>`select ${COLUMNS} from mcp_connections order by created_at`;
 
@@ -249,7 +251,8 @@ export async function add(name: string, link: string, headers: Record<string, st
     insert into mcp_connections (name, host, secret, tools, checked_at)
     values (${name}, ${url.host}, ${await lock(JSON.stringify(secret))}, ${sql.json(tools as never)}, now())
     returning ${COLUMNS}`;
-  return row;
+  await updateLogo(row.id, row.host);
+  return (await list()).find((c) => c.id === row.id) ?? row;
 }
 
 /** Asks the server again which tools it has. */
@@ -266,7 +269,8 @@ export async function refresh(id: string): Promise<Connection> {
       tools = coalesce(${tools ? sql.json(tools as never) : null}::jsonb, tools)
     where id = ${id} returning ${COLUMNS}`;
   if (!row) throw new Error("that connection is gone");
-  return row;
+  await updateLogo(id, row.host); // "Check again" also looks for a newer logo
+  return (await list()).find((c) => c.id === id) ?? row;
 }
 
 export async function setRule(id: string, tool: string, rule: Rule) {
@@ -358,7 +362,8 @@ export async function addOAuth(name: string, link: string, given: oauth.Prepare)
     insert into mcp_connections (name, host, secret, auth, signin_needed)
     values (${name}, ${url.host}, ${await lock(JSON.stringify(secret))}, 'oauth', true)
     returning ${COLUMNS}`;
-  return row;
+  await updateLogo(row.id, row.host);
+  return (await list()).find((c) => c.id === row.id) ?? row;
 }
 
 /** The service's sign-in page for this connection, with `state` to match when you come back. */
@@ -386,4 +391,56 @@ export async function finishSignIn(state: string, code: string): Promise<Connect
   await saveSecret(id, signedIn);
   await sql`update mcp_connections set signin_needed = false, error = null where id = ${id}`;
   return refresh(id);
+}
+
+// --- logos ----------------------------------------------------------------------------------
+
+const LOGO_TOTAL_MS = 12_000;
+const LOGO_EVERY_MS = 7 * 24 * 3_600_000; // look for a newer one weekly
+const LOGO_RETRY_MS = 3_600_000; // after a miss, wait an hour
+
+let logoGet: Get | undefined;
+
+/** Swaps how logos are fetched (tests use a pretend web). */
+export const useLogoFetch = (get: Get | undefined) => { logoGet = get; };
+
+/**
+ * Looks up the connection's logo on its website and keeps it. A failure or a miss keeps
+ * the logo it already has, and never fails the caller.
+ */
+export async function updateLogo(id: string, host: string): Promise<boolean> {
+  let timer: number | undefined;
+  try {
+    const logo = await Promise.race([
+      findLogo(host, logoGet),
+      new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), LOGO_TOTAL_MS); }),
+    ]);
+    if (!logo) return false;
+    await sql`update mcp_connections set logo = ${logo.bytes}, logo_type = ${logo.type}, logo_at = now() where id = ${id}`;
+    return true;
+  } catch (e) {
+    console.error("mcp logo", String(e).slice(0, 200));
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The stored logo, for the website to show. */
+export async function logoOf(id: string): Promise<{ type: string; bytes: Uint8Array } | null> {
+  const [row] = await sql<{ logo: Uint8Array | null; logo_type: string | null }[]>`
+    select logo, logo_type from mcp_connections where id = ${id}`;
+  return row?.logo && row.logo_type ? { type: row.logo_type, bytes: row.logo } : null;
+}
+
+const triedAt = new Map<string, number>();
+
+/** Starts looking, behind the scenes, for logos that are missing or a week old. */
+export function refreshLogos(conns: Connection[], now = Date.now()) {
+  for (const c of conns) {
+    const age = c.logo_at ? now - Date.parse(c.logo_at) : Infinity;
+    if (age < LOGO_EVERY_MS || now - (triedAt.get(c.id) ?? 0) < LOGO_RETRY_MS) continue;
+    triedAt.set(c.id, now);
+    updateLogo(c.id, c.host);
+  }
 }
