@@ -97,3 +97,22 @@ export async function guardedFetch(input: string | URL | Request, init: RequestI
   }
   throw new Error("too many redirects");
 }
+
+/**
+ * fetch for public web pages that carry no secrets (like a site's logo): checks the address
+ * first and at every redirect, but unlike guardedFetch it follows redirects to another site
+ * (notion.com sends you to www.notion.com), since nothing private is sent along.
+ */
+export async function publicFetch(input: string | URL, init: RequestInit = {}, resolve: Resolve = resolveDns): Promise<Response> {
+  let url = new URL(input);
+  const { headers: _drop, ...rest } = init; // never forward headers across sites
+  for (let hop = 0; hop < 4; hop++) {
+    await checkUrl(url.href, resolve);
+    const res = await fetch(url, { ...rest, headers: { accept: "*/*", "user-agent": "Butler/2.0 (logo lookup)" }, redirect: "manual" });
+    const next = res.headers.get("location");
+    if (res.status < 300 || res.status >= 400 || !next) return res;
+    await res.body?.cancel();
+    url = new URL(next, url);
+  }
+  throw new Error("too many redirects");
+}

@@ -43,3 +43,28 @@ test("this server's own machine is refused, even under another name", async () =
   Deno.env.delete("PUBLIC_URL");
   forgetOwnAddresses();
 });
+
+test("public pages follow redirects to another site, checking every hop", async () => {
+  forgetOwnAddresses();
+  Deno.env.delete("PUBLIC_URL");
+  const real = globalThis.fetch;
+  const asked: string[] = [];
+  globalThis.fetch = ((input: Request | URL | string, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    asked.push(url);
+    if (url === "https://notion.com/") return Promise.resolve(new Response(null, { status: 301, headers: { location: "https://www.notion.com/" } }));
+    if (url === "https://sneaky.example.com/") return Promise.resolve(new Response(null, { status: 302, headers: { location: "https://inside.example.com/" } }));
+    assert.equal((init?.headers as Record<string, string>)?.authorization, undefined); // no key ever goes along
+    return Promise.resolve(new Response("hello"));
+  }) as typeof fetch;
+  const dns = fakeDns({ "notion.com": ["3.3.3.3"], "www.notion.com": ["3.3.3.4"], "sneaky.example.com": ["3.3.3.5"], "inside.example.com": ["10.0.0.9"] });
+  try {
+    const { publicFetch } = await import("../server/lib/outbound.ts");
+    const ok = await publicFetch("https://notion.com/", { headers: { authorization: "Bearer secret" } }, dns);
+    assert.equal(await ok.text(), "hello");
+    assert.deepEqual(asked, ["https://notion.com/", "https://www.notion.com/"]);
+    await assert.rejects(publicFetch("https://sneaky.example.com/", {}, dns), /public/); // a redirect into a private place
+  } finally {
+    globalThis.fetch = real;
+  }
+});

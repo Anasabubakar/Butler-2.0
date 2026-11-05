@@ -16,6 +16,7 @@ interface Connection {
   error: string | null;
   tools: Tool[];
   signin?: string; // where to go to sign in, right after adding one
+  logo: string | null; // the service's logo, found on the web; null until Butler has one
 }
 interface Call { at: string; connection: string; tool: string; asked: boolean; status: "done" | "failed"; result: string | null }
 interface McpStatus { ready: boolean; connections: Connection[]; calls: Call[] }
@@ -64,6 +65,7 @@ export async function renderIntegrations(app: HTMLElement) {
 
   google(googleSlot);
   telegram(telegramSlot);
+  let retried = false;
   async function load() {
     let s: McpStatus;
     try {
@@ -73,6 +75,11 @@ export async function renderIntegrations(app: HTMLElement) {
       return;
     }
     add.disabled = !s.ready;
+    // New connections get their logo a moment after they appear; look again once.
+    if (!retried && s.connections.some((c) => !c.logo)) {
+      retried = true;
+      setTimeout(() => { if (other.isConnected) load(); }, 6000);
+    }
     fill(other,
       h("h2", { class: "section-title" }, "Other", h("span", { class: "muted" }, "MCP servers like Zapier, Notion or your own")),
       s.ready ? null : inlineError("The server needs BUTLER_VAULT_KEY set before it can keep keys safely."),
@@ -332,7 +339,7 @@ function connectionCard(conn: Connection, reload: () => unknown): HTMLElement {
   });
   return h("details", { class: "auto integ-conn" },
     h("summary", { class: "auto__head" },
-      h("span", { class: "integ__logo" }, h("span", {}, conn.name.charAt(0).toUpperCase())),
+      logoTile(conn),
       h("span", { class: "row__text" },
         h("span", { class: "row__title" }, conn.name),
         h("span", { class: "row__sub" }, [conn.host, conn.auth === "oauth" ? "signed in with OAuth" : "", `${conn.tools.length} tools`,
@@ -351,6 +358,19 @@ function connectionCard(conn: Connection, reload: () => unknown): HTMLElement {
       h("div", { class: "actions" }, signIn, conn.signin_needed ? null : recheck, remove),
     ),
   );
+}
+
+/** The service's logo, or its first letter until Butler has found one (or if it won't load). */
+function logoTile(conn: Connection): HTMLElement {
+  const letter = h("span", {}, conn.name.charAt(0).toUpperCase());
+  const tile = h("span", { class: "integ__logo" }, letter);
+  if (conn.logo) {
+    const img = h("img", { src: conn.logo, alt: "", loading: "lazy", decoding: "async" }) as HTMLImageElement;
+    img.addEventListener("error", () => tile.replaceChildren(letter), { once: true });
+    tile.classList.add("integ__logo--picture");
+    tile.replaceChildren(img);
+  }
+  return tile;
 }
 
 function toolRow(conn: Connection, tool: Tool): HTMLElement {
