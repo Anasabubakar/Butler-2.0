@@ -111,7 +111,7 @@ export function compose(p: Parts, now: Date, timeZone: string): string {
 }
 
 /** Asks Google for one part of the brief; a failure becomes words for the owner, never an empty list. */
-async function fromGoogle<T>(what: string, ask: () => Promise<T[]>): Promise<Found<T>> {
+export async function fromGoogle<T>(what: string, ask: () => Promise<T[]>): Promise<Found<T>> {
   try {
     return await ask();
   } catch (e) {
