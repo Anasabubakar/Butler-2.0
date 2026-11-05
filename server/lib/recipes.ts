@@ -221,10 +221,14 @@ export class EventLimit {
 
 // --- running one --------------------------------------------------------------------
 
-/** The tools a recipe may use: from its connections (or all), never ones switched off. */
+/**
+ * The tools a recipe may use: from its connections (or all), never ones switched off.
+ * Butler's own read-only tools (your Google account) always come along.
+ */
 export const toolsFor = (recipe: Recipe, offers: Offer[]) =>
   recipe.connections.length
-    ? offers.filter((o) => recipe.connections.some((c) => c.toLowerCase() === o.connection.name.toLowerCase()))
+    ? offers.filter((o) => o.connection.id.startsWith("builtin:") ||
+      recipe.connections.some((c) => c.toLowerCase() === o.connection.name.toLowerCase()))
     : offers;
 
 /** Whether a recipe step may use this tool without asking: it only reads, and you haven't said to ask. */
