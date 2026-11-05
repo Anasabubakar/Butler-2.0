@@ -14,9 +14,11 @@ import android.widget.TextView
 
 /**
  * B2/PetBubble, the speech bubble over Little Butler's head (Figma B2 · 17): an ink card with
- * where and what state on top ("My laptop • Working"), one short line of what it's doing,
- * and Stop. When it's done: a tick (or a warning), the first line of the answer, Copy,
- * Share and close, and a reply box under it to answer back. Tap the line to read all of it.
+ * where and what state on top ("My laptop • Working") beside Stop, and what it's doing under
+ * that. When it's done: a tick (or a warning), Copy, Share and close on top, the answer under
+ * them, wrapped over as many lines as it needs, and a reply box to answer back. A long answer
+ * shows its first lines and "Show more"; open, it scrolls inside the bubble, so every word can
+ * be read without the bubble running off the screen.
  */
 class PetBubble(context: Context) : LinearLayout(context) {
 
@@ -47,22 +49,31 @@ class PetBubble(context: Context) : LinearLayout(context) {
         textSize = 13f
         isSingleLine = true
         ellipsize = TextUtils.TruncateAt.END
-        visibility = View.GONE
+        visibility = View.INVISIBLE
     }
+    // What Butler says, all of it: wrapped, never cut to one line. Closed, it shows the first
+    // few lines; open, every line, scrolling inside `scroll` once it's taller than that allows.
     private val line = TextView(context).apply {
         setTextColor(Ui.TEXT)
         textSize = 15f
-        typeface = android.graphics.Typeface.DEFAULT_BOLD
-        isSingleLine = true
-        ellipsize = TextUtils.TruncateAt.END
-        maxWidth = (210 * dp).toInt()
-    }
-    private val body = TextView(context).apply {
-        setTextColor(Ui.SUBTLE)
-        textSize = 14f
         setLineSpacing(0f, 1.15f)
-        maxWidth = (290 * dp).toInt()
-        setTextIsSelectable(true)
+        maxLines = CLOSED_LINES
+        ellipsize = TextUtils.TruncateAt.END
+        breakStrategy = android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY
+    }
+    private val scroll = CappedScroll(context).apply {
+        addView(line, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+    }
+    // Only there when something is hidden (or to close it again), with a 40 dp target.
+    private val more = TextView(context).apply {
+        setText(R.string.bubble_more)
+        setTextColor(Ui.ACCENT)
+        textSize = 14f
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+        gravity = Gravity.CENTER_VERTICAL
+        minHeight = (40 * dp).toInt()
+        isClickable = true
+        setOnClickListener { toggleExpanded() }
         visibility = View.GONE
     }
     // "Stop" in words, as in B2 · 17, with a 48 dp target. Never hidden while something runs.
@@ -133,40 +144,44 @@ class PetBubble(context: Context) : LinearLayout(context) {
         background = Ui.rounded(Ui.BACKGROUND, 12 * dp, Ui.BORDER, dp.toInt())
         elevation = 6 * dp
         setPadding((16 * dp).toInt(), (10 * dp).toInt(), (8 * dp).toInt(), (10 * dp).toInt())
-        addView(where, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { bottomMargin = (2 * dp).toInt() })
+        // Top row: spinner or tick, where and what state, then the buttons. The text goes under
+        // it at the bubble's full width, so the buttons never squeeze it down to a few words.
         val top = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             addView(spinner, LayoutParams((16 * dp).toInt(), (16 * dp).toInt()).apply { marginEnd = (10 * dp).toInt() })
             addView(mark, LayoutParams((22 * dp).toInt(), (22 * dp).toInt()).apply { marginEnd = (8 * dp).toInt() })
-            // The line takes what's left and shortens with "…", so the buttons always fit.
-            addView(line, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            addView(where, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             for (button in listOf(stop, copy, share, close)) {
                 (button.layoutParams as LayoutParams).marginStart = (6 * dp).toInt()
                 button.visibility = View.GONE
                 addView(button)
             }
-            setOnClickListener { toggleExpanded() }
         }
-        addView(top)
+        addView(top, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+            topMargin = (4 * dp).toInt()
+            marginEnd = (8 * dp).toInt()
+        })
+        addView(more, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
         addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, (6 * dp).toInt()).apply {
             topMargin = (8 * dp).toInt()
             marginEnd = (8 * dp).toInt()
         })
         addView(detail, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = (4 * dp).toInt() })
-        addView(body, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = (6 * dp).toInt() })
         addView(action, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = (8 * dp).toInt() })
         addView(reply, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
             topMargin = (8 * dp).toInt()
             marginEnd = (8 * dp).toInt()
         })
         line.setOnClickListener { toggleExpanded() }
-        body.setOnClickListener { toggleExpanded() }
+        // Whether "Show more" is needed depends on how the text wrapped, known after layout.
+        line.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateMore() }
     }
 
-    // Never wider than the screen (less a margin each side), so Copy, Share and close stay on it.
+    // As wide as the screen allows (less a margin each side), up to a comfortable reading width.
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        var cap = resources.displayMetrics.widthPixels - (16 * dp).toInt()
+        var cap = minOf(resources.displayMetrics.widthPixels - (16 * dp).toInt(), (MAX_WIDTH_DP * dp).toInt())
         if (MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED) cap = minOf(cap, MeasureSpec.getSize(widthMeasureSpec))
         super.onMeasure(MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST), heightMeasureSpec)
     }
@@ -191,8 +206,7 @@ class PetBubble(context: Context) : LinearLayout(context) {
     fun progress(text: String) {
         if (!working) return working(text)
         full = text
-        body.text = text
-        val next = firstLine(text)
+        val next = text.trim()
         if (line.text.toString() == next) return
         line.animate().cancel()
         if (Ui.reducedMotion(context)) {
@@ -201,6 +215,7 @@ class PetBubble(context: Context) : LinearLayout(context) {
         }
         line.animate().alpha(0f).translationY(-4 * dp).setDuration(90).withEndAction {
             line.text = next
+            updateMore()
             line.translationY = 4 * dp
             line.animate().alpha(1f).translationY(0f).setDuration(Ui.LISTEN_MS).withEndAction(null).start()
         }.start()
@@ -231,14 +246,12 @@ class PetBubble(context: Context) : LinearLayout(context) {
         share.visibility = if (worthKeeping) View.VISIBLE else View.GONE
         close.visibility = View.VISIBLE
         reply.visibility = if (onReply != null) View.VISIBLE else View.GONE
-        // Long answers open up straight away; short ones fit on the line.
-        if (text.length > 90 || text.contains('\n')) setExpanded(true)
     }
 
     /** Something to say that isn't a job: no spinner, just close. */
     fun info(text: String) {
         result(text, ok = true)
-        where.visibility = View.GONE
+        where.visibility = View.INVISIBLE
         mark.visibility = View.GONE
     }
 
@@ -260,12 +273,12 @@ class PetBubble(context: Context) : LinearLayout(context) {
     /** Sets the top line as given, for updates that already name the device and state ("My laptop • Complete"). */
     fun heading(text: String?) {
         where.text = text
-        where.visibility = if (text.isNullOrBlank()) View.GONE else View.VISIBLE
+        where.visibility = if (text.isNullOrBlank()) View.INVISIBLE else View.VISIBLE
     }
 
     private fun setWhere(device: String?, state: Int) {
         where.text = device?.let { context.getString(R.string.bubble_where, it, context.getString(state)) }
-        where.visibility = if (device != null) View.VISIBLE else View.GONE
+        where.visibility = if (device != null) View.VISIBLE else View.INVISIBLE
     }
 
     private fun show(text: String, spinning: Boolean) {
@@ -275,29 +288,59 @@ class PetBubble(context: Context) : LinearLayout(context) {
         line.animate().cancel()
         line.alpha = 1f
         line.translationY = 0f
-        line.text = firstLine(text)
-        body.text = text
+        line.text = text.trim()
+        scroll.scrollTo(0, 0)
         spinner.visibility = if (spinning) View.VISIBLE else View.GONE
         mark.visibility = View.GONE
         setExpanded(false)
     }
 
-    private fun toggleExpanded() = setExpanded(!expanded && full.length > firstLine(full).length)
+    private fun toggleExpanded() = setExpanded(!expanded && (cutShort() || line.lineCount > CLOSED_LINES))
 
     private fun setExpanded(on: Boolean) {
+        if (expanded == on && line.maxLines == (if (on) Int.MAX_VALUE else CLOSED_LINES)) return updateMore()
         expanded = on
-        if (on && body.visibility != View.VISIBLE) {
-            body.alpha = 0f
-            body.visibility = View.VISIBLE
-            body.animate().alpha(1f).setDuration(if (Ui.reducedMotion(context)) 0 else 180).setInterpolator(LinearInterpolator()).start()
-        } else if (!on) {
-            body.visibility = View.GONE
+        line.maxLines = if (on) Int.MAX_VALUE else CLOSED_LINES
+        line.ellipsize = if (on) null else TextUtils.TruncateAt.END
+        if (!on) scroll.scrollTo(0, 0)
+        more.setText(if (on) R.string.bubble_less else R.string.bubble_more)
+        if (on && !Ui.reducedMotion(context)) {
+            line.alpha = 0.6f
+            line.animate().alpha(1f).setDuration(180).setInterpolator(LinearInterpolator()).start()
         }
-        line.alpha = if (on) 0.7f else 1f
+        updateMore()
+    }
+
+    /** True when the closed text ends in "…" because more is hidden. */
+    private fun cutShort(): Boolean {
+        val layout = line.layout ?: return needsMore(full)
+        val last = layout.lineCount - 1
+        return last >= 0 && layout.getEllipsisCount(last) > 0
+    }
+
+    /** "Show more" only when something is hidden; "Show less" while it's open. */
+    private fun updateMore() {
+        val show = expanded || cutShort()
+        val want = if (show) View.VISIBLE else View.GONE
+        if (more.visibility != want) post { more.visibility = if (expanded || cutShort()) View.VISIBLE else View.GONE }
     }
 
     companion object {
-        /** The first non-empty line; the view cuts it short with "…" if it's long. */
+        /** How many lines a closed bubble shows before "Show more". */
+        const val CLOSED_LINES = 6
+        /** The widest the bubble gets, for comfortable reading on tablets and landscape. */
+        const val MAX_WIDTH_DP = 360
+
+        /** The first non-empty line. */
         fun firstLine(text: String) = text.trim().lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
+
+        /**
+         * A guess, before the text is laid out, at whether it needs "Show more": more lines than
+         * a closed bubble shows, or more than about that many lines' worth of characters.
+         */
+        fun needsMore(text: String, perLine: Int = 38): Boolean {
+            val lines = text.trim().lines()
+            return lines.size > CLOSED_LINES || lines.sumOf { maxOf(1, (it.length + perLine - 1) / perLine) } > CLOSED_LINES
+        }
     }
 }
