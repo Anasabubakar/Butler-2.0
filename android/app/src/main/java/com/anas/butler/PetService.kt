@@ -54,7 +54,7 @@ import java.util.UUID
 
 /**
  * Little Butler on your phone: peeks from the bottom-right corner over every app.
- * Tap it for Save this, Copy this, Analyze this, Solve this, Send to laptop and Ask Butler;
+ * Tap it for Act on this, Save this, Copy this, Analyze this, Solve this, Send to laptop and Ask Butler;
  * hold it to type a command straight away. A bubble over its head says what it's doing.
  * It also checks for reminders and things sent from your laptop.
  */
@@ -185,6 +185,11 @@ class PetService : Service() {
                 textSize = 12f
                 setPadding((4 * dp).toInt(), (12 * dp).toInt(), 0, (4 * dp).toInt())
             })
+            // Act on this: the one most worth a single tap, so it gets a whole row.
+            addView(tile(ui, R.drawable.ic_check, getString(R.string.pet_act), ::actOnScreen),
+                LinearLayout.LayoutParams(wide, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    setMargins((3 * dp).toInt(), (3 * dp).toInt(), (3 * dp).toInt(), (3 * dp).toInt())
+                })
             // Quick actions, two to a row.
             val actions = listOf<Triple<Int, Int, () -> Unit>>(
                 Triple(R.drawable.ic_bookmark, R.string.pet_save, ::saveThis),
