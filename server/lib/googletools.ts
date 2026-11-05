@@ -32,7 +32,7 @@ const TOOLS: Tool[] = [
 ];
 
 /** The built-in connection the tools hang off. Its id can't clash with a stored connection's. */
-export const GOOGLE: Connection = { id: "builtin:google", name: "Google", host: "google.com", tools: TOOLS, rules: {}, checked_at: null, error: null };
+export const GOOGLE: Connection = { id: "builtin:google", name: "Google", host: "google.com", auth: "oauth", signin_needed: false, tools: TOOLS, rules: {}, checked_at: null, error: null };
 
 export const isGoogleTool = (o: Offer) => o.connection.id === GOOGLE.id;
 
