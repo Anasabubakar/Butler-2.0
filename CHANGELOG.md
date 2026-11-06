@@ -4,9 +4,14 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 
 ## Unreleased
 
+## v0.4.0 (2026-11-06)
+
+Butler comes to Windows, acts on what's on your screen, drafts replies right in the chat box, signs in to connections with OAuth, and finally talks like a real conversation.
+
 - **Butler on Windows.** A new Windows 10 and 11 app (`desktop/windows`) with the same Little Butler: Act on this, Draft a reply, Save, Copy, Analyze, Solve, Translate, Ask and Talk, Send to phone and real files both ways, Ring my phone, clipboard sync, and everything your phone sends. It installs from `butler-<version>-windows-setup.exe` on the release, starts with Windows, and updates itself from new releases (once the repository is public) or with `update-pet.ps1`. Built and tested by CI only: nobody has run it on a real Windows PC yet. Not on Windows yet: doing things on screen, remote control from the phone, and direct Wi-Fi file sending.
 - **Act on this and Draft a reply on the Linux laptop.** The GNOME pet's menu gets both. Draft a reply pastes the draft where your cursor is (click the chat's box first); it never presses Enter. Needs `update-pet`, then log out and back in.
 - **Which feature works where**: [docs/platforms.md](docs/platforms.md) lists every device feature on Android, Linux and Windows.
+- **Butler's whole reply, every time.** The phone pet's bubble, the laptop bubble, the Ask sheet and Butler's messages on Home used to cut long answers to their first few words. They now wrap the whole answer, with **Show more** for long ones, scroll instead of cutting off, and stay up longer so you can read them. Needs the new APK and `update-pet`.
 - **Butler talks properly now.** Chat replies used to be a one-line side note of the step that picks an action, written by the fastest, smallest model with thinking off, in under 120 words, from a squashed copy of the last two days of chat. Now a conversation gets its own reply from a smarter model that reads the last week of chat as real turns, digs up older chat that matches what you said, uses what it remembers about you, can search Google, offers what it can do, and says as much as the answer needs. It also learns new facts about you after each chat, in the background. Sample conversations to check it: `deno task eval-chat`. Server only: no new APK needed.
 - **Connections show their real logo.** Instead of the first letter of its name, each connection card now shows the service's own logo, found on its website when you connect it and looked up again every week (and on **Check again**) so it stays current. The letter is still there until a logo is found. Website and server only: no new APK needed.
 - **Draft a reply, right in the chat.** In WhatsApp, Telegram, Messages, Instagram, Gmail or any app with a message box, tap the pet and pick **Draft a reply**, or hold it and type "help me respond", "draft a reply" or "refine this message". Butler reads the chat (scrolling up for older messages if it needs them, then back), writes the message as you, in the chat's own language and tone, and types it into the app's box in place of what was there. It never presses Send by itself: you read it and send it, or tap **Send it** on the bubble. Reply to the bubble with "shorter", "more casual", "say no politely" or "in pidgin" and it rewrites what's in the box. If an app won't let it type, the draft goes on your clipboard. Needs the new APK.
@@ -15,6 +20,18 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 - **Sign in to connections with OAuth.** When you add an MCP connection you can now pick **Sign in (OAuth)** instead of pasting a key: Butler finds the service's sign-in page, sends you there to allow it, and keeps the tokens encrypted and fresh. It signs up by itself where the service allows it, uses its client document (`/oauth/client.json`) where the service reads those, and takes your own app's client ID and secret for services like GitHub that need one. When a sign-in runs out for good the connection shows **Reconnect**. Key connections work as before. Website and server only: no new APK needed.
 - **Recipes can read your Google calendar, tasks and email.** A recipe like "Morning check" had no way to look at your calendar or Google Tasks (only your connections, like Apollo, whose tasks call failed), so it guessed and said your day was clear. Recipes now get three read-only tools, `Google/calendar`, `Google/tasks` and `Google/email`, read the same way the morning brief reads them, even when a recipe is limited to certain connections. Recipes are also told to say plainly when they couldn't check something instead of calling it empty. Server only: no new APK needed.
 - **Reminders and events ring with mobile data off.** While online, the phone keeps a copy of the next two days of reminders and events (refreshed every 5 minutes while the pet runs, and with each background sync) and sets an alarm for each. If Butler can't reach the phone when the moment comes, the phone shows it by itself. Whichever comes first is shown; the other is skipped. New emails, codes and messages still need internet: those can't be known ahead. Needs the new APK.
+
+### Before you use it
+
+- Install the new APK on the phone and run `update-pet` on the Linux laptop (then log out and back in).
+- On Windows, run `butler-0.4.0-windows-setup.exe` from this release.
+- Press **Connect Google** once more so Act on this can add Google Tasks.
+
+### Known limits
+
+- Nothing in this release has been tried on a real phone, Linux laptop or Windows PC yet; it's checked by tests and CI only.
+- Windows is unsigned, so SmartScreen will warn before it installs ("More info" → "Run anyway").
+- Gmail and Calendar sync were reported failing on 2026-11-02 and haven't been confirmed fixed, so anything that reads them may come back empty or with an error.
 
 ## v0.3.1 (2026-11-02)
 
