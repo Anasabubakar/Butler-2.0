@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src file:; style-src 'self'; script-src 'self'; media-src mediastream: blob:">
+  <title>Butler</title>
+  <link rel="stylesheet" href="pet.css">
+</head>
+<body>
+  <div id="stage">
+    <section id="bubble" class="bubble hit" hidden aria-live="polite">
+      <div class="bubble__heading" id="heading" hidden></div>
+      <div class="bubble__top">
+        <span class="spinner" id="spinner" hidden></span>
+        <span class="mark" id="mark" hidden></span>
+        <span class="bubble__grow"></span>
+        <button class="chip chip--stop" id="stop" hidden>Stop</button>
+        <button class="chip" id="copy" hidden>Copy</button>
+        <button class="chip" id="close" hidden aria-label="Close">×</button>
+      </div>
+      <div class="track" id="track" hidden><div class="fill" id="fill"></div></div>
+      <div class="detail" id="detail" hidden></div>
+      <div class="bubble__text" id="text"></div>
+      <button class="more" id="more" hidden>Show more</button>
+      <div class="bubble__buttons" id="confirm" hidden>
+        <button class="chip chip--yes" id="yes">Do it</button>
+        <button class="chip" id="no">Cancel</button>
+      </div>
+      <input class="reply" id="reply" placeholder="Reply to Butler…" hidden>
+    </section>
+
+    <nav id="menu" class="menu hit" hidden>
+      <div class="menu__title">What needs handling?</div>
+      <input class="ask" id="ask" placeholder="Ask me anything…">
+      <button data-action="act" class="menu__wide">Act on this</button>
+      <button data-action="draft" class="menu__wide">Draft a reply</button>
+      <button data-action="save">Save this</button>
+      <button data-action="copy">Copy this</button>
+      <button data-action="analyze">Analyze this</button>
+      <button data-action="solve">Solve this</button>
+      <button data-action="translate">Translate this</button>
+      <button data-action="sendPhone">Send to phone</button>
+      <button data-action="sendFiles">Send files to phone</button>
+      <button data-action="ringPhone">Ring my phone</button>
+      <button id="talk">Talk to Butler</button>
+      <button data-action="library">Open my library</button>
+      <button data-action="toggleSync" id="sync">Clipboard sync: off</button>
+      <button data-action="settings">Settings</button>
+    </nav>
+
+    <div id="pet" class="pet hit peeking" role="button" aria-label="Butler: click for actions, drag to move">
+      <img id="face" alt="" draggable="false">
+    </div>
+  </div>
+  <script src="pet.js"></script>
+</body>
+</html>
