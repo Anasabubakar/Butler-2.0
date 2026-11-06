@@ -266,6 +266,8 @@ export default class ButlerPetExtension extends Extension {
         this._menu = new St.BoxLayout({vertical: true, style_class: 'butler-menu', visible: false});
         this._menu.add_child(new St.Label({text: 'What needs handling?', style_class: 'butler-menu-title'}));
         for (const [label, run] of [
+            ['Act on this', () => this._actOnThis()],
+            ['Draft a reply', () => this._draftReply()],
             ['Save this', () => this._saveThis()],
             ['Copy this', () => this._copyThis()],
             ['Analyze this', () => this._look('analyze')],
@@ -359,6 +361,8 @@ export default class ButlerPetExtension extends Extension {
             const button = new St.Button({label, style_class: 'butler-action', x_expand: true, can_focus: false});
             button.connect('clicked', () => this._answer?.(yes));
             this._confirmBox.add_child(button);
+            if (yes)
+                this._confirmYes = button;
         }
 
         // The bubble over its head: what it's doing (with Stop), then the answer (with Copy and ×).
@@ -991,6 +995,68 @@ export default class ButlerPetExtension extends Extension {
         }, 'think');
     }
 
+    // --- Act on this and Draft a reply ---------------------------------------------------
+
+    /**
+     * Act on this: Butler reads the window and offers what it asks of you (a reminder, an
+     * event, a task, a check). Nothing is done until you press Do it. If it can't tell, it
+     * asks one question; answer it in the bubble's reply box.
+     */
+    _actOnThis() {
+        this._work('Reading your screen…', async () => {
+            const config = this._config();
+            const shot = await this._snapWindow();
+            if (!shot)
+                throw new Error('open the window you want me to read');
+            const result = await this._send(config, '/api/screen/act', {device: 'laptop', kind: 'laptop', tz: timeZone()}, shot);
+            if (!result.confirm)
+                return result.say || 'nothing to act on here.';
+            this._say(result.say);
+            if (!await this._confirm('Do it'))
+                return 'Left it. Nothing was done.';
+            this._bubble.working('On it…');
+            const done = await this._send(config, '/api/command/confirm', {confirm: result.confirm});
+            for (const step of done.steps ?? []) {
+                if (step.action === 'draft')
+                    return `${done.say}\n\n${await this._typeDraft(config, step.instruction)}`;
+                if (step.action === 'screen')
+                    return this._operate(config, step.goal);
+            }
+            return done.say;
+        }, 'think');
+    }
+
+    /**
+     * Draft a reply: Butler reads the chat in the window and writes what you'd say. It's pasted
+     * where your cursor is (click the chat's message box first) and stays on the clipboard.
+     * It never presses Enter: you read it and send it.
+     */
+    _draftReply(instruction = 'help me respond') {
+        this._work('Reading the chat and writing a draft…', async () => {
+            return this._typeDraft(this._config(), instruction);
+        }, 'think');
+    }
+
+    async _typeDraft(config, instruction) {
+        const shot = await this._snapWindow();
+        if (!shot)
+            throw new Error('open the chat you want to answer');
+        const app = global.display.focus_window?.get_wm_class() ?? '';
+        const result = await this._send(config, '/api/screen/draft',
+            {device: 'laptop', kind: 'laptop', instruction, app, tz: timeZone()}, shot);
+        if (!result.text)
+            throw new Error(result.error ?? "couldn't write anything for that chat. try again, or tell me what to say");
+        St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, result.text);
+        this._lastSynced = result.text; // a draft isn't sent to the phone's clipboard
+        await sleep(150);
+        const wmClass = app.toLowerCase();
+        if (TERMINALS.some(name => wmClass.includes(name)))
+            await this._press(Clutter.KEY_Control_L, Clutter.KEY_Shift_L, Clutter.KEY_v);
+        else
+            await this._press(Clutter.KEY_Control_L, Clutter.KEY_v);
+        return `${result.text}\n\nPasted where your cursor was, and it's on your clipboard. Read it over, then send it yourself. Reply here to change it, like "shorter".`;
+    }
+
     // --- Ask Butler -------------------------------------------------------------------
 
     /** Shows the typing box and takes the keyboard until Enter or Escape. */
@@ -1082,6 +1148,8 @@ export default class ButlerPetExtension extends Extension {
             {device: 'laptop', kind: 'laptop', tz: timeZone(), ...fields}, shot, files);
         if (result.heard)
             this._bubble.progress(`“${result.heard}”\n\nWorking…`);
+        if (result.action === 'draft' && result.instruction)
+            return this._typeDraft(config, result.instruction); // "shorter", "say no" after a draft
         if (result.message)
             return this._handoff(result.message, shot, result.say);
         if (result.goal)
@@ -1247,7 +1315,9 @@ export default class ButlerPetExtension extends Extension {
     }
 
     /** Shows Send / Cancel under the note and waits for your answer (Cancel after 2 minutes). */
-    _confirm() {
+    /** Waits for your yes: `yes` is the button's word, "Send" for an email, "Do it" for Act on this. */
+    _confirm(yes = 'Send') {
+        this._confirmYes.label = yes;
         this._confirmBox.show();
         this._place(false);
         return new Promise(resolve => {
