@@ -135,9 +135,17 @@
 
 .butler-bubble-body {
   color: #e6e3dd;
-  width: 290px;
+  width: 300px;
+  padding-right: 8px;
+}
+
+/* The answer's box: it grows with the text, and scrolls past half the screen (set in bubble.js). */
+.butler-bubble-scroll {
   margin-top: 6px;
-  padding-right: 4px;
+}
+
+.butler-bubble-more {
+  margin-top: 6px;
 }
 
 .butler-ask {
