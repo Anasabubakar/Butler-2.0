@@ -75,10 +75,10 @@ export async function addTurn(role: Turn["role"], text: string, device: string |
  * The latest turns, oldest first, since the last "new chat": for the main conversation only
  * those from the last two days (older ones are what memories are for), for a save all of them.
  */
-export async function recentTurns(itemId: string | null, limit = HISTORY_TURNS): Promise<Turn[]> {
+export async function recentTurns(itemId: string | null, limit = HISTORY_TURNS, hours = HISTORY_HOURS): Promise<Turn[]> {
   const rows = await sql<Turn[]>`
     select id::text, created_at, role, device, text from chat_turns
-    where ${itemId ? sql`item_id = ${itemId}` : sql`item_id is null and created_at > now() - ${`${HISTORY_HOURS} hours`}::interval`}
+    where ${itemId ? sql`item_id = ${itemId}` : sql`item_id is null and created_at > now() - ${`${hours} hours`}::interval`}
     order by created_at desc, id desc limit ${limit}`;
   const sinceBreak = rows.findIndex((r) => r.role === "break");
   return (sinceBreak === -1 ? rows : rows.slice(0, sinceBreak)).reverse();
@@ -156,6 +156,62 @@ export function lastWord(turns: Turn[], now = new Date()): Turn | null {
   const last = turns.at(-1);
   if (last?.role !== "butler") return null;
   return now.getTime() - new Date(last.created_at).getTime() <= ANSWERING_MS ? last : null;
+}
+
+// --- older conversation ----------------------------------------------------------------------
+
+/** How far back a conversation reply reads, and how much of it: more than planning, as replies need the thread. */
+export const TALK_TURNS = 40;
+export const TALK_HOURS = 7 * 24;
+
+/** Words too common to search old chat by. */
+const STOP = new Set(("the and for that this with you your what when where which who how why are was were have has had " +
+  "but not can could would should will just like about from into them they then than there their its it's i'm don't " +
+  "does did doing done get got make made want need tell said say know think yeah yes nah okay also really some more " +
+  "much many very ever been being because abeg pls please butler").split(" "));
+
+/** The words worth searching old chat for, from what they just said: at most 8. */
+export function searchWords(said: string): string[] {
+  const words = said.toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "").replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/)
+    .filter((w) => w.length >= 4 && !STOP.has(w) && !/^\d+$/.test(w));
+  return [...new Set(words)].slice(0, 8);
+}
+
+/**
+ * Older things you said, from before the conversation a reply reads, that share words with what
+ * you just said: so "what did I tell you about the visa?" finds last month's chat. Best matches
+ * first, each with Butler's answer after it. Main chat only.
+ */
+export async function olderTurns(said: string, before: string | null, limit = 6): Promise<Turn[]> {
+  const words = searchWords(said);
+  if (!words.length) return [];
+  const query = words.map((w) => w.replace(/'/g, "")).join(" | ");
+  const cutoff = before ?? new Date(Date.now() - TALK_HOURS * 3_600_000).toISOString();
+  const hits = await sql<Turn[]>`
+    select id::text, created_at, role, device, text from chat_turns
+    where item_id is null and role = 'owner' and created_at < ${cutoff}::timestamptz
+      and to_tsvector('simple', text) @@ to_tsquery('simple', ${query})
+    order by ts_rank(to_tsvector('simple', text), to_tsquery('simple', ${query})) desc, created_at desc
+    limit ${limit}`;
+  const out: Turn[] = [];
+  for (const hit of hits) {
+    out.push(hit);
+    const [answer] = await sql<Turn[]>`
+      select id::text, created_at, role, device, text from chat_turns
+      where item_id is null and role = 'butler' and created_at >= ${hit.created_at} and created_at < ${cutoff}::timestamptz
+      order by created_at, id limit 1`;
+    if (answer) out.push(answer);
+  }
+  return out;
+}
+
+/** Older chat for the prompt: when each was said, owner and Butler, cut short. */
+export function olderText(turns: Turn[], timeZone: string): string {
+  const when = new Intl.DateTimeFormat("en-GB", { timeZone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return turns.map((t) => {
+    const text = t.text.length > 400 ? `${t.text.slice(0, 400)}…` : t.text;
+    return `[${when.format(new Date(t.created_at))}] ${t.role === "owner" ? "owner" : "you"}: ${text}`;
+  }).join("\n");
 }
 
 /** Starts a new chat: what came before is kept but no longer read. */
