@@ -146,7 +146,9 @@ Every feature, with its settings, is in **[docs/features.md](docs/features.md)**
 | 🐧 **Linux** (GNOME 46 to 48) | ✅ Ready | GNOME Shell extension ([guide](desktop/gnome/README.md)) |
 | 🍎 **iPhone / iPad** | 🗺️ Planned | See the [roadmap](#-roadmap) |
 | 🍏 **macOS** | 🗺️ Planned | See the [roadmap](#-roadmap) |
-| 🪟 **Windows** | 🗺️ Planned | See the [roadmap](#-roadmap) |
+
+Which feature works on which device: [docs/platforms.md](docs/platforms.md).
+| 🪟 **Windows** 10 and 11 | 🧪 Built, not yet tried on a real PC | Desktop app with the same pet ([guide](desktop/windows/README.md)) |
 
 ## 🏁 Quick start
 
@@ -173,6 +175,7 @@ Then install the apps:
 
 - **Android:** download `butler-<version>-android.apk` from the [latest release](https://github.com/Anasabubakar/Butler-2.0/releases/latest), open it, and enter your server's save URL and `BUTLER_TOKEN`. [Full guide →](docs/android.md)
 - **Linux (GNOME):** download `butler-<version>-gnome-extension.zip` from the same release, then `gnome-extensions install butler-*-gnome-extension.zip` and log out and back in. [Full guide →](desktop/gnome/README.md)
+- **Windows:** download `butler-<version>-windows-setup.exe` from the same release, open it (SmartScreen: More info → Run anyway), and enter your server address and `BUTLER_TOKEN`. [Full guide →](desktop/windows/README.md)
 
 The **[self-hosting guide](docs/self-hosting.md)** covers opening ports, automatic deploys from GitHub, running a local AI model instead of a cloud one, connecting Google, backups and restoring.
 
@@ -192,6 +195,7 @@ flowchart LR
   subgraph devices[Your devices]
     A[🤖 Android app<br/>+ floating pet]
     G[🐧 GNOME pet]
+    X[🪟 Windows pet]
     W[🌐 Website]
   end
   subgraph server[Your server]
@@ -202,6 +206,7 @@ flowchart LR
   end
   A <--> C
   G <--> C
+  X <--> C
   W <--> C
   C <--> S
   S <--> P
@@ -224,6 +229,7 @@ flowchart LR
 | [`web/`](web/) | The website (Vite + TypeScript), light and dark |
 | [`android/`](android/) | Android app (Kotlin, Jetpack Compose): offline library, Share menu, floating pet |
 | [`desktop/gnome/`](desktop/gnome/) | The GNOME Shell pet extension |
+| [`desktop/windows/`](desktop/windows/) | The Windows pet (Electron) |
 | [`deploy/`](deploy/) | Docker Compose for a server: Postgres, Butler, Caddy, backups |
 | [`design/`](design/) | Brand guide, logo masters and the Little Butler sprite kit |
 | [`tests/`](tests/) | Unit tests |
@@ -238,7 +244,8 @@ flowchart LR
 - [x] Native offline Android app
 - [ ] One-command installer and a setup page, so self-hosting takes minutes
 - [ ] Signed release APK and an F-Droid listing
-- [ ] Windows and macOS desktop pet
+- [x] Windows desktop pet (built; first real-PC test pending)
+- [ ] macOS desktop pet
 - [ ] iPhone app (Share extension first; iOS doesn't allow a floating pet over other apps)
 - [ ] "Hey Butler" wake word
 - [ ] Sign in to MCP servers with OAuth
