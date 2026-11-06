@@ -24,7 +24,7 @@ Butler comes to Windows, acts on what's on your screen, drafts replies right in 
 ### Before you use it
 
 - Install the new APK on the phone and run `update-pet` on the Linux laptop (then log out and back in).
-- On Windows, run `butler-v0.4.0-windows-setup.exe` from this release.
+- On Windows, run `butler-0.4.0-windows-setup.exe` from this release.
 - Press **Connect Google** once more so Act on this can add Google Tasks.
 
 ### Known limits
