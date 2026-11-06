@@ -2,6 +2,8 @@
 
 A small charcoal butler that peeks out from the bottom-right corner of your screen. Drag it anywhere you like: it stays where you drop it, and peeks again if you drop it on the bottom edge. Tap it for quick actions:
 
+- **Act on this**: Butler reads the window you're in (a chat, an email, a page) and offers what it asks of you: a reminder, an event, a task, a check on one of your connections. Nothing happens until you press **Do it**. If it can't tell what's needed, it asks one question; answer it in the bubble's reply box.
+- **Draft a reply**: click into a chat's message box first, then tap this. Butler reads the chat and pastes what you'd say where your cursor is (it's on your clipboard too). It never presses Enter: read it, then send it yourself. Reply in the bubble ("shorter", "say no nicely") and it pastes a new one; select the old text first if you want it replaced.
 - **Save this**: saves a screenshot of the window you're in, plus the page's link in a browser or the text you've selected in any other app. On a feed (TikTok For You, the X home page, Instagram and so on), the address bar doesn't hold the post's link, so the pet taps the post's Share button, then Copy link, and saves that link instead.
 - **Copy this**: copies what you've selected.
 - **Analyze this** and **Solve this**: Butler looks at the window and explains it, or solves the problem on it. The answer shows beside the pet (tap it to close) and is copied so you can paste it.
