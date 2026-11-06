@@ -2,7 +2,7 @@ name: Release
 
 # Run from the Actions tab with a version like v0.3.0, or push a tag like v0.3.0.
 # Builds the Android APK and the GNOME extension, then publishes a GitHub release
-# with that version's notes from CHANGELOG.md.
+# with that version's notes from CHANGELOG.md, and adds the Windows installer to it.
 
 on:
   workflow_dispatch:
@@ -64,3 +64,35 @@ jobs:
           name: Butler ${{ env.VERSION }}
           body_path: ${{ runner.temp }}/notes.md
           files: dist/*
+
+  windows:
+    needs: release
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ inputs.version || github.ref_name }}
+    defaults:
+      run:
+        working-directory: desktop/windows
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/windows/package-lock.json
+      - run: npm ci
+      - name: Build the installer at this version
+        run: |
+          npm version "${VERSION#v}" --no-git-tag-version --allow-same-version
+          npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      # latest.yml is what the installed app reads to find its update.
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          files: |
+            desktop/windows/dist/*.exe
+            desktop/windows/dist/*.exe.blockmap
+            desktop/windows/dist/latest.yml
