@@ -4,6 +4,10 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 
 ## Unreleased
 
+## v0.4.0 (2026-11-06)
+
+Butler comes to Windows, acts on what's on your screen, drafts replies right in the chat box, signs in to connections with OAuth, and finally talks like a real conversation.
+
 - **Butler on Windows.** A new Windows 10 and 11 app (`desktop/windows`) with the same Little Butler: Act on this, Draft a reply, Save, Copy, Analyze, Solve, Translate, Ask and Talk, Send to phone and real files both ways, Ring my phone, clipboard sync, and everything your phone sends. It installs from `butler-<version>-windows-setup.exe` on the release, starts with Windows, and updates itself from new releases (once the repository is public) or with `update-pet.ps1`. Built and tested by CI only: nobody has run it on a real Windows PC yet. Not on Windows yet: doing things on screen, remote control from the phone, and direct Wi-Fi file sending.
 - **Act on this and Draft a reply on the Linux laptop.** The GNOME pet's menu gets both. Draft a reply pastes the draft where your cursor is (click the chat's box first); it never presses Enter. Needs `update-pet`, then log out and back in.
 - **Which feature works where**: [docs/platforms.md](docs/platforms.md) lists every device feature on Android, Linux and Windows.
