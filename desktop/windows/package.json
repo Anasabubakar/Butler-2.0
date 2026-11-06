@@ -1,0 +1,43 @@
+{
+  "name": "butler-desktop",
+  "productName": "Butler",
+  "version": "0.4.0",
+  "description": "Little Butler for Windows: the pet that peeks from the corner of your screen and talks to your Butler server.",
+  "license": "AGPL-3.0-only",
+  "author": "Anas Abubakar",
+  "private": true,
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/",
+    "dist": "electron-builder --win nsis --x64 --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "6.3.9"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "dev.butler.desktop",
+    "productName": "Butler",
+    "artifactName": "butler-${version}-windows-setup.${ext}",
+    "files": [
+      "src/**",
+      "package.json",
+      { "from": "../gnome/butler-pet@anasmasama.dev/pets", "to": "pets", "filter": ["**/*.png", "clips.json"] }
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true
+    },
+    "publish": [{ "provider": "github", "owner": "Anasabubakar", "repo": "Butler-2.0", "releaseType": "release" }]
+  }
+}
