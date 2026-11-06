@@ -163,8 +163,18 @@ export function sentRow(m: Sent): HTMLElement {
     ? `Due ${new Date(m.due_at).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })}`
     : ago(m.due_at);
   const text = m.body?.trim() || m.url || "A file";
+  // The whole message wraps; a long one shows three lines and Show more.
+  const words = h("span", { class: "row__title row__title--wrap" }, text);
+  const more = text.length > 140 || text.includes("\n")
+    ? h("button", { type: "button", class: "row__more", "aria-expanded": "false" }, "Show more")
+    : null;
+  more?.addEventListener("click", () => {
+    const open = words.classList.toggle("is-open");
+    more.textContent = open ? "Show less" : "Show more";
+    more.setAttribute("aria-expanded", String(open));
+  });
   return h("li", { class: "row" },
     h("span", { class: "row__icon" }, icon(SENT_ICONS[m.kind] ?? "note")),
-    h("span", { class: "row__text" }, h("span", { class: "row__title" }, text), h("span", { class: "row__sub" }, when)),
+    h("span", { class: "row__text" }, words, more, h("span", { class: "row__sub" }, when)),
   );
 }
