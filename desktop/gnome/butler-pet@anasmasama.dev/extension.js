@@ -1314,8 +1314,10 @@ export default class ButlerPetExtension extends Extension {
         return `${say ? `${say}\n\n` : ''}Opened ${where} with the message. ${how}${extra}`;
     }
 
-    /** Shows Send / Cancel under the note and waits for your answer (Cancel after 2 minutes). */
-    /** Waits for your yes: `yes` is the button's word, "Send" for an email, "Do it" for Act on this. */
+    /**
+     * Shows Send / Cancel under the note and waits for your answer (Cancel after 2 minutes).
+     * `yes` is the button's word: "Send" for an email, "Do it" for Act on this.
+     */
     _confirm(yes = 'Send') {
         this._confirmYes.label = yes;
         this._confirmBox.show();
