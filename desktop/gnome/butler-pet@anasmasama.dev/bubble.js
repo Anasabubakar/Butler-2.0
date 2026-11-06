@@ -1,21 +1,25 @@
 // B2/PetBubble over the pet's head (Figma B2 · 17), like the phone pet's (PetBubble.kt):
 // where and what state on top ("My laptop • Working"), one short line of what it's doing,
-// and Stop. When it's done: a tick (or a "!"), the first line of the answer, Copy and ×, and a
-// reply box under it to answer back. Click the line to read all of it.
+// and Stop. When it's done: a tick (or a "!"), Copy and ×, the answer itself wrapped over as many
+// lines as it needs (a long one shows its start and "Show more"), and a reply box to answer back.
 import Clutter from 'gi://Clutter';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
 
 import * as Animation from 'resource:///org/gnome/shell/ui/animation.js';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-const LONGEST = 1200;
+import {PREVIEW, preview} from './textfit.js';
+
+/** The most it ever holds; Copy still gets all of it. */
+const LONGEST = 20000;
 
 /** The first non-empty line; the label cuts it short with "…" if it's long. */
 export function firstLine(text) {
     return String(text ?? '').trim().split('\n').find(line => line.trim())?.trim() ?? '';
 }
 
-/** Up to about a screenful; Copy still gets all of it. */
+/** Never more than LONGEST; Copy still gets all of it. */
 function shortened(text) {
     return text.length > LONGEST ? `${text.slice(0, LONGEST)}…` : text;
 }
@@ -82,16 +86,35 @@ export class Bubble {
         this._action.x_align = Clutter.ActorAlign.START;
         this.actor.add_child(this._action);
 
+        // The answer, wrapped over as many lines as it takes. A long one scrolls inside the bubble.
         this._body = new St.Label({style_class: 'butler-bubble-body', reactive: true, x_align: Clutter.ActorAlign.START});
         this._body.clutter_text.line_wrap = true;
         this._body.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
         this._body.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+        this._body.clutter_text.single_line_mode = false;
         this._body.connect('button-release-event', () => {
             this._tapped();
             return Clutter.EVENT_STOP;
         });
-        this._body.visible = false;
-        this.actor.add_child(this._body);
+        const page = new St.BoxLayout({vertical: true});
+        page.add_child(this._body);
+        this._scroll = new St.ScrollView({
+            style_class: 'butler-bubble-scroll',
+            hscrollbar_policy: St.PolicyType.NEVER,
+            vscrollbar_policy: St.PolicyType.AUTOMATIC,
+            overlay_scrollbars: true,
+            child: page,
+            visible: false,
+        });
+        this.actor.add_child(this._scroll);
+
+        // Under a long answer: "Show more" opens all of it, "Show less" folds it back.
+        this._more = chip('Show more', 'butler-bubble-more', () => {
+            this._setExpanded(!this._expanded);
+            this._changed();
+        });
+        this._more.x_align = Clutter.ActorAlign.START;
+        this.actor.add_child(this._more);
 
         // Answer back: a follow-up, a correction, a new order. Butler remembers the conversation.
         this._reply = new St.Entry({hint_text: 'Reply to Butler…', style_class: 'butler-bubble-reply', can_focus: true, x_expand: true, visible: false});
@@ -217,9 +240,7 @@ export class Bubble {
         this._copy.visible = text.length > 40;
         this._close.visible = true;
         this._showReply(Boolean(this.onReply));
-        // Long answers open up straight away; short ones fit on the line.
-        if (text.length > 90 || text.includes('\n'))
-            this._setExpanded(true);
+        this._render();
         this._changed();
     }
 
@@ -286,26 +307,57 @@ export class Bubble {
     _tapped() {
         if (this.onTap?.())
             return;
-        this._setExpanded(!this._expanded && this._full.trim().length > firstLine(this._full).length);
+        const more = this._working ? this._full.trim().length > firstLine(this._full).length : this._long();
+        this._setExpanded(!this._expanded && more);
         this._changed();
     }
 
-    /**
-     * Sets the full text. Its height is worked out at the width it's shown at: the bubble
-     * would otherwise ask at its own (wider) width and cut the last lines off.
-     */
+    /** Sets the full text; what shows of it is worked out by _render. */
     _setBody(text) {
-        this._body.text = shortened(text);
-        this._body.height = -1;
-        const [, width] = this._body.get_preferred_width(-1);
-        const [, height] = this._body.get_preferred_height(width);
-        this._body.height = height;
+        this._full = text;
+        this._render();
+    }
+
+    /** True when the answer is too long to show whole before "Show more". */
+    _long() {
+        return this._full.trim().length > PREVIEW;
+    }
+
+    /**
+     * Working: the one short line on top, and all of it only when tapped. Done: the answer
+     * itself under the buttons, wrapped, its start and "Show more" when it's long, and all
+     * of it (scrolling past half the screen) once opened.
+     */
+    _render() {
+        const long = this._long();
+        if (this._working) {
+            this._line.visible = true;
+            this._body.text = shortened(this._full);
+            this._scroll.visible = this._expanded;
+            this._more.visible = false;
+        } else {
+            this._line.visible = false;
+            this._body.text = this._expanded || !long ? shortened(this._full.trim()) : preview(this._full);
+            this._scroll.visible = Boolean(this._full.trim());
+            this._more.label = this._expanded ? 'Show less' : 'Show more';
+            this._more.visible = long;
+        }
+        this._line.opacity = this._working && this._expanded ? 150 : 255;
+        this._fitScroll();
+    }
+
+    /** A long answer scrolls inside the bubble instead of running off the screen. */
+    _fitScroll() {
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (!monitor)
+            return;
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor || 1;
+        this._scroll.style = `max-height: ${Math.max(160, Math.floor(monitor.height * 0.5 / scale))}px;`;
     }
 
     _setExpanded(on) {
         this._expanded = on;
-        this._body.visible = on;
-        this._line.opacity = on ? 150 : 255;
+        this._render();
     }
 
     _changed() {
