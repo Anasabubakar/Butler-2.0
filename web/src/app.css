@@ -149,6 +149,10 @@
 .row__title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row__sub { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 a.row { color: inherit; text-decoration: none; }
+.row__title--wrap { white-space: pre-wrap; overflow-wrap: anywhere; text-overflow: clip; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.row__title--wrap.is-open { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.row__more { justify-self: start; padding: 2px 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.row__more:hover { text-decoration: underline; }
 a.row:hover .row__title { text-decoration: underline; text-underline-offset: 3px; }
 
 /* Empty states. */
