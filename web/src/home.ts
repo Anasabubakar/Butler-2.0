@@ -165,6 +165,20 @@ export function sentRow(m: Sent): HTMLElement {
   const text = m.body?.trim() || m.url || "A file";
   return h("li", { class: "row" },
     h("span", { class: "row__icon" }, icon(SENT_ICONS[m.kind] ?? "note")),
-    h("span", { class: "row__text" }, h("span", { class: "row__title" }, text), h("span", { class: "row__sub" }, when)),
+    h("span", { class: "row__text" }, said(text), h("span", { class: "row__sub" }, when)),
   );
+}
+
+/** What Butler said, three lines at most until clicked (or Enter), then all of it. */
+function said(text: string): HTMLElement {
+  const el = h("span", { class: "row__title row__title--said", role: "button", tabindex: "0", "aria-expanded": "false" }, text);
+  const toggle = () => el.setAttribute("aria-expanded", String(el.classList.toggle("open")));
+  el.addEventListener("click", toggle);
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggle();
+    }
+  });
+  return el;
 }

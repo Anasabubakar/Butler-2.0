@@ -93,6 +93,7 @@ class AskActivity : AppCompatActivity() {
         workingText = findViewById(R.id.ask_working_text)
         examples = findViewById(R.id.ask_examples)
         news = findViewById(R.id.ask_news)
+        openOnTap(news, 6)
         go.setOnClickListener { ask() }
         findViewById<View>(R.id.ask_close).setOnClickListener { finish() }
         val where = findViewById<MaterialButtonToggleGroup>(R.id.ask_where)
@@ -105,6 +106,7 @@ class AskActivity : AppCompatActivity() {
             val answering = replyTo?.let { getString(R.string.ask_replying_to, it.trim().replace(Regex("\\s+"), " ")) }
             text = about ?: answering
             visibility = if (text.isNullOrBlank()) View.GONE else View.VISIBLE
+            openOnTap(this, 3)
         }
         if (item != null) where.visibility = View.GONE // a save is talked about here, not on the laptop
         findViewById<Button>(R.id.ask_stop).setOnClickListener { stopLaptop(off = false) }
@@ -189,6 +191,15 @@ class AskActivity : AppCompatActivity() {
         }
     }
 
+    /** Text cut to `lines` lines with "…" opens to all of it on a tap, and closes on the next. */
+    private fun openOnTap(view: TextView, lines: Int) {
+        view.setOnClickListener {
+            val open = view.maxLines != Int.MAX_VALUE
+            view.maxLines = if (open) Int.MAX_VALUE else lines
+            view.ellipsize = if (open) null else android.text.TextUtils.TruncateAt.END
+        }
+    }
+
     private fun showNews() {
         val lines = synchronized(PetService.laptopNews) { PetService.laptopNews.take(3) }
         news.text = lines.joinToString("\n\n")
@@ -199,6 +210,7 @@ class AskActivity : AppCompatActivity() {
         working.visibility = View.GONE
         answer.text = text
         answer.visibility = View.VISIBLE
+        findViewById<View>(R.id.ask_answer_scroll).scrollTo(0, 0)
     }
 
     /** A finished answer: shown, and spoken too if Voice replies is on. */

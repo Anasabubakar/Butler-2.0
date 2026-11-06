@@ -698,13 +698,13 @@ export default class ButlerPetExtension extends Extension {
     }
 
     /**
-     * Waits long enough to read the bubble (2 to 30 seconds), and for as long as it's open
+     * Waits long enough to read the bubble (2 to 60 seconds), and for as long as it's open
      * to read in full, or until × is pressed. With `tappable`, clicking its line ends it too.
      * Resolves to 'tapped', 'closed' or 'timeout'.
      */
     _hold(ms, tappable = false) {
         return new Promise(resolve => {
-            let left = Math.min(30000, Math.max(2200, ms));
+            let left = Math.min(60000, Math.max(2200, ms));
             const finish = how => {
                 GLib.source_remove(id);
                 this._bubbleClosed = this._noteTapped = null;
@@ -740,7 +740,7 @@ export default class ButlerPetExtension extends Extension {
             this._play('error');
             this._bubble.result(`That didn't go through: ${e.message}`, false);
         }
-        await this._hold(this._bubble.text.length * 50);
+        await this._hold(this._bubble.text.length * 80);
         if (!this._pet)
             return;
         this._bubble.hide();

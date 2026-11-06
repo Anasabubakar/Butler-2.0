@@ -67,14 +67,30 @@
 .butler-bubble-heading {
   color: #a8a49e;
   font-size: 10pt;
-  padding: 0 2px 2px;
+  padding: 0 2px;
+  min-height: 24px;
 }
 
+/* What Butler says: wrapped over as many lines as it needs (bubble.js sets its width). */
 .butler-bubble-line {
   color: #ffffff;
-  font-weight: 600;
-  max-width: 230px;
+  font-weight: 500;
+  padding: 2px 2px 4px;
+}
+
+.butler-bubble-scroll {
+  margin-top: 4px;
+}
+
+.butler-bubble-chip.butler-bubble-more {
+  margin-top: 4px;
+  color: #ff8a73;
+  background-color: transparent;
   padding: 4px 2px;
+}
+
+.butler-bubble-chip.butler-bubble-more:hover {
+  background-color: #262523;
 }
 
 .butler-bubble-mark {
@@ -131,13 +147,6 @@
 
 .butler-bubble-action {
   margin-top: 8px;
-}
-
-.butler-bubble-body {
-  color: #e6e3dd;
-  width: 290px;
-  margin-top: 6px;
-  padding-right: 4px;
 }
 
 .butler-ask {

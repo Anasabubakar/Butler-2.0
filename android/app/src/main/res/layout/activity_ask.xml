@@ -179,14 +179,24 @@
             android:textAppearance="?attr/textAppearanceBodyMedium" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/ask_answer"
+    <!-- Butler's answer, all of it: grows with the text up to about half the screen, then
+         scrolls, so a long answer never runs off the bottom of the sheet. -->
+    <com.anas.butler.CappedScroll
+        android:id="@+id/ask_answer_scroll"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:textAppearance="?attr/textAppearanceBodyLarge"
-        android:textIsSelectable="true"
-        android:visibility="gone" />
+        android:layout_marginTop="12dp">
+
+        <TextView
+            android:id="@+id/ask_answer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:breakStrategy="high_quality"
+            android:lineSpacingMultiplier="1.15"
+            android:textAppearance="?attr/textAppearanceBodyLarge"
+            android:textIsSelectable="true"
+            android:visibility="gone" />
+    </com.anas.butler.CappedScroll>
 
     <!-- Laptop only: what it said lately, and Stop / Switch off. -->
     <TextView
