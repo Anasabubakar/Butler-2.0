@@ -4,6 +4,7 @@ What changed in each release. Newest first. The format follows [Keep a Changelog
 
 ## Unreleased
 
+- **Bubbles show the whole answer.** The pet's bubble on the laptop and phone used to show only the first line, cut off after a few words, unless you tapped it. Now the answer wraps under the buttons; a long one shows its start and **Show more**, and scrolls inside the bubble past half the screen. Messages on the website's home also wrap, with Show more. Needs the new APK and `update-pet` (then log out and back in).
 - **Butler holds a real conversation.** When what you say isn't a job (a reminder, an email…), Butler now answers in a separate step that reads the whole chat as real back-and-forth turns, what it remembers about you, and saves from your library that look related, on full Gemini Flash rather than Flash-Lite. Before, the answer was a one-line field squeezed out of the action picker. It also remembers the last week (40 turns) instead of two days (20). Server only: no new APK or update-pet needed.
 - **Reminders and events ring with mobile data off.** While online, the phone keeps a copy of the next two days of reminders and events (refreshed every 5 minutes while the pet runs, and with each background sync) and sets an alarm for each. If Butler can't reach the phone when the moment comes, the phone shows it by itself. Whichever comes first is shown; the other is skipped. New emails, codes and messages still need internet: those can't be known ahead. Needs the new APK.
 
