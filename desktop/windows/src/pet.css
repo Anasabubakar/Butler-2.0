@@ -1,0 +1,72 @@
+/* The Windows pet, matching the GNOME pet (desktop/gnome/.../stylesheet.css) and the phone's
+   B2/PetBubble: an ink card, white text, radius 12, Inter or the system font. */
+:root {
+  --ink: rgba(17, 17, 17, 0.96);
+  --chip: #262523;
+  --chip-hover: #2e2c29;
+  --text: #ffffff;
+  --soft: #e6e3dd;
+  --muted: #a8a49e;
+  --accent: #e4462d;
+  --bad: #ff8a73;
+  --stop: #b83120;
+  --paper: #f8f7f4;
+  --line: #d8d5cf;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none; }
+body { font: 14px/1.4 Inter, "Segoe UI", system-ui, sans-serif; color: var(--text); }
+button { font: inherit; color: inherit; cursor: pointer; }
+[hidden] { display: none !important; }
+
+#stage { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; padding: 8px 12px 0 8px; gap: 8px; }
+
+/* The pet: 88 × 110, as on GNOME. Peeking, only its head shows over the bottom edge. */
+.pet { width: 88px; height: 110px; overflow: hidden; flex: none; margin-right: 28px; cursor: grab; touch-action: none; }
+.pet img { width: 88px; height: 110px; display: block; transition: transform 220ms cubic-bezier(.2, .8, .2, 1); pointer-events: none; }
+.pet.peeking img { transform: translateY(54px); }
+.pet.dragging { cursor: grabbing; }
+
+.bubble, .menu { max-width: 360px; width: max-content; min-width: 200px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0, 0, 0, .3); }
+
+.bubble { background: var(--ink); padding: 10px 8px 10px 16px; display: flex; flex-direction: column; gap: 6px; }
+.bubble__heading { color: var(--muted); font-size: 12.5px; }
+.bubble__top { display: flex; align-items: center; gap: 6px; min-height: 28px; }
+.bubble__grow { flex: 1; }
+.bubble__text { color: var(--soft); white-space: pre-wrap; overflow-wrap: anywhere; padding-right: 8px; user-select: text; cursor: text;
+  display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; width: 320px; max-width: 100%; }
+.bubble__text.open { display: block; -webkit-line-clamp: unset; max-height: 45vh; overflow-y: auto; }
+.bubble__text.tappable { cursor: pointer; text-decoration: underline dotted rgba(255, 255, 255, .4); }
+.bubble__text:empty { display: none; }
+.more { align-self: flex-start; background: none; border: 0; padding: 2px 0; color: var(--text); font-weight: 700; }
+.more:hover { text-decoration: underline; }
+
+.mark { font-weight: 800; font-size: 15px; }
+.mark.bad { color: var(--bad); }
+.spinner { width: 16px; height: 16px; border: 2px solid rgba(255, 255, 255, .25); border-top-color: var(--text); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } .pet img { transition: none; } }
+
+.chip { background: var(--chip); border: 0; border-radius: 12px; padding: 4px 10px; font-size: 13px; font-weight: 600; }
+.chip:hover { background: var(--chip-hover); }
+.chip--stop { background: var(--stop); }
+.chip--yes { background: var(--text); color: #111; }
+.chip--yes:hover { background: var(--soft); }
+.bubble__buttons { display: flex; gap: 8px; }
+
+.track { height: 6px; margin: 4px 8px 0 2px; border-radius: 3px; background: var(--chip-hover); overflow: hidden; }
+.fill { height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width 200ms; }
+.detail { color: var(--muted); font-size: 12px; }
+
+.reply, .ask { width: 100%; font: inherit; border-radius: 12px; padding: 8px 12px; outline: none; }
+.reply { background: var(--chip); color: var(--text); border: 1px solid #3a3835; margin-right: 8px; width: calc(100% - 8px); }
+.reply:focus { border-color: var(--muted); }
+
+.menu { background: var(--paper); color: #111; padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.menu__title { grid-column: 1 / -1; font-weight: 700; padding: 2px 4px 4px; }
+.menu .ask { grid-column: 1 / -1; border: 1px solid var(--line); background: #fff; color: #111; }
+.menu .ask:focus { border-color: #111; }
+.menu button { border: 0; border-radius: 10px; background: #eceae6; padding: 8px 10px; text-align: left; font-weight: 500; }
+.menu button:hover { background: #e2dfda; }
+.menu__wide { grid-column: 1 / -1; background: #111 !important; color: #fff; font-weight: 700 !important; }

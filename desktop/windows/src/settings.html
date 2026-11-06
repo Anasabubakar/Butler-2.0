@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'">
+  <title>Butler settings</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #f8f7f4; --card: #ffffff; --text: #111111; --muted: #6b6761; --line: #d8d5cf; --bad: #b83120; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #161514; --card: #201f1d; --text: #f3f1ed; --muted: #a8a49e; --line: #3a3835; --bad: #ff8a73; } }
+    body { margin: 0; padding: 24px; background: var(--bg); color: var(--text); font: 14px/1.45 Inter, "Segoe UI", system-ui, sans-serif; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    p { color: var(--muted); margin: 0 0 18px; }
+    label { display: block; font-weight: 600; margin: 14px 0 6px; }
+    input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--text); font: inherit; }
+    small { display: block; color: var(--muted); margin-top: 4px; }
+    button { margin-top: 20px; padding: 10px 18px; border: 0; border-radius: 10px; background: var(--text); color: var(--bg); font: inherit; font-weight: 700; cursor: pointer; }
+    #error { color: var(--bad); margin-top: 12px; min-height: 1.4em; }
+  </style>
+</head>
+<body>
+  <h1>Connect Butler</h1>
+  <p>The same address and token as your phone app. They stay on this computer, in your user folder.</p>
+  <form id="form">
+    <label for="url">Butler address</label>
+    <input id="url" type="url" placeholder="https://butler.yourdomain.com" required autocomplete="off">
+    <label for="token">Token</label>
+    <input id="token" type="password" placeholder="Paste your Butler token" required autocomplete="off">
+    <label for="device">This computer's name</label>
+    <input id="device" placeholder="laptop" maxlength="60" autocomplete="off">
+    <small>Your phone sends "to my laptop" to the name "laptop". If you also run Butler on a Linux laptop, call this one "windows".</small>
+    <button type="submit">Save</button>
+    <div id="error" role="alert"></div>
+  </form>
+  <script src="settings.js"></script>
+</body>
+</html>
