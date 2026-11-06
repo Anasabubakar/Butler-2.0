@@ -50,7 +50,12 @@ const GAP_MS = 3 * 3_600_000;
 
 /** The conversation as turns for the AI, ending with what they just said. */
 export function chatTurns(turns: Turn[], said: string, timeZone: string, now = new Date()): ChatTurn[] {
-  const when = new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  // Built from its parts: how ICU joins them (commas or not) differs between systems.
+  const when = { format: (d: Date) => {
+    const p = Object.fromEntries(parts.formatToParts(d).map((x) => [x.type, x.value]));
+    return `${p.weekday} ${p.day} ${p.month}, ${p.hour}:${p.minute}`;
+  } };
   const out: ChatTurn[] = [];
   let last = 0;
   for (const t of turns) {
