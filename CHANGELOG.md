@@ -21,6 +21,18 @@ Butler comes to Windows, acts on what's on your screen, drafts replies right in 
 - **Recipes can read your Google calendar, tasks and email.** A recipe like "Morning check" had no way to look at your calendar or Google Tasks (only your connections, like Apollo, whose tasks call failed), so it guessed and said your day was clear. Recipes now get three read-only tools, `Google/calendar`, `Google/tasks` and `Google/email`, read the same way the morning brief reads them, even when a recipe is limited to certain connections. Recipes are also told to say plainly when they couldn't check something instead of calling it empty. Server only: no new APK needed.
 - **Reminders and events ring with mobile data off.** While online, the phone keeps a copy of the next two days of reminders and events (refreshed every 5 minutes while the pet runs, and with each background sync) and sets an alarm for each. If Butler can't reach the phone when the moment comes, the phone shows it by itself. Whichever comes first is shown; the other is skipped. New emails, codes and messages still need internet: those can't be known ahead. Needs the new APK.
 
+### Before you use it
+
+- Install the new APK on the phone and run `update-pet` on the Linux laptop (then log out and back in).
+- On Windows, run `butler-v0.4.0-windows-setup.exe` from this release.
+- Press **Connect Google** once more so Act on this can add Google Tasks.
+
+### Known limits
+
+- Nothing in this release has been tried on a real phone, Linux laptop or Windows PC yet; it's checked by tests and CI only.
+- Windows is unsigned, so SmartScreen will warn before it installs ("More info" → "Run anyway").
+- Gmail and Calendar sync were reported failing on 2026-11-02 and haven't been confirmed fixed, so anything that reads them may come back empty or with an error.
+
 ## v0.3.1 (2026-11-02)
 
 Email heads-ups now cover any important email, not only the kinds Butler had rules for.
